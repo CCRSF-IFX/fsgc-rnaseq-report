@@ -1,0 +1,45 @@
+{
+  "reportTitle": "Demo RNA-seq Report",
+  "reportSubtitle": "Static report with optional webR downstream analysis",
+  "runId": "demo-run-001",
+  "dataRoot": "assets/data",
+  "qcThresholds": {
+    "mapping_rate": {
+      "min_warn": 0.9,
+      "min_fail": 0.8
+    },
+    "duplication_rate": {
+      "max_warn": 0.3,
+      "max_fail": 0.45
+    },
+    "rrna_rate": {
+      "max_warn": 0.05,
+      "max_fail": 0.1
+    },
+    "detected_genes": {
+      "min_warn": 13000,
+      "min_fail": 10000
+    }
+  },
+  "webr": {
+    "enabled": true,
+    "baseUrl": "https://webr.r-wasm.org/latest/",
+    "packageRepo": "https://YOUR_ORG.github.io/webr-bioc-wasm/",
+    "modules": {
+      "limma_voom": {
+        "packages": [
+          "limma",
+          "edgeR"
+        ],
+        "memoryWarning": "medium"
+      },
+      "deseq2": {
+        "packages": [
+          "DESeq2"
+        ],
+        "memoryWarning": "high",
+        "experimental": true
+      }
+    }
+  }
+}

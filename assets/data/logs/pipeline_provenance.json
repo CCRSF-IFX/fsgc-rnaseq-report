@@ -1,0 +1,10 @@
+{
+  "pipeline_name": "Demo RNA-seq pipeline",
+  "pipeline_version": "0.1.0",
+  "run_id": "demo-run-001",
+  "run_date": "2026-05-15",
+  "genome_build": "GRCh38",
+  "annotation_version": "GENCODE v44",
+  "normalization": "DESeq2 size factors",
+  "counting_method": "featureCounts"
+}

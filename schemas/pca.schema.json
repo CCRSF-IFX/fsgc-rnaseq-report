@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "pca.json",
+  "type": "object",
+  "required": ["variance_explained", "samples"],
+  "properties": {
+    "variance_explained": { "type": "object" },
+    "samples": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["sample_id", "PC1", "PC2"],
+        "additionalProperties": true
+      }
+    }
+  }
+}

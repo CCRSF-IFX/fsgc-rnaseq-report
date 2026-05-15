@@ -1,0 +1,7 @@
+{
+  "fastqc": "0.12.1",
+  "multiqc": "1.25",
+  "star": "2.7.11b",
+  "featureCounts": "2.0.6",
+  "DESeq2": "1.44.0"
+}

@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "samples.json",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "required": ["sample_id"],
+    "properties": {
+      "sample_id": { "type": "string" }
+    },
+    "additionalProperties": true
+  }
+}

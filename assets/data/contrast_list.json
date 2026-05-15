@@ -1,0 +1,8 @@
+[
+  {
+    "id": "treated_vs_control",
+    "label": "Treated vs Control",
+    "de_file": "differential_expression/treated_vs_control.csv",
+    "enrichment_file": "enrichment/treated_vs_control_go.csv"
+  }
+]

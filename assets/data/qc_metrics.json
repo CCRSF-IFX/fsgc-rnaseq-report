@@ -1,0 +1,50 @@
+[
+  {
+    "sample_id": "S1",
+    "total_reads": 24500000,
+    "mapping_rate": 0.932,
+    "duplication_rate": 0.18,
+    "rrna_rate": 0.018,
+    "detected_genes": 15800
+  },
+  {
+    "sample_id": "S2",
+    "total_reads": 23800000,
+    "mapping_rate": 0.921,
+    "duplication_rate": 0.21,
+    "rrna_rate": 0.021,
+    "detected_genes": 15420
+  },
+  {
+    "sample_id": "S3",
+    "total_reads": 20100000,
+    "mapping_rate": 0.887,
+    "duplication_rate": 0.29,
+    "rrna_rate": 0.031,
+    "detected_genes": 14120
+  },
+  {
+    "sample_id": "S4",
+    "total_reads": 26000000,
+    "mapping_rate": 0.941,
+    "duplication_rate": 0.17,
+    "rrna_rate": 0.019,
+    "detected_genes": 16210
+  },
+  {
+    "sample_id": "S5",
+    "total_reads": 25100000,
+    "mapping_rate": 0.935,
+    "duplication_rate": 0.19,
+    "rrna_rate": 0.017,
+    "detected_genes": 16005
+  },
+  {
+    "sample_id": "S6",
+    "total_reads": 16500000,
+    "mapping_rate": 0.812,
+    "duplication_rate": 0.37,
+    "rrna_rate": 0.056,
+    "detected_genes": 12010
+  }
+]

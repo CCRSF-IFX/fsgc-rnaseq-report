@@ -1,0 +1,44 @@
+[
+  {
+    "sample_id": "S1",
+    "condition": "control",
+    "batch": "B1",
+    "sex": "F",
+    "tissue": "liver"
+  },
+  {
+    "sample_id": "S2",
+    "condition": "control",
+    "batch": "B1",
+    "sex": "M",
+    "tissue": "liver"
+  },
+  {
+    "sample_id": "S3",
+    "condition": "control",
+    "batch": "B2",
+    "sex": "F",
+    "tissue": "liver"
+  },
+  {
+    "sample_id": "S4",
+    "condition": "treated",
+    "batch": "B2",
+    "sex": "M",
+    "tissue": "liver"
+  },
+  {
+    "sample_id": "S5",
+    "condition": "treated",
+    "batch": "B1",
+    "sex": "F",
+    "tissue": "liver"
+  },
+  {
+    "sample_id": "S6",
+    "condition": "treated",
+    "batch": "B2",
+    "sex": "M",
+    "tissue": "liver"
+  }
+]

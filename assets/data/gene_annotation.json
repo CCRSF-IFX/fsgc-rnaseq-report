@@ -1,0 +1,22 @@
+[
+  {
+    "gene_id": "ENSG000001",
+    "gene_symbol": "GeneA",
+    "description": "Example inflammatory marker"
+  },
+  {
+    "gene_id": "ENSG000002",
+    "gene_symbol": "GeneB",
+    "description": "Example metabolic enzyme"
+  },
+  {
+    "gene_id": "ENSG000003",
+    "gene_symbol": "GeneC",
+    "description": "Example transcription factor"
+  },
+  {
+    "gene_id": "ENSG000004",
+    "gene_symbol": "GeneD",
+    "description": "Example ribosomal protein"
+  }
+]

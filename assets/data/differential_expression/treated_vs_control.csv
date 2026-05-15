@@ -1,0 +1,6 @@
+gene_id,gene_symbol,baseMean,log2FoldChange,lfcSE,pvalue,padj
+ENSG000001,GeneA,295.8,2.15,0.32,1.2e-8,4.5e-6
+ENSG000002,GeneB,613.3,-1.04,0.28,4.0e-5,0.003
+ENSG000003,GeneC,128.7,2.24,0.45,2.2e-6,0.0003
+ENSG000004,GeneD,1525.0,0.02,0.08,0.82,0.91
+ENSG000005,GeneE,14.3,0.37,0.51,0.48,0.74

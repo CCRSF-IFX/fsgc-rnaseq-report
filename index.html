@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>RNA-seq Report</title>
+  <link rel="stylesheet" href="assets/css/style.css" />
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+</head>
+<body>
+  <div id="app-shell">
+    <aside class="sidebar" aria-label="Report navigation">
+      <div class="brand">
+        <div class="brand-mark">OR</div>
+        <div>
+          <h1>RNA-seq Report</h1>
+          <p id="run-label">Loading run...</p>
+        </div>
+      </div>
+      <nav id="tab-nav">
+        <button class="tab-button active" data-tab="overview">Overview</button>
+        <button class="tab-button" data-tab="samples">Sample Metadata</button>
+        <button class="tab-button" data-tab="qc">QC Dashboard</button>
+        <button class="tab-button" data-tab="pca">PCA</button>
+        <button class="tab-button" data-tab="clustering">Clustering</button>
+        <button class="tab-button" data-tab="counts">Count Matrix</button>
+        <button class="tab-button" data-tab="de">Differential Expression</button>
+        <button class="tab-button" data-tab="gene">Gene Search</button>
+        <button class="tab-button" data-tab="enrichment">Enrichment</button>
+        <button class="tab-button" data-tab="provenance">Methods</button>
+        <button class="tab-button" data-tab="downstream">Optional Analysis</button>
+      </nav>
+    </aside>
+
+    <main class="content">
+      <header class="topbar">
+        <div>
+          <h2 id="report-title">RNA-seq Report</h2>
+          <p id="report-subtitle">Interactive pipeline summary</p>
+        </div>
+        <div class="status-bar" id="status-bar">Loading assets...</div>
+      </header>
+
+      <section class="tab-panel active" id="tab-overview">
+        <div class="grid three">
+          <article class="card"><h3>Samples</h3><div class="metric" id="sample-count">--</div><p>Total samples in report</p></article>
+          <article class="card"><h3>Contrasts</h3><div class="metric" id="contrast-count">--</div><p>Differential-expression contrasts</p></article>
+          <article class="card"><h3>QC warnings</h3><div class="metric warn" id="qc-warning-count">--</div><p>Samples with warning/fail metrics</p></article>
+        </div>
+        <article class="card">
+          <h3>Study summary</h3>
+          <div id="overview-summary"></div>
+        </article>
+      </section>
+
+      <section class="tab-panel" id="tab-samples">
+        <article class="card">
+          <h3>Sample metadata</h3>
+          <div class="table-toolbar"><input id="sample-search" placeholder="Search samples" /></div>
+          <div id="samples-table"></div>
+        </article>
+      </section>
+
+      <section class="tab-panel" id="tab-qc">
+        <article class="card">
+          <h3>QC Dashboard</h3>
+          <div id="qc-summary"></div>
+          <div id="qc-plots" class="grid two"></div>
+          <div id="qc-table"></div>
+        </article>
+      </section>
+
+      <section class="tab-panel" id="tab-pca">
+        <article class="card">
+          <div class="toolbar">
+            <label>Color by <select id="pca-color"></select></label>
+            <label>X/Y PCs <select id="pca-pair"><option value="PC1,PC2">PC1 vs PC2</option><option value="PC2,PC3">PC2 vs PC3</option></select></label>
+          </div>
+          <div id="pca-plot" class="plot tall"></div>
+          <div id="scree-plot" class="plot short"></div>
+        </article>
+      </section>
+
+      <section class="tab-panel" id="tab-clustering">
+        <article class="card">
+          <h3>Sample distance and hierarchical clustering</h3>
+          <div id="distance-heatmap" class="plot tall"></div>
+          <p class="note">Dendrogram rendering can be added when the pipeline exports cluster tree coordinates.</p>
+        </article>
+      </section>
+
+      <section class="tab-panel" id="tab-counts">
+        <article class="card">
+          <h3>Count matrix explorer</h3>
+          <div class="toolbar">
+            <input id="count-gene-input" placeholder="Gene symbol or ID, e.g. GeneA" />
+            <button id="count-gene-button">Plot gene</button>
+          </div>
+          <div id="gene-count-plot" class="plot tall"></div>
+          <div id="counts-table"></div>
+        </article>
+      </section>
+
+      <section class="tab-panel" id="tab-de">
+        <article class="card">
+          <div class="toolbar">
+            <label>Contrast <select id="contrast-select"></select></label>
+            <label>padj <= <input id="padj-threshold" type="number" step="0.01" value="0.05" /></label>
+            <label>|log2FC| >= <input id="lfc-threshold" type="number" step="0.25" value="1" /></label>
+            <button id="de-apply">Apply</button>
+          </div>
+          <div class="grid two">
+            <div id="volcano-plot" class="plot tall"></div>
+            <div id="ma-plot" class="plot tall"></div>
+          </div>
+          <div id="de-table"></div>
+        </article>
+      </section>
+
+      <section class="tab-panel" id="tab-gene">
+        <article class="card">
+          <h3>Gene search</h3>
+          <div class="toolbar">
+            <input id="gene-search-input" placeholder="Search gene symbol, gene_id, or description" />
+            <button id="gene-search-button">Search</button>
+          </div>
+          <div id="gene-search-results"></div>
+        </article>
+      </section>
+
+      <section class="tab-panel" id="tab-enrichment">
+        <article class="card">
+          <h3>Pathway / enrichment</h3>
+          <div class="toolbar"><label>Contrast <select id="enrichment-contrast-select"></select></label></div>
+          <div id="enrichment-plot" class="plot tall"></div>
+          <div id="enrichment-table"></div>
+        </article>
+      </section>
+
+      <section class="tab-panel" id="tab-provenance">
+        <article class="card">
+          <h3>Methods and provenance</h3>
+          <div id="provenance-panel"></div>
+        </article>
+      </section>
+
+      <section class="tab-panel" id="tab-downstream">
+        <article class="card">
+          <h3>Optional downstream analysis</h3>
+          <p class="warning">Browser-side analysis is for small exploratory datasets. Use pipeline-generated results for production RNA-seq differential expression.</p>
+          <div id="downstream-cards" class="grid two"></div>
+          <details class="log-panel"><summary>Analysis log</summary><pre id="analysis-log"></pre></details>
+        </article>
+      </section>
+    </main>
+  </div>
+  <script type="module" src="assets/js/app.js"></script>
+</body>
+</html>
