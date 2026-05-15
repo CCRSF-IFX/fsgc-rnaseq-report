@@ -1,6 +1,22 @@
 import { state } from './state.js';
 
+function getEmbeddedAsset(path) {
+  const assets = globalThis.REPORT_EMBEDDED_ASSETS;
+  return assets && Object.prototype.hasOwnProperty.call(assets, path) ? assets[path] : undefined;
+}
+
 export async function loadJson(path, required = false) {
+  const embedded = getEmbeddedAsset(path);
+  if (embedded !== undefined) {
+    try {
+      return JSON.parse(embedded);
+    } catch (error) {
+      if (required) throw new Error(`Required embedded JSON asset failed: ${path}: ${error.message}`);
+      console.warn(`Optional embedded JSON asset invalid: ${path}`, error);
+      return null;
+    }
+  }
+
   try {
     const response = await fetch(path);
     if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
@@ -13,6 +29,9 @@ export async function loadJson(path, required = false) {
 }
 
 export async function loadText(path, required = false) {
+  const embedded = getEmbeddedAsset(path);
+  if (embedded !== undefined) return embedded;
+
   try {
     const response = await fetch(path);
     if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);

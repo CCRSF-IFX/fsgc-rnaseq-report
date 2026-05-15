@@ -24,7 +24,8 @@
   "webr": {
     "enabled": true,
     "baseUrl": "https://webr.r-wasm.org/latest/",
-    "packageRepo": "https://YOUR_ORG.github.io/webr-bioc-wasm/",
+    "packageRepo": "https://omicsreporthub.github.io/rnaseq-report/webr-packages/v0.1.0/",
+    "packageRepoVersion": "v0.1.0",
     "modules": {
       "limma_voom": {
         "packages": [
@@ -34,6 +35,7 @@
         "memoryWarning": "medium"
       },
       "deseq2": {
+        "enabled": false,
         "packages": [
           "DESeq2"
         ],

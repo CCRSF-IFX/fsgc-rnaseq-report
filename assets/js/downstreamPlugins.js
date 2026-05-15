@@ -4,7 +4,7 @@ import { renderPCA } from './plots.js';
 
 export function pluginDefinitions() {
   const modules = state.config?.webr?.modules || {};
-  return [
+  const plugins = [
     {
       id: 'pca_replot',
       name: 'PCA replot',
@@ -21,7 +21,10 @@ export function pluginDefinitions() {
       memory: modules.limma_voom?.memoryWarning || 'medium',
       run: async () => { logAnalysis('limma/voom module ready. Add R script implementation for your pipeline design matrix.'); },
     },
-    {
+  ];
+
+  if (modules.deseq2?.enabled !== false) {
+    plugins.push({
       id: 'deseq2_experimental',
       name: 'DESeq2 experimental module',
       description: 'Optional DESeq2 browser-side module. This is expected to be heavy and may be unavailable depending on wasm package builds.',
@@ -29,8 +32,10 @@ export function pluginDefinitions() {
       memory: modules.deseq2?.memoryWarning || 'high',
       experimental: true,
       run: async () => { logAnalysis('DESeq2 module loaded. Use only for small exploratory datasets.'); },
-    },
-  ];
+    });
+  }
+
+  return plugins;
 }
 
 export function renderDownstreamCards() {

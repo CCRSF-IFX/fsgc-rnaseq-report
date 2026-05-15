@@ -9,6 +9,7 @@ permissions:
   contents: read
   pages: write
   id-token: write
+  repository-projects: read
 
 concurrency:
   group: pages
@@ -23,12 +24,80 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Read webR package snapshot version
+        id: webr-snapshot
+        shell: bash
+        run: |
+          version="$(tr -d '[:space:]' < webr-packages/VERSION)"
+          if [[ -z "$version" ]]; then
+            echo "webr-packages/VERSION is empty" >&2
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Prepare static site
+        shell: bash
+        run: |
+          mkdir -p _site
+          rsync -a --delete \
+            --exclude '.git/' \
+            --exclude '.github/' \
+            --exclude '_site/' \
+            --exclude 'dist/' \
+            --exclude 'local_data/' \
+            --exclude 'large_outputs/' \
+            --exclude 'webr-packages/' \
+            ./ _site/
+          touch _site/.nojekyll
+
+      - name: Checkout r-wasm/actions repository
+        uses: actions/checkout@v4
+        with:
+          ref: v2
+          repository: r-wasm/actions
+          token: ${{ secrets.GITHUB_TOKEN }}
+          path: .actions
+
+      - name: Retrieve webR package refs
+        id: packages-file
+        shell: Rscript {0}
+        run: |
+          pkgs <- unique(trimws(readLines("webr-packages/packages", warn = FALSE)))
+          pkgs <- pkgs[nzchar(pkgs) & !startsWith(pkgs, "#")]
+          cat("pkgs=", paste0(pkgs, collapse = ","), "\n", file = Sys.getenv("GITHUB_OUTPUT"), sep = "", append = TRUE)
+
+      - name: Patch r-wasm package resolver workaround
+        shell: python
+        run: |
+          from pathlib import Path
+
+          path = Path(".actions/build-rwasm/code.R")
+          text = path.read_text()
+          old = 'rwasm::add_pkg(packages, repo_dir = repo_path, compress = compress)'
+          new = 'rwasm::add_pkg(packages, repo_dir = repo_path, remotes = NULL, compress = compress)'
+          if old not in text:
+              raise SystemExit("Expected rwasm::add_pkg() call was not found")
+          path.write_text(text.replace(old, new))
+
+      - name: Build versioned webR package repo
+        uses: ./.actions/build-rwasm
+        with:
+          packages: ${{ steps.packages-file.outputs.pkgs }}
+          repo-path: _site/webr-packages/${{ steps.webr-snapshot.outputs.version }}
+          webr-image: ghcr.io/r-wasm/webr:main
+          compress: false
+
+      - name: Fix generated package permissions
+        shell: bash
+        run: sudo chown -R "$(id -u):$(id -g)" _site/webr-packages
+
       - name: Configure Pages
         uses: actions/configure-pages@v5
       - name: Upload static site
         uses: actions/upload-pages-artifact@v3
         with:
-          path: .
+          path: _site
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4

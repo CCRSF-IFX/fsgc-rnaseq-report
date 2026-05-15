@@ -12,21 +12,58 @@ async function main() {
   wireTabs();
   try {
     await loadCoreAssets();
-    setStatus('Report assets loaded');
     renderHeader();
     renderOverview();
     renderSamples();
+    populateContrastSelectors();
+    renderDownstreamCards();
+    setStatus('Report assets loaded; loading plots...');
+    await waitForPlotly();
     renderQC();
     setupPcaControls();
-    populateContrastSelectors();
     await renderCurrentContrast();
     await renderCurrentEnrichment();
-    renderDownstreamCards();
     wireControls();
+    setStatus('Report assets loaded');
   } catch (error) {
     setStatus(`Error: ${error.message}`);
     console.error(error);
   }
+}
+
+function waitForPlotly(timeoutMs = 30000) {
+  if (globalThis.Plotly) return Promise.resolve();
+  const script = document.querySelector('[data-plotly]');
+  if (!script) return Promise.reject(new Error('Plotly script is missing.'));
+
+  return new Promise((resolve, reject) => {
+    let done = false;
+    const cleanup = () => {
+      script.removeEventListener('load', handleLoad);
+      script.removeEventListener('error', handleError);
+      clearInterval(check);
+      clearTimeout(timeout);
+    };
+    const finish = () => {
+      if (done) return;
+      done = true;
+      cleanup();
+      resolve();
+    };
+    const fail = (message) => {
+      if (done) return;
+      done = true;
+      cleanup();
+      reject(new Error(message));
+    };
+    const handleLoad = () => (globalThis.Plotly ? finish() : fail('Plotly loaded but did not initialize.'));
+    const handleError = () => fail('Plotly failed to load.');
+    const check = setInterval(() => { if (globalThis.Plotly) finish(); }, 50);
+    const timeout = setTimeout(() => fail('Plotly did not load within 30 seconds.'), timeoutMs);
+
+    script.addEventListener('load', handleLoad, { once: true });
+    script.addEventListener('error', handleError, { once: true });
+  });
 }
 
 function renderHeader() {

@@ -13,20 +13,31 @@ This repository contains the report application:
 - `assets/data/` - demo report assets
 - `schemas/` - documented JSON structures
 - `scripts/validate_assets.py` - simple asset validator
-- `.github/workflows/deploy-pages.yml` - optional GitHub Pages deployment
-
-A separate repository, `webr-bioc-wasm`, hosts WebAssembly R packages for optional webR modules.
+- `.github/workflows/deploy-pages.yml` - GitHub Pages deployment, including the report-scoped webR package snapshot
+- `webr-packages/` - versioned WebAssembly R package set for optional webR modules
 
 ## Quick start
 
-Open locally from a static web server:
+For development, open locally from a static web server:
 
 ```bash
 python -m http.server 8000
 # then open http://localhost:8000
 ```
 
-Do not rely on double-clicking `index.html`; browsers often block `fetch()` from local files.
+Do not rely on double-clicking `index.html`; browsers often block `fetch()` and JavaScript modules from local files.
+
+For end-user delivery, build a double-clickable single-file report:
+
+```bash
+python scripts/build_standalone_report.py
+```
+
+Send the generated `dist/rnaseq-report.html` file. It embeds the report data, CSS, and application JavaScript, so recipients do not need to run a local web server. By default, the file still loads Plotly from the public CDN. To make a larger fully offline file, run:
+
+```bash
+python scripts/build_standalone_report.py --embed-plotly
+```
 
 ## Create and push this repo
 
@@ -53,7 +64,15 @@ To publish the demo report using GitHub Pages:
 3. Under **Build and deployment**, set source to **GitHub Actions**.
 4. Push to `main` or run the workflow manually.
 
-The workflow uploads the repository root as a static site artifact.
+The workflow builds the static report into `_site/`, then builds the configured
+webR package set into a versioned snapshot path:
+
+```text
+https://omicsreporthub.github.io/rnaseq-report/webr-packages/v0.1.0/
+```
+
+The report config points to that immutable package repository URL, so standalone
+HTML files generated from this repo keep using the same package snapshot.
 
 ## Data model
 
@@ -95,7 +114,8 @@ The report lazy-loads webR only when the user opens the optional downstream anal
   "webr": {
     "enabled": true,
     "baseUrl": "https://webr.r-wasm.org/latest/",
-    "packageRepo": "https://YOUR_ORG.github.io/webr-bioc-wasm/",
+    "packageRepo": "https://omicsreporthub.github.io/rnaseq-report/webr-packages/v0.1.0/",
+    "packageRepoVersion": "v0.1.0",
     "modules": {
       "limma_voom": {
         "packages": ["limma", "edgeR"],
