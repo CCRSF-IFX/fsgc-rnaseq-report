@@ -61,11 +61,26 @@ jobs:
 
       - name: Retrieve webR package refs
         id: packages-file
-        shell: Rscript {0}
+        shell: bash
         run: |
-          pkgs <- unique(trimws(readLines("webr-packages/packages", warn = FALSE)))
-          pkgs <- pkgs[nzchar(pkgs) & !startsWith(pkgs, "#")]
-          cat("pkgs=", paste0(pkgs, collapse = ","), "\n", file = Sys.getenv("GITHUB_OUTPUT"), sep = "", append = TRUE)
+          pkgs="$(
+            awk '
+              {
+                gsub(/^[[:space:]]+|[[:space:]]+$/, "", $0)
+                if ($0 == "" || substr($0, 1, 1) == "#") next
+                if (!seen[$0]++) {
+                  if (out != "") out = out ","
+                  out = out $0
+                }
+              }
+              END { print out }
+            ' webr-packages/packages
+          )"
+          if [[ -z "$pkgs" ]]; then
+            echo "webr-packages/packages did not contain any package refs" >&2
+            exit 1
+          fi
+          printf 'pkgs=%s\n' "$pkgs" >> "$GITHUB_OUTPUT"
 
       - name: Patch r-wasm package resolver workaround
         shell: python

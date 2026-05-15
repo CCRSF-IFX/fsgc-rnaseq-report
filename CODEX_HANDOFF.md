@@ -68,7 +68,7 @@ From `/Users/xies4/github/rna_report/rnaseq-report`:
 ruby -e 'require "yaml"; YAML.load_file(".github/workflows/deploy-pages.yml"); puts "yaml ok"'
 python3 -m json.tool assets/report_config.json >/dev/null
 node --check assets/js/downstreamPlugins.js
-Rscript --vanilla -e 'pkgs <- unique(trimws(readLines("webr-packages/packages", warn = FALSE))); pkgs <- pkgs[nzchar(pkgs) & !startsWith(pkgs, "#")]; cat(paste(pkgs, collapse = ","), "\n")'
+awk '{ gsub(/^[[:space:]]+|[[:space:]]+$/, "", $0); if ($0 == "" || substr($0, 1, 1) == "#") next; if (!seen[$0]++) { if (out != "") out = out ","; out = out $0 } } END { print out }' webr-packages/packages
 python3 scripts/build_standalone_report.py
 ```
 
