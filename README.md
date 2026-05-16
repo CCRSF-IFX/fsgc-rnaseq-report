@@ -114,6 +114,9 @@ The actual package repo build is delegated to `r-wasm/actions`.
 The package list includes DESeq2 plus the Bioconductor hard dependency closure
 that is not available from the default webR package repository. This keeps the
 snapshot focused while still making `library(DESeq2)` loadable in webR.
+The workflow also installs the project-local `webr-packages/patches/locfit.mk`
+override before building packages so `locfit`, a DESeq2 import that requires
+C17, compiles with Emscripten instead of the host C compiler.
 
 Package snapshots are overwrite-protected by default. If
 `webr-packages/<VERSION>/bin/emscripten/contrib/4.5/PACKAGES` already exists on
@@ -286,6 +289,9 @@ The Clustering tab has a Clustergrammer-JS heatmap using the count matrix, with
 row z-score or log2(CPM + 1) scale, sample annotation, and row/column clustering
 controls. Clustergrammer-JS is loaded from the npm package bundle at runtime so
 the development app and generated standalone HTML can stay build-free.
+
+The Pages workflow verifies that every package listed above appears in the
+generated wasm `PACKAGES` index before publishing the snapshot.
 
 Each deployed snapshot also exposes a ZIP archive:
 

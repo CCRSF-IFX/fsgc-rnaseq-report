@@ -6,6 +6,8 @@ with the GitHub Pages workflow.
 - `VERSION` is the immutable snapshot path published under
   `webr-packages/<VERSION>/`.
 - `packages` contains package references for `rwasm::add_pkg()`.
+- `patches/` contains project-local Makevars overrides installed into the
+  rwasm build environment before package compilation.
 - `published_versions` lists old snapshots that should be preserved during
   future deploys.
 

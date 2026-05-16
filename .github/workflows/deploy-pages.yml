@@ -167,13 +167,27 @@ jobs:
           fi
           printf 'pkgs=%s\n' "$pkgs" >> "$GITHUB_OUTPUT"
 
-      - name: Patch r-wasm package resolver workaround
+      - name: Patch r-wasm action for package snapshot build
         shell: python
         run: |
           from pathlib import Path
 
           path = Path(".actions/build-rwasm/code.R")
           text = path.read_text()
+          install = 'pak::pak(c("r-wasm/rwasm"))'
+          patch = (
+              'pak::pak(c("r-wasm/rwasm"))\n\n'
+              'locfit_makevars_src <- file.path("webr-packages", "patches", "locfit.mk")\n'
+              'if (file.exists(locfit_makevars_src)) {\n'
+              '  locfit_makevars_dest <- file.path(system.file("Makevars", package = "rwasm"), "locfit.mk")\n'
+              '  file.copy(locfit_makevars_src, locfit_makevars_dest, overwrite = TRUE)\n'
+              '  message("Installed locfit webR Makevars override: ", locfit_makevars_dest)\n'
+              '}\n'
+          )
+          if install not in text:
+              raise SystemExit("Expected rwasm install call was not found")
+          text = text.replace(install, patch)
+
           old = 'rwasm::add_pkg(packages, repo_dir = repo_path, compress = compress)'
           new = 'rwasm::add_pkg(packages, repo_dir = repo_path, remotes = NULL, compress = compress)'
           if old not in text:
@@ -191,6 +205,44 @@ jobs:
       - name: Fix generated package permissions
         shell: bash
         run: sudo chown -R "$(id -u):$(id -g)" _site/webr-packages
+
+      - name: Verify webR package snapshot contents
+        shell: bash
+        run: |
+          package_index="_site/webr-packages/${{ steps.webr-snapshot.outputs.version }}/bin/emscripten/contrib/4.5/PACKAGES"
+          if [[ ! -f "$package_index" ]]; then
+            echo "Package index was not built: $package_index" >&2
+            exit 1
+          fi
+
+          mapfile -t expected < <(
+            awk '
+              {
+                gsub(/^[[:space:]]+|[[:space:]]+$/, "", $0)
+                if ($0 == "" || substr($0, 1, 1) == "#") next
+                sub("@.*$", "", $0)
+                sub("^.*::", "", $0)
+                sub("^.*/", "", $0)
+                if (!seen[$0]++) print $0
+              }
+            ' webr-packages/packages
+          )
+          mapfile -t available < <(awk '/^Package:/ { print $2 }' "$package_index" | sort -u)
+
+          missing=()
+          for package in "${expected[@]}"; do
+            if ! printf '%s\n' "${available[@]}" | grep -Fxq "$package"; then
+              missing+=("$package")
+            fi
+          done
+
+          if (( ${#missing[@]} )); then
+            echo "The webR package snapshot is missing required binary packages:" >&2
+            printf '  - %s\n' "${missing[@]}" >&2
+            exit 1
+          fi
+
+          printf 'Verified webR package snapshot packages: %s\n' "${expected[*]}"
 
       - name: Build webR package snapshot archive
         shell: bash
