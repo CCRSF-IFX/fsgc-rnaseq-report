@@ -36,10 +36,11 @@ export function renderPackageRepositoryPanel() {
   document.getElementById('package-install')?.addEventListener('click', async () => {
     try {
       packageRepoSetStatus('Installing packages in webR...', 'info');
-      await ensureRPackages(packages);
-      logAnalysis(`webR packages ready: ${packages.join(', ')}`);
+      const loadPackages = packageRepoLoadPackages();
+      await ensureRPackages(packages, { load: loadPackages });
+      logAnalysis(`webR packages installed; loaded top-level packages: ${loadPackages.join(', ') || 'none'}`);
       renderPackageRepositoryPanel();
-      packageRepoSetStatus('Packages installed and loaded.', 'ok');
+      packageRepoSetStatus('Packages installed; top-level analysis packages loaded.', 'ok');
     } catch (error) {
       packageRepoSetStatus(`Package install failed: ${error.message}`, 'fail');
     }
@@ -93,6 +94,19 @@ function packageRepoRequiredPackages() {
   Object.values(modules).forEach((moduleConfig) => {
     if (moduleConfig?.enabled === false) return;
     (moduleConfig?.packages || []).forEach((pkg) => {
+      if (!packages.includes(pkg)) packages.push(pkg);
+    });
+  });
+  return packages;
+}
+
+function packageRepoLoadPackages() {
+  const modules = state.config?.webr?.modules || {};
+  const packages = [];
+  Object.values(modules).forEach((moduleConfig) => {
+    if (moduleConfig?.enabled === false) return;
+    const loadPackages = moduleConfig?.loadPackages || (moduleConfig?.packages || []).slice(0, 1);
+    loadPackages.forEach((pkg) => {
       if (!packages.includes(pkg)) packages.push(pkg);
     });
   });

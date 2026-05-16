@@ -29,6 +29,7 @@ export function pluginDefinitions() {
       name: 'DESeq2 experimental module',
       description: 'Optional DESeq2 browser-side module. This is expected to be heavy and may be unavailable depending on wasm package builds.',
       packages: modules.deseq2?.packages || ['DESeq2'],
+      loadPackages: modules.deseq2?.loadPackages || ['DESeq2'],
       memory: modules.deseq2?.memoryWarning || 'high',
       experimental: true,
       run: async () => { logAnalysis('DESeq2 module loaded. Run a contrast from the Differential Expression tab.'); },
@@ -41,6 +42,7 @@ export function pluginDefinitions() {
       name: 'fgsea experimental module',
       description: 'Run preranked GSEA from the current DE contrast using hg38 or mm10 GMT pathway sets.',
       packages: modules.fgsea?.packages || ['fgsea'],
+      loadPackages: modules.fgsea?.loadPackages || ['fgsea'],
       memory: modules.fgsea?.memoryWarning || 'medium',
       experimental: true,
       run: async () => { logAnalysis('fgsea module loaded. Run fgsea from the Enrichment tab.'); },
@@ -65,12 +67,16 @@ export function renderDownstreamCards() {
   container.querySelectorAll('[data-plugin-id]').forEach((card) => {
     const plugin = pluginDefinitions().find((p) => p.id === card.dataset.pluginId);
     card.querySelector('[data-action="install"]')?.addEventListener('click', async () => {
-      try { await ensureRPackages(plugin.packages); logAnalysis(`${plugin.name} packages ready.`); }
-      catch (error) { logAnalysis(`${plugin.name} package step failed: ${error.message}`); }
+      try {
+        await ensureRPackages(plugin.packages, { load: plugin.loadPackages || plugin.packages });
+        logAnalysis(`${plugin.name} packages ready.`);
+      } catch (error) {
+        logAnalysis(`${plugin.name} package step failed: ${error.message}`);
+      }
     });
     card.querySelector('[data-action="run"]')?.addEventListener('click', async () => {
       try {
-        if (plugin.packages.length) await ensureRPackages(plugin.packages);
+        if (plugin.packages.length) await ensureRPackages(plugin.packages, { load: plugin.loadPackages || plugin.packages });
         await plugin.run();
       } catch (error) { logAnalysis(`${plugin.name} failed: ${error.message}`); }
     });
