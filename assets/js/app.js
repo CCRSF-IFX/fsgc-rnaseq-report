@@ -7,6 +7,9 @@ import { populateContrastSelectors, renderCurrentContrast } from './de.js';
 import { renderCurrentEnrichment } from './enrichment.js';
 import { renderGeneSearch } from './geneSearch.js';
 import { renderDownstreamCards } from './downstreamPlugins.js';
+import { renderPackageRepositoryPanel } from './packageRepository.js';
+import { setupDeseqControls } from './deseq2.js';
+import { setupExpressionHeatmapControls } from './heatmap.js';
 
 async function main() {
   wireTabs();
@@ -16,11 +19,14 @@ async function main() {
     renderOverview();
     renderSamples();
     populateContrastSelectors();
+    setupDeseqControls({ populateContrastSelectors, renderCurrentContrast });
     renderDownstreamCards();
+    renderPackageRepositoryPanel();
     setStatus('Report assets loaded; loading plots...');
     await waitForPlotly();
     renderQC();
     setupPcaControls();
+    setupExpressionHeatmapControls();
     await renderCurrentContrast();
     await renderCurrentEnrichment();
     wireControls();
@@ -109,7 +115,12 @@ function setupPcaControls() {
   const columns = metadataColumns();
   color.innerHTML = columns.map((c) => `<option value="${c}">${c}</option>`).join('');
   if (columns.includes('condition')) color.value = 'condition';
-  renderPCA(color.value || columns[0], document.getElementById('pca-pair').value);
+  const pair = document.getElementById('pca-pair');
+  const pcs = Object.keys(state.pca?.variance_explained || {});
+  if (pair && pcs.length >= 2) {
+    pair.innerHTML = pcs.slice(0, -1).map((pc, i) => `<option value="${pc},${pcs[i + 1]}">${pc} vs ${pcs[i + 1]}</option>`).join('');
+  }
+  renderPCA(color.value || columns[0], pair?.value || 'PC1,PC2');
   renderDistanceHeatmap();
 }
 
@@ -137,7 +148,13 @@ function wireTabs() {
       document.querySelectorAll('.tab-button').forEach((b) => b.classList.remove('active'));
       document.querySelectorAll('.tab-panel').forEach((p) => p.classList.remove('active'));
       button.classList.add('active');
-      document.getElementById(`tab-${button.dataset.tab}`).classList.add('active');
+      const panel = document.getElementById(`tab-${button.dataset.tab}`);
+      panel.classList.add('active');
+      if (globalThis.Plotly?.Plots) {
+        requestAnimationFrame(() => {
+          panel.querySelectorAll('.js-plotly-plot').forEach((plot) => Plotly.Plots.resize(plot));
+        });
+      }
     });
   });
 }

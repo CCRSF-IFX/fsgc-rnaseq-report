@@ -1,6 +1,7 @@
 import { state, logAnalysis } from './state.js';
 import { ensureRPackages } from './packageManager.js';
 import { renderPCA } from './plots.js';
+import { renderExpressionHeatmap } from './heatmap.js';
 
 export function pluginDefinitions() {
   const modules = state.config?.webr?.modules || {};
@@ -15,11 +16,11 @@ export function pluginDefinitions() {
     },
     {
       id: 'limma_voom',
-      name: 'limma/voom exploratory module',
-      description: 'Install limma and edgeR in webR for small exploratory analyses. Production results should come from the pipeline.',
-      packages: modules.limma_voom?.packages || ['limma', 'edgeR'],
+      name: 'limma exploratory module',
+      description: 'Install limma in webR for small exploratory analyses. Production results should come from the pipeline.',
+      packages: modules.limma_voom?.packages || ['limma'],
       memory: modules.limma_voom?.memoryWarning || 'medium',
-      run: async () => { logAnalysis('limma/voom module ready. Add R script implementation for your pipeline design matrix.'); },
+      run: async () => { logAnalysis('limma module ready. Add R script implementation for your pipeline design matrix.'); },
     },
   ];
 
@@ -31,7 +32,18 @@ export function pluginDefinitions() {
       packages: modules.deseq2?.packages || ['DESeq2'],
       memory: modules.deseq2?.memoryWarning || 'high',
       experimental: true,
-      run: async () => { logAnalysis('DESeq2 module loaded. Use only for small exploratory datasets.'); },
+      run: async () => { logAnalysis('DESeq2 module loaded. Run a contrast from the Differential Expression tab.'); },
+    });
+  }
+
+  if (modules.pheatmap?.enabled !== false) {
+    plugins.push({
+      id: 'pheatmap',
+      name: 'pheatmap module',
+      description: 'Install pheatmap in webR and use the Plotly expression heatmap controls for small matrices.',
+      packages: modules.pheatmap?.packages || ['pheatmap'],
+      memory: modules.pheatmap?.memoryWarning || 'medium',
+      run: async () => { renderExpressionHeatmap(); logAnalysis('Expression heatmap refreshed.'); },
     });
   }
 

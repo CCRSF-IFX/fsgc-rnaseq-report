@@ -4,104 +4,123 @@ This note is for any other session working in this repository.
 
 ## Goal
 
-Use the "single report app" architecture: `rnaseq-report` hosts both the static
-report and the exact WebAssembly R package snapshot needed by that report.
-
-The report should refer to a versioned package repository URL, so delivered HTML
-files can keep using the same package set:
+`rnaseq-report` hosts the static report and the exact WebAssembly R package
+snapshot needed by optional browser-side modules. Delivered HTML files should
+point at a versioned package repository URL:
 
 ```text
 https://omicsreporthub.github.io/rnaseq-report/webr-packages/v0.1.0/
 ```
 
-## Current Local Changes
+## Current Snapshot
 
-The following logic has been added locally but not committed here:
+- `webr-packages/VERSION`: `v0.1.0`
+- `assets/report_config.json` points `webr.packageRepo` at:
 
-- `.github/workflows/deploy-pages.yml`
-  - Builds the static site into `_site/`.
-  - Checks out `r-wasm/actions@v2`.
-  - Reads the snapshot version from `webr-packages/VERSION`.
-  - Reads package refs from `webr-packages/packages`.
-  - Patches `rwasm::add_pkg()` to use `remotes = NULL`, matching the workaround
-    used in `webr-bioc-wasm` for the current `pkgdepends/pkgcache` resolver bug.
-  - Builds the wasm package repo into
-    `_site/webr-packages/${VERSION}/`.
-  - Uploads `_site` to GitHub Pages.
+  ```text
+  https://omicsreporthub.github.io/rnaseq-report/webr-packages/v0.1.0/
+  ```
 
-- `webr-packages/VERSION`
-  - Current value: `v0.1.0`.
+- `webr-packages/packages` currently contains:
 
-- `webr-packages/packages`
-  - Current package refs:
+  ```text
+  bioc::limma
+  bioc::DESeq2
+  cran::pheatmap
+  ```
 
-    ```text
-    bioc::limma
-    bioc::edgeR
-    ```
+- `webr-packages/published_versions` currently lists:
 
-- `assets/report_config.json`
-  - `webr.packageRepo` now points at:
+  ```text
+  v0.1.0
+  ```
 
-    ```text
-    https://omicsreporthub.github.io/rnaseq-report/webr-packages/v0.1.0/
-    ```
+## Workflow Behavior
 
-  - `webr.packageRepoVersion` is `v0.1.0`.
-  - The DESeq2 webR module is disabled for now because this snapshot only hosts
-    `limma` and `edgeR`.
+`.github/workflows/deploy-pages.yml`:
 
-- `assets/js/downstreamPlugins.js`
-  - Respects `modules.deseq2.enabled === false`, so the DESeq2 card does not
-    appear unless explicitly enabled.
+- Builds the static site into `_site/`.
+- Refuses to overwrite an existing `webr-packages/<VERSION>/.../PACKAGES` URL by
+  default.
+- Allows deliberate same-version replacement only from manual
+  `workflow_dispatch` with `force_overwrite=true`.
+- Restores previously published versions listed in
+  `webr-packages/published_versions` into `_site/` before deploying.
+- Checks out `r-wasm/actions@v2`.
+- Reads package refs from `webr-packages/packages` using Bash/`awk`; no
+  `Rscript` is required for that parsing step.
+- Patches `rwasm::add_pkg()` to use `remotes = NULL`, matching the workaround
+  used for the current resolver behavior.
+- Builds the current wasm package repo into `_site/webr-packages/${VERSION}/`.
+- Writes `_site/webr-packages/${VERSION}/webr-packages-${VERSION}.zip` so users
+  can download or mirror the compiled package snapshot.
+- Uploads `_site` to GitHub Pages.
 
-- `scripts/build_standalone_report.py`
-  - Existing/dirty local work builds a standalone HTML file and embeds
-    `assets/report_config.json`, so the delivered HTML carries the versioned
-    package repo URL.
+## Current Browser Features
 
-## Validation Already Run
+- Minimum inputs: `counts.csv` plus a sample metadata file such as
+  `sample_manifest.csv`.
+- Browser fallbacks compute PCA, sample distances, exploratory Welch-test DE,
+  and a Plotly expression heatmap from counts.
+- The Clustering tab has a pheatmap-style expression heatmap with metadata
+  annotation, row z-score/logCPM scale, and row/column clustering toggles.
+- The Differential Expression tab has a basic webR DESeq2 runner for two-group
+  contrasts. It installs/loads `DESeq2` from the configured package snapshot.
+- The Optional Analysis tab shows the configured package repository, can check
+  the remote `PACKAGES` index, can install/load configured webR packages, and
+  links to the snapshot ZIP.
+
+## Simulated Test Data
+
+`assets/data/simulated/` contains a minimal manifest-driven fixture:
+
+- `sample_manifest.csv`
+- `counts.csv`
+
+Validate it with:
+
+```bash
+python3 scripts/validate_assets.py assets/data/simulated
+```
+
+## Validation Commands
 
 From `/Users/xies4/github/rna_report/rnaseq-report`:
 
 ```bash
-ruby -e 'require "yaml"; YAML.load_file(".github/workflows/deploy-pages.yml"); puts "yaml ok"'
+python3 scripts/validate_assets.py assets/data
+python3 scripts/validate_assets.py assets/data/simulated
 python3 -m json.tool assets/report_config.json >/dev/null
+python3 -m py_compile scripts/validate_assets.py scripts/build_standalone_report.py
+node --check assets/js/app.js
+node --check assets/js/analysis.js
+node --check assets/js/dataLoader.js
 node --check assets/js/downstreamPlugins.js
+node --check assets/js/deseq2.js
+node --check assets/js/heatmap.js
+node --check assets/js/packageRepository.js
+node --check assets/js/plots.js
+ruby -e 'require "yaml"; YAML.load_file(".github/workflows/deploy-pages.yml"); puts "yaml ok"'
 awk '{ gsub(/^[[:space:]]+|[[:space:]]+$/, "", $0); if ($0 == "" || substr($0, 1, 1) == "#") next; if (!seen[$0]++) { if (out != "") out = out ","; out = out $0 } } END { print out }' webr-packages/packages
 python3 scripts/build_standalone_report.py
 ```
 
-The generated `dist/rnaseq-report.html` contains the `v0.1.0` package repo URL.
+Expected package parser output:
 
-## Important Caveat
+```text
+bioc::limma,bioc::DESeq2,cran::pheatmap
+```
 
-This implementation creates a versioned path, but GitHub Pages artifact
-deployment replaces the whole published site each run. If `VERSION` is later
-changed to `v0.2.0`, the old `v0.1.0` directory will not be preserved unless the
-workflow is extended to copy forward prior snapshots or publish snapshots to a
-durable artifact store.
+## Verification URL
 
-For true immutable historical snapshots, use one of these follow-ups:
-
-1. Keep a checked-in `webr-package-snapshots/` archive branch or `gh-pages`
-   branch and deploy old plus new snapshots.
-2. Publish snapshots to object storage, e.g. S3, Cloudflare R2, GCS, Azure Blob,
-   or internal MinIO.
-3. Store package snapshots as GitHub Release assets and have report manifests
-   reference release URLs.
-
-For the immediate `v0.1.0` report delivery, the current setup is enough: the
-HTML points to one explicit snapshot URL and the Pages workflow builds that
-snapshot during deployment.
-
-## Suggested Next Step
-
-Run the GitHub Pages workflow in `rnaseq-report`, then verify:
+After the Pages workflow force-overwrites `v0.1.0`, verify:
 
 ```text
 https://omicsreporthub.github.io/rnaseq-report/webr-packages/v0.1.0/bin/emscripten/contrib/4.5/PACKAGES
 ```
 
-Only after that should the delivered standalone HTML be treated as pinned to a
-working package snapshot.
+Also verify the package archive:
+
+```text
+https://omicsreporthub.github.io/rnaseq-report/webr-packages/v0.1.0/webr-packages-v0.1.0.zip
+```

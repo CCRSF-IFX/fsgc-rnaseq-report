@@ -87,6 +87,19 @@
           <div id="distance-heatmap" class="plot tall"></div>
           <p class="note">Dendrogram rendering can be added when the pipeline exports cluster tree coordinates.</p>
         </article>
+        <article class="card">
+          <h3>Expression heatmap</h3>
+          <div class="toolbar">
+            <label>Top genes <input id="heatmap-top-n" type="number" min="5" max="500" step="5" value="50" /></label>
+            <label>Annotation <select id="heatmap-annotation-column"></select></label>
+            <label>Scale <select id="heatmap-scale"><option value="row">Row z-score</option><option value="logcpm">log2(CPM + 1)</option></select></label>
+            <label class="check-label"><input id="heatmap-cluster-rows" type="checkbox" checked /> Cluster rows</label>
+            <label class="check-label"><input id="heatmap-cluster-columns" type="checkbox" checked /> Cluster columns</label>
+            <button id="heatmap-render">Update</button>
+          </div>
+          <div id="heatmap-annotation-strip"></div>
+          <div id="expression-heatmap" class="plot tall"></div>
+        </article>
       </section>
 
       <section class="tab-panel" id="tab-counts">
@@ -114,6 +127,17 @@
             <div id="ma-plot" class="plot tall"></div>
           </div>
           <div id="de-table"></div>
+        </article>
+        <article class="card">
+          <h3>DESeq2 in browser</h3>
+          <div class="toolbar">
+            <label>Design <select id="deseq-design-column"></select></label>
+            <label>Reference <select id="deseq-reference-level"></select></label>
+            <label>Numerator <select id="deseq-numerator-level"></select></label>
+            <label>Denominator <select id="deseq-denominator-level"></select></label>
+            <button id="deseq-run">Run DESeq2</button>
+          </div>
+          <p class="note" id="deseq-status">DESeq2 uses webR and the configured package snapshot for small exploratory runs.</p>
         </article>
       </section>
 
@@ -148,6 +172,7 @@
         <article class="card">
           <h3>Optional downstream analysis</h3>
           <p class="warning">Browser-side analysis is for small exploratory datasets. Use pipeline-generated results for production RNA-seq differential expression.</p>
+          <div id="package-repository-panel"></div>
           <div id="downstream-cards" class="grid two"></div>
           <details class="log-panel"><summary>Analysis log</summary><pre id="analysis-log"></pre></details>
         </article>

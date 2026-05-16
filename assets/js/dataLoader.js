@@ -1,4 +1,10 @@
 import { state } from './state.js';
+import {
+  computeDifferentialExpression,
+  computePcaFromCounts,
+  computeSampleDistanceFromCounts,
+  inferContrastsFromSamples,
+} from './analysis.js';
 
 function getEmbeddedAsset(path) {
   const assets = globalThis.REPORT_EMBEDDED_ASSETS;
@@ -44,16 +50,24 @@ export async function loadText(path, required = false) {
 }
 
 export function parseCsv(text) {
+  return parseDelimited(text, ',');
+}
+
+export function parseTsv(text) {
+  return parseDelimited(text, '\t');
+}
+
+function parseDelimited(text, delimiter) {
   if (!text) return [];
   const lines = text.trim().split(/\r?\n/).filter(Boolean);
-  const headers = splitCsvLine(lines.shift());
+  const headers = splitDelimitedLine(lines.shift(), delimiter);
   return lines.map((line) => {
-    const values = splitCsvLine(line);
+    const values = splitDelimitedLine(line, delimiter);
     return Object.fromEntries(headers.map((header, i) => [header, parseValue(values[i])]));
   });
 }
 
-function splitCsvLine(line) {
+function splitDelimitedLine(line, delimiter) {
   const out = [];
   let current = '';
   let inQuotes = false;
@@ -61,7 +75,7 @@ function splitCsvLine(line) {
     const ch = line[i];
     if (ch === '"' && line[i + 1] === '"') { current += '"'; i += 1; }
     else if (ch === '"') inQuotes = !inQuotes;
-    else if (ch === ',' && !inQuotes) { out.push(current); current = ''; }
+    else if (ch === delimiter && !inQuotes) { out.push(current); current = ''; }
     else current += ch;
   }
   out.push(current);
@@ -77,26 +91,89 @@ function parseValue(value) {
 export async function loadCoreAssets() {
   state.config = await loadJson('assets/report_config.json', true);
   const dataRoot = state.config.dataRoot || 'assets/data';
-  state.samples = await loadJson(`${dataRoot}/samples.json`, true);
-  state.qc = await loadJson(`${dataRoot}/qc_metrics.json`, true);
-  state.pca = await loadJson(`${dataRoot}/pca.json`, true);
-  state.distance = await loadJson(`${dataRoot}/sample_distance_matrix.json`, true);
+  state.samples = await loadSampleMetadata(dataRoot);
+  state.counts = parseCsv(await loadText(`${dataRoot}/counts.csv`, true));
+  state.qc = await loadJson(`${dataRoot}/qc_metrics.json`, false) || [];
+  state.pca = await loadJson(`${dataRoot}/pca.json`, false);
+  state.distance = await loadJson(`${dataRoot}/sample_distance_matrix.json`, false);
   state.geneAnnotation = await loadJson(`${dataRoot}/gene_annotation.json`, false) || [];
   state.contrasts = await loadJson(`${dataRoot}/contrast_list.json`, false) || [];
   state.provenance = await loadJson(`${dataRoot}/logs/pipeline_provenance.json`, false);
   state.software = await loadJson(`${dataRoot}/logs/software_versions.json`, false);
-  state.counts = parseCsv(await loadText(`${dataRoot}/counts.csv`, false));
 
   validateSamples(state.samples);
+  validateCounts(state.counts);
+  if (!state.pca) state.pca = computePcaFromCounts(state.counts, state.samples, state.config);
+  if (!state.distance) state.distance = computeSampleDistanceFromCounts(state.counts, state.samples, state.config);
+  if (state.contrasts.length === 0) state.contrasts = inferContrastsFromSamples(state.samples, state.config);
   validatePca(state.pca);
-  validateDistance(state.distance);
+  if (state.distance) validateDistance(state.distance);
+}
+
+async function loadSampleMetadata(dataRoot) {
+  const configured = state.config.sampleManifest || state.config.samplesFile;
+  if (configured) {
+    return loadSampleFile(`${dataRoot}/${configured}`, true);
+  }
+
+  const candidates = ['samples.json', 'sample_manifest.csv', 'sample_manifest.tsv', 'samples.csv', 'samples.tsv'];
+  for (const candidate of candidates) {
+    const rows = await loadSampleFile(`${dataRoot}/${candidate}`, false);
+    if (rows) return rows;
+  }
+  throw new Error(`Required sample metadata failed: ${dataRoot}/samples.json, sample_manifest.csv, sample_manifest.tsv, samples.csv, or samples.tsv was not found.`);
+}
+
+async function loadSampleFile(path, required) {
+  if (path.endsWith('.json')) return loadJsonQuiet(path, required);
+  const text = await loadTextQuiet(path, required);
+  if (text === null) return null;
+  return path.endsWith('.tsv') ? parseTsv(text) : parseCsv(text);
+}
+
+async function loadJsonQuiet(path, required = false) {
+  const embedded = getEmbeddedAsset(path);
+  if (embedded !== undefined) {
+    try {
+      return JSON.parse(embedded);
+    } catch (error) {
+      if (required) throw new Error(`Required embedded JSON asset failed: ${path}: ${error.message}`);
+      return null;
+    }
+  }
+
+  try {
+    const response = await fetch(path);
+    if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
+    return await response.json();
+  } catch (error) {
+    if (required) throw new Error(`Required JSON asset failed: ${path}: ${error.message}`);
+    return null;
+  }
+}
+
+async function loadTextQuiet(path, required = false) {
+  const embedded = getEmbeddedAsset(path);
+  if (embedded !== undefined) return embedded;
+
+  try {
+    const response = await fetch(path);
+    if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
+    return await response.text();
+  } catch (error) {
+    if (required) throw new Error(`Required text asset failed: ${path}: ${error.message}`);
+    return null;
+  }
 }
 
 export async function loadDeForContrast(contrast) {
-  if (!contrast || !contrast.de_file) return [];
+  if (!contrast) return [];
   if (state.deResults.has(contrast.id)) return state.deResults.get(contrast.id);
   const dataRoot = state.config.dataRoot || 'assets/data';
-  const rows = parseCsv(await loadText(`${dataRoot}/${contrast.de_file}`, false));
+  let rows = contrast.de_file ? parseCsv(await loadText(`${dataRoot}/${contrast.de_file}`, false)) : [];
+  if (rows.length === 0 && contrast.column && contrast.numerator !== undefined && contrast.denominator !== undefined) {
+    rows = computeDifferentialExpression(state.counts, state.samples, contrast, state.config);
+  }
   state.deResults.set(contrast.id, rows);
   return rows;
 }
@@ -111,10 +188,18 @@ export async function loadEnrichmentForContrast(contrast) {
 }
 
 function validateSamples(samples) {
-  if (!Array.isArray(samples) || samples.length === 0) throw new Error('samples.json must contain a non-empty array.');
+  if (!Array.isArray(samples) || samples.length === 0) throw new Error('sample metadata must contain at least one row.');
   samples.forEach((sample) => {
     if (!sample.sample_id) throw new Error('Every sample must include sample_id.');
   });
+}
+
+function validateCounts(counts) {
+  if (!Array.isArray(counts) || counts.length === 0) throw new Error('counts.csv must contain at least one gene row.');
+  const first = counts[0];
+  if (!first.gene_id && !first.gene_symbol && !first.gene_name) throw new Error('counts.csv should include gene_id, gene_symbol, or gene_name.');
+  const matched = state.samples.filter((sample) => Object.prototype.hasOwnProperty.call(first, sample.sample_id));
+  if (matched.length < 2) throw new Error('counts.csv must include at least two columns matching sample_id values in the sample metadata.');
 }
 
 function validatePca(pca) {

@@ -20,14 +20,18 @@ JS_ORDER = [
     "assets/js/state.js",
     "assets/js/tables.js",
     "assets/js/qc.js",
+    "assets/js/analysis.js",
     "assets/js/dataLoader.js",
     "assets/js/plots.js",
+    "assets/js/heatmap.js",
     "assets/js/de.js",
     "assets/js/enrichment.js",
     "assets/js/geneSearch.js",
     "assets/js/webrManager.js",
     "assets/js/packageManager.js",
     "assets/js/downstreamPlugins.js",
+    "assets/js/packageRepository.js",
+    "assets/js/deseq2.js",
     "assets/js/app.js",
 ]
 
@@ -38,8 +42,15 @@ def read_text(path: Path) -> str:
 
 def strip_module_syntax(source: str) -> str:
     lines = []
+    skipping_import = False
     for line in source.splitlines():
-        if re.match(r"^\s*import\s+", line):
+        if skipping_import:
+            if ";" in line:
+                skipping_import = False
+            continue
+        if re.match(r"^\s*import\b", line):
+            if ";" not in line:
+                skipping_import = True
             continue
         line = re.sub(
             r"^\s*export\s+(?=(async\s+)?function\b|const\b|let\b|var\b|class\b)",

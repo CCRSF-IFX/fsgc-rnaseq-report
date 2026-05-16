@@ -50,11 +50,20 @@ export function renderQCPlots() {
 
 export function renderVolcano(rows, padj = 0.05, lfc = 1) {
   const x = rows.map((r) => Number(r.log2FoldChange));
-  const y = rows.map((r) => -Math.log10(Math.max(Number(r.padj) || 1, 1e-300)));
+  const y = rows.map((r) => -Math.log10(plotPValue(r.padj)));
   const significant = rows.map((r) => Number(r.padj) <= padj && Math.abs(Number(r.log2FoldChange)) >= lfc ? 'significant' : 'not significant');
   Plotly.react('volcano-plot', [{
     x, y, text: rows.map((r) => `${r.gene_symbol || r.gene_id}<br>padj=${r.padj}`), mode: 'markers', type: 'scatter', marker: { size: 8, opacity: 0.75 }, transforms: [{ type: 'groupby', groups: significant }]
-  }], { ...plotLayout('Volcano plot'), xaxis: { title: 'log2 fold change' }, yaxis: { title: '-log10 adjusted p-value' } }, { responsive: true });
+  }], {
+    ...plotLayout('Volcano plot'),
+    xaxis: { title: 'log2 fold change' },
+    yaxis: { title: '-log10 adjusted p-value' },
+    shapes: [
+      { type: 'line', x0: -lfc, x1: -lfc, y0: 0, y1: 1, yref: 'paper', line: { color: '#94a3b8', dash: 'dot' } },
+      { type: 'line', x0: lfc, x1: lfc, y0: 0, y1: 1, yref: 'paper', line: { color: '#94a3b8', dash: 'dot' } },
+      { type: 'line', x0: 0, x1: 1, xref: 'paper', y0: -Math.log10(plotPValue(padj)), y1: -Math.log10(plotPValue(padj)), line: { color: '#94a3b8', dash: 'dot' } },
+    ],
+  }, { responsive: true });
 }
 
 export function renderMA(rows, padj = 0.05, lfc = 1) {
@@ -77,7 +86,7 @@ export function renderGeneCounts(geneQuery) {
 export function renderEnrichment(rows) {
   const top = rows.slice().sort((a, b) => Number(a.padj) - Number(b.padj)).slice(0, 15).reverse();
   Plotly.react('enrichment-plot', [{
-    x: top.map((r) => -Math.log10(Math.max(Number(r.padj) || 1, 1e-300))),
+    x: top.map((r) => -Math.log10(plotPValue(r.padj))),
     y: top.map((r) => r.term_name),
     type: 'bar',
     orientation: 'h',
@@ -87,4 +96,9 @@ export function renderEnrichment(rows) {
 
 function pct(value) {
   return value === undefined ? '' : `${(value * 100).toFixed(1)}%`;
+}
+
+function plotPValue(value) {
+  const n = Number(value);
+  return Number.isFinite(n) ? Math.max(n, 1e-300) : 1;
 }

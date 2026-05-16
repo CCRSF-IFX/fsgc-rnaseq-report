@@ -3,7 +3,16 @@ name: Deploy report demo to GitHub Pages
 on:
   push:
     branches: [main, master]
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      force_overwrite:
+        description: Overwrite an existing webR package snapshot version
+        required: true
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
 
 permissions:
   contents: read
@@ -36,6 +45,32 @@ jobs:
           fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
+      - name: Guard existing webR package snapshot
+        shell: bash
+        env:
+          FORCE_OVERWRITE: ${{ github.event.inputs.force_overwrite || 'false' }}
+        run: |
+          version="${{ steps.webr-snapshot.outputs.version }}"
+          package_repo_url="$(python3 -c 'import json; print(json.load(open("assets/report_config.json", encoding="utf-8"))["webr"]["packageRepo"].rstrip("/"))')"
+          if [[ "$package_repo_url" != */"$version" ]]; then
+            echo "assets/report_config.json packageRepo must end with webr-packages/$version" >&2
+            echo "Current packageRepo: $package_repo_url" >&2
+            exit 1
+          fi
+
+          packages_url="$package_repo_url/bin/emscripten/contrib/4.5/PACKAGES"
+          if curl -fsSIL "$packages_url" >/dev/null 2>&1; then
+            if [[ "$GITHUB_EVENT_NAME" != "workflow_dispatch" || "$FORCE_OVERWRITE" != "true" ]]; then
+              echo "webR package snapshot $version already exists:" >&2
+              echo "$packages_url" >&2
+              echo "Refusing to overwrite. Bump webr-packages/VERSION or run the workflow manually with force_overwrite=true." >&2
+              exit 1
+            fi
+            echo "::warning::Force overwrite enabled for existing webR package snapshot $version"
+          else
+            echo "No existing webR package snapshot found for $version"
+          fi
+
       - name: Prepare static site
         shell: bash
         run: |
@@ -50,6 +85,56 @@ jobs:
             --exclude 'webr-packages/' \
             ./ _site/
           touch _site/.nojekyll
+
+      - name: Restore preserved webR package snapshots
+        shell: bash
+        run: |
+          current_version="${{ steps.webr-snapshot.outputs.version }}"
+          package_repo_url="$(python3 -c 'import json; print(json.load(open("assets/report_config.json", encoding="utf-8"))["webr"]["packageRepo"].rstrip("/"))')"
+          site_root="${package_repo_url%/webr-packages/*}"
+          versions_file="webr-packages/published_versions"
+          if [[ ! -f "$versions_file" ]]; then
+            echo "No preserved webR package snapshot list found."
+            exit 0
+          fi
+
+          awk '
+            {
+              gsub(/^[[:space:]]+|[[:space:]]+$/, "", $0)
+              if ($0 != "" && substr($0, 1, 1) != "#") print $0
+            }
+          ' "$versions_file" | while read -r version; do
+            if [[ "$version" == "$current_version" ]]; then
+              continue
+            fi
+
+            src="$site_root/webr-packages/$version/bin/emscripten/contrib/4.5"
+            dest="_site/webr-packages/$version/bin/emscripten/contrib/4.5"
+            packages_file="$(mktemp)"
+            if ! curl -fsSL "$src/PACKAGES" -o "$packages_file"; then
+              echo "::warning::Could not restore prior webR package snapshot $version from $src/PACKAGES"
+              rm -f "$packages_file"
+              continue
+            fi
+
+            mkdir -p "$dest"
+            cp "$packages_file" "$dest/PACKAGES"
+            awk '
+              /^Package:/ { package = $2 }
+              /^Version:/ {
+                version = $2
+                if (package != "" && version != "") {
+                  print package "_" version ".tgz"
+                  package = ""
+                  version = ""
+                }
+              }
+            ' "$packages_file" | while read -r artifact; do
+              curl -fsSL "$src/$artifact" -o "$dest/$artifact"
+            done
+            rm -f "$packages_file"
+            echo "Restored preserved webR package snapshot $version"
+          done
 
       - name: Checkout r-wasm/actions repository
         uses: actions/checkout@v4
@@ -106,6 +191,33 @@ jobs:
       - name: Fix generated package permissions
         shell: bash
         run: sudo chown -R "$(id -u):$(id -g)" _site/webr-packages
+
+      - name: Build webR package snapshot archive
+        shell: bash
+        env:
+          VERSION: ${{ steps.webr-snapshot.outputs.version }}
+        run: |
+          python3 - <<'PY'
+          import os
+          import zipfile
+          from pathlib import Path
+
+          version = os.environ["VERSION"]
+          snapshot_dir = Path("_site/webr-packages") / version
+          package_dir = snapshot_dir / "bin/emscripten/contrib/4.5"
+          if not package_dir.exists():
+              raise SystemExit(f"Package directory was not built: {package_dir}")
+
+          archive = snapshot_dir / f"webr-packages-{version}.zip"
+          if archive.exists():
+              archive.unlink()
+
+          with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+              for path in sorted(package_dir.rglob("*")):
+                  if path.is_file():
+                      zf.write(path, path.relative_to(snapshot_dir))
+          print(f"Wrote {archive}")
+          PY
 
       - name: Configure Pages
         uses: actions/configure-pages@v5

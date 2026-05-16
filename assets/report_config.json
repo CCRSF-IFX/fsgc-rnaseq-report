@@ -3,6 +3,10 @@
   "reportSubtitle": "Static report with optional webR downstream analysis",
   "runId": "demo-run-001",
   "dataRoot": "assets/data",
+  "analysis": {
+    "conditionColumn": "condition",
+    "referenceLevel": "control"
+  },
   "qcThresholds": {
     "mapping_rate": {
       "min_warn": 0.9,
@@ -29,18 +33,24 @@
     "modules": {
       "limma_voom": {
         "packages": [
-          "limma",
-          "edgeR"
+          "limma"
         ],
         "memoryWarning": "medium"
       },
       "deseq2": {
-        "enabled": false,
+        "enabled": true,
         "packages": [
           "DESeq2"
         ],
         "memoryWarning": "high",
         "experimental": true
+      },
+      "pheatmap": {
+        "enabled": true,
+        "packages": [
+          "pheatmap"
+        ],
+        "memoryWarning": "medium"
       }
     }
   }

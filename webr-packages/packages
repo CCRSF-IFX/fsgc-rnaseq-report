@@ -1,2 +1,3 @@
 bioc::limma
-bioc::edgeR
+bioc::DESeq2
+cran::pheatmap

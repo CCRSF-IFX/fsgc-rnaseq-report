@@ -1,0 +1,9 @@
+sample_id,condition,batch,sex,tissue
+SIM_C1,control,B1,F,liver
+SIM_C2,control,B1,M,liver
+SIM_C3,control,B2,F,liver
+SIM_C4,control,B2,M,liver
+SIM_T1,treated,B1,F,liver
+SIM_T2,treated,B1,M,liver
+SIM_T3,treated,B2,F,liver
+SIM_T4,treated,B2,M,liver

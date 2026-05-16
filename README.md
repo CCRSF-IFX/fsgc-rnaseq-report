@@ -1,88 +1,172 @@
 # RNA-seq Report
 
-A static, portable RNA-seq report application for pipeline outputs. The core report is based on precomputed JSON/CSV assets, so users can view PCA, hierarchical clustering, sample QC, differential expression, enrichment, and gene-level summaries without running a backend server.
+A static, portable RNA-seq report application for pipeline outputs. The minimum
+inputs are a count matrix and a sample manifest. From those, the browser can
+compute PCA coordinates, a sample-distance matrix, an expression heatmap, and
+exploratory two-group differential expression, then visualize the results
+without running a backend server.
 
-Optional browser-side analysis is supported through a plugin layer. The default optional backend is webR, intended for small exploratory analyses only. Production differential expression should remain in the pipeline, with results exported into this report.
+Precomputed pipeline outputs are still preferred when available. If files such
+as `pca.json`, `sample_distance_matrix.json`, or differential-expression CSVs
+are present, the report displays those instead of recomputing them.
 
-## Repository role
+Optional browser-side R analysis is available through a small plugin layer. The
+default optional backend is webR, intended only for small exploratory analyses.
+The report can install/load DESeq2 from the configured wasm package snapshot and
+run a basic two-group DESeq2 contrast in the browser. For production statistics,
+keep DESeq2, limma, or another mature RNA-seq method in the pipeline and export
+the final results into this report.
 
-This repository contains the report application:
+## Repository Contents
 
-- `index.html` - static report shell
-- `assets/js/` - report logic and optional analysis managers
-- `assets/data/` - demo report assets
-- `schemas/` - documented JSON structures
-- `scripts/validate_assets.py` - simple asset validator
-- `.github/workflows/deploy-pages.yml` - GitHub Pages deployment, including the report-scoped webR package snapshot
-- `webr-packages/` - versioned WebAssembly R package set for optional webR modules
+- `index.html` - modular static report shell for development and hosted use.
+- `assets/css/` - report styling.
+- `assets/js/` - data loading, count-derived analysis, plotting, tables, tab wiring, and optional webR managers.
+- `assets/data/` - demo report data assets.
+- `assets/report_config.json` - report title, data root, analysis settings, QC thresholds, and webR package configuration.
+- `schemas/` - documented JSON structures.
+- `scripts/validate_assets.py` - lightweight asset validator.
+- `scripts/build_standalone_report.py` - builds a double-clickable single-file HTML report.
+- `webr-packages/` - versioned package snapshot definition for optional webR modules.
+- `.github/workflows/deploy-pages.yml` - GitHub Pages deployment plus report-scoped webR package repo build.
 
-## Quick start
+## Local Preview
 
-For development, open locally from a static web server:
-
-```bash
-python -m http.server 8000
-# then open http://localhost:8000
-```
-
-Do not rely on double-clicking `index.html`; browsers often block `fetch()` and JavaScript modules from local files.
-
-For end-user delivery, build a double-clickable single-file report:
-
-```bash
-python scripts/build_standalone_report.py
-```
-
-Send the generated `dist/rnaseq-report.html` file. It embeds the report data, CSS, and application JavaScript, so recipients do not need to run a local web server. By default, the file still loads Plotly from the public CDN. To make a larger fully offline file, run:
-
-```bash
-python scripts/build_standalone_report.py --embed-plotly
-```
-
-## Create and push this repo
-
-From the parent folder containing `rnaseq-report/`:
+Use a local static server while developing:
 
 ```bash
-ORG=OmicsReportHub
-
-git -C rnaseq-report init
-git -C rnaseq-report add .
-git -C rnaseq-report commit -m "Initial RNA-seq report app"
-
-gh repo create "$ORG/rnaseq-report" --public --source=rnaseq-report --push
+python3 -m http.server 8000
 ```
 
-For a private repository, replace `--public` with `--private`.
+Then open:
+
+```text
+http://localhost:8000/
+```
+
+Do not rely on double-clicking `index.html`. Browsers commonly block local
+`fetch()` calls and JavaScript modules from `file://` pages.
+
+## End-User Delivery
+
+For users who should not run a local server, build a single HTML file:
+
+```bash
+python3 scripts/build_standalone_report.py
+```
+
+Send the generated file:
+
+```text
+dist/rnaseq-report.html
+```
+
+That file embeds the report data, CSS, and application JavaScript. By default it
+still loads Plotly from the public CDN, which keeps the file small.
+
+The standalone file also keeps the configured webR and package-repository URLs.
+Users can run the browser DESeq2 module when the browser can reach those URLs.
+The Optional Analysis tab includes install/load controls and a link to download
+the compiled package snapshot ZIP.
+
+For a larger report that can render plots without internet access, inline Plotly:
+
+```bash
+python3 scripts/build_standalone_report.py --embed-plotly
+```
+
+Useful builder options:
+
+```bash
+python3 scripts/build_standalone_report.py --output path/to/report.html
+python3 scripts/build_standalone_report.py --plotly-file path/to/plotly.min.js
+python3 scripts/build_standalone_report.py --plotly-url https://cdn.plot.ly/plotly-2.35.2.min.js
+```
+
+`dist/` is ignored by git because generated report files can contain run-specific
+data.
 
 ## GitHub Pages
 
-To publish the demo report using GitHub Pages:
+This repository is configured to publish with GitHub Actions:
 
-1. Push this repository to GitHub.
-2. Go to repository **Settings > Pages**.
-3. Under **Build and deployment**, set source to **GitHub Actions**.
-4. Push to `main` or run the workflow manually.
+1. Push to `main` or `master`, or run the workflow manually.
+2. In repository settings, set Pages source to **GitHub Actions**.
+3. The workflow builds a deployable `_site/` directory.
+4. The workflow builds the configured webR package set into `_site/webr-packages/<VERSION>/`.
+5. The workflow writes `_site/webr-packages/<VERSION>/webr-packages-<VERSION>.zip`.
+6. The workflow uploads `_site/` to GitHub Pages.
 
-The workflow builds the static report into `_site/`, then builds the configured
-webR package set into a versioned snapshot path:
+The current report config points to:
 
 ```text
 https://omicsreporthub.github.io/rnaseq-report/webr-packages/v0.1.0/
 ```
 
-The report config points to that immutable package repository URL, so standalone
-HTML files generated from this repo keep using the same package snapshot.
+The workflow reads package refs from `webr-packages/packages` using Bash/`awk`.
+It does not require `Rscript` to be present on the runner for that parsing step.
+The actual package repo build is delegated to `r-wasm/actions`.
 
-## Data model
+Package snapshots are overwrite-protected by default. If
+`webr-packages/<VERSION>/bin/emscripten/contrib/4.5/PACKAGES` already exists on
+GitHub Pages, normal pushes fail. To intentionally replace an existing snapshot,
+run the workflow manually and set `force_overwrite=true`.
 
-The pipeline should generate a report folder with this structure:
+The current package set intentionally reuses `v0.1.0`, so deployment must be a
+manual workflow run with `force_overwrite=true`.
+
+Previously published snapshots listed in `webr-packages/published_versions` are
+restored into `_site/` before deploying, so older report HTML files can keep
+using their pinned package URLs.
+
+## Data Model
+
+The smallest useful report needs:
 
 ```text
 assets/
   report_config.json
   data/
-    samples.json
+    sample_manifest.csv
+    counts.csv
+```
+
+The sample manifest may be any one of these files:
+
+```text
+samples.json
+sample_manifest.csv
+sample_manifest.tsv
+samples.csv
+samples.tsv
+```
+
+The report checks those names in that order. To use a different manifest name,
+set it in `assets/report_config.json`:
+
+```json
+{
+  "sampleManifest": "metadata/my_samples.tsv"
+}
+```
+
+`sampleManifest` is resolved relative to `dataRoot`.
+
+With those two data files, the report derives:
+
+- PCA coordinates from log2(CPM + 1) expression.
+- sample distances from log2(CPM + 1) expression.
+- a Plotly expression heatmap with metadata annotation and row/column clustering toggles.
+- two-group differential expression from metadata-defined contrasts.
+
+For production reports, the pipeline can also export precomputed assets. When
+present, these files override browser-computed fallbacks:
+
+```text
+assets/
+  report_config.json
+  data/
+    samples.json OR sample_manifest.csv
     qc_metrics.json
     pca.json
     sample_distance_matrix.json
@@ -98,19 +182,55 @@ assets/
       pipeline_provenance.json
 ```
 
-The demo data follows these conventions:
+Conventions:
 
 - `sample_id` is the primary key for sample-level files.
+- The sample manifest must include `sample_id`; analysis group columns such as `condition`, `treatment`, `batch`, and `sex` are preserved as metadata.
+- `counts.csv` must include at least one gene identifier column, such as `gene_id`, `gene_symbol`, or `gene_name`.
+- Count matrix sample columns must match `sample_id` values in the sample manifest.
 - `gene_id` and `gene_symbol` identify gene-level records.
 - DE tables should include `gene_id`, `gene_symbol`, `log2FoldChange`, `pvalue`, and `padj`.
 - Count matrices are expected in wide CSV format with gene columns first and one column per sample.
 
-## Optional webR modules
+Browser-generated contrasts use `analysis.conditionColumn` from
+`assets/report_config.json`. If it is not set, the report uses `condition` when
+available, otherwise the first metadata column with at least two groups.
 
-The report lazy-loads webR only when the user opens the optional downstream analysis tab and clicks a module. Configure webR in `assets/report_config.json`:
+Validate assets with:
+
+```bash
+python3 scripts/validate_assets.py assets/data
+```
+
+## Simulated Test Data
+
+The repo includes a manifest-driven test fixture:
+
+```text
+assets/data/simulated/
+  sample_manifest.csv
+  counts.csv
+```
+
+It contains eight simulated samples split by `condition`, `batch`, and `sex`.
+Validate it with:
+
+```bash
+python3 scripts/validate_assets.py assets/data/simulated
+```
+
+## Optional webR Modules
+
+webR is lazy-loaded only when a user opens optional downstream analysis and runs
+a module that needs R packages. The package repository is configured in
+`assets/report_config.json`:
 
 ```json
 {
+  "analysis": {
+    "conditionColumn": "condition",
+    "referenceLevel": "control"
+  },
   "webr": {
     "enabled": true,
     "baseUrl": "https://webr.r-wasm.org/latest/",
@@ -118,7 +238,18 @@ The report lazy-loads webR only when the user opens the optional downstream anal
     "packageRepoVersion": "v0.1.0",
     "modules": {
       "limma_voom": {
-        "packages": ["limma", "edgeR"],
+        "packages": ["limma"],
+        "memoryWarning": "medium"
+      },
+      "deseq2": {
+        "enabled": true,
+        "packages": ["DESeq2"],
+        "memoryWarning": "high",
+        "experimental": true
+      },
+      "pheatmap": {
+        "enabled": true,
+        "packages": ["pheatmap"],
         "memoryWarning": "medium"
       }
     }
@@ -126,32 +257,103 @@ The report lazy-loads webR only when the user opens the optional downstream anal
 }
 ```
 
-Browser-side R/Bioconductor analysis is optional and experimental. If a package cannot be loaded, the report continues to show precomputed pipeline results.
+The built-in browser DE fallback uses Welch t-tests on log2(CPM + 1) values and
+Benjamini-Hochberg adjusted p-values. Treat those results as exploratory. Use
+pipeline-generated DESeq2, limma, or another mature RNA-seq method for final
+analysis.
 
-## Pipeline integration
+The current package snapshot includes:
 
-Typical pipeline steps:
-
-1. Run alignment/quantification/counting.
-2. Run QC aggregation.
-3. Run PCA/clustering on normalized counts.
-4. Run DESeq2/edgeR/limma on the server or cluster.
-5. Run GO/KEGG/Reactome/GSEA enrichment.
-6. Export the report assets into `assets/data/`.
-7. Validate assets:
-
-```bash
-python scripts/validate_assets.py assets/data
+```text
+bioc::limma
+bioc::DESeq2
+cran::pheatmap
 ```
 
-## Security and privacy
+DESeq2 and pheatmap are enabled in the optional-analysis UI for small
+browser-side experiments. The Differential Expression tab has a browser DESeq2
+runner for two-group contrasts. The Clustering tab has a Plotly heatmap using
+the count matrix, with row z-score or log2(CPM + 1) scale, sample annotation,
+and row/column clustering controls.
 
-Do not publish patient identifiers, protected health information, controlled-access genomes, or licensed annotation files to public GitHub Pages. Keep published demo data synthetic or de-identified.
+Each deployed snapshot also exposes a ZIP archive:
 
-## Adding a new tab
+```text
+https://omicsreporthub.github.io/rnaseq-report/webr-packages/v0.1.0/webr-packages-v0.1.0.zip
+```
+
+That archive can be downloaded and mirrored as a static wasm package repository.
+The report still installs packages through webR from `webr.packageRepo`; if you
+mirror the package repository elsewhere, update `assets/report_config.json`
+before building the standalone HTML.
+
+## Updating The webR Snapshot
+
+When the optional R package set changes:
+
+1. Choose a new immutable version, for example `v0.2.0`, or deliberately keep the same version and deploy manually with `force_overwrite=true`.
+2. Update `webr-packages/VERSION`.
+3. Update `webr-packages/packages`.
+4. Update `assets/report_config.json` so `packageRepo` and `packageRepoVersion` match the new version.
+5. Enable or disable optional modules in `assets/report_config.json` to match the available packages.
+6. Add previously published versions that must remain available to `webr-packages/published_versions`.
+7. Run the validation checklist below.
+8. Push to trigger the Pages workflow.
+
+By default, the workflow refuses to overwrite an existing package snapshot. For
+a deliberate replacement, run the workflow manually with `force_overwrite=true`.
+
+## Validation Checklist
+
+Run these before pushing workflow or report changes:
+
+```bash
+python3 scripts/validate_assets.py assets/data
+python3 -m json.tool assets/report_config.json >/dev/null
+python3 -m py_compile scripts/build_standalone_report.py
+node --check assets/js/app.js
+node --check assets/js/analysis.js
+node --check assets/js/dataLoader.js
+node --check assets/js/downstreamPlugins.js
+node --check assets/js/deseq2.js
+node --check assets/js/heatmap.js
+node --check assets/js/packageRepository.js
+node --check assets/js/plots.js
+ruby -e 'require "yaml"; YAML.load_file(".github/workflows/deploy-pages.yml"); puts "yaml ok"'
+awk '{ gsub(/^[[:space:]]+|[[:space:]]+$/, "", $0); if ($0 == "" || substr($0, 1, 1) == "#") next; if (!seen[$0]++) { if (out != "") out = out ","; out = out $0 } } END { print out }' webr-packages/packages
+python3 scripts/build_standalone_report.py
+```
+
+Expected package parser output for the current repo:
+
+```text
+bioc::limma,bioc::DESeq2,cran::pheatmap
+```
+
+## Troubleshooting
+
+If GitHub Actions reports `Rscript: command not found`, make sure the workflow
+contains the Bash package parser in `Retrieve webR package refs`. Older workflow
+versions used `shell: Rscript {0}` for that step.
+
+If `index.html` loads locally but data fetches fail, run
+`python3 -m http.server 8000` and open `http://localhost:8000/`.
+
+If a delivered standalone report opens but plots do not appear, rebuild with
+`--embed-plotly` or confirm the user's browser can reach the configured Plotly
+CDN URL.
+
+## Security And Privacy
+
+Do not publish patient identifiers, protected health information,
+controlled-access genomes, or licensed annotation files to public GitHub Pages.
+Keep published demo data synthetic or de-identified.
+
+## Adding A New Report Tab
 
 1. Add a tab button and panel in `index.html`.
 2. Add loader code in `assets/js/dataLoader.js` if new files are needed.
 3. Add rendering logic in `assets/js/plots.js` or a new module.
 4. Wire the tab in `assets/js/app.js`.
 5. Document expected input schema in `schemas/`.
+6. Regenerate the standalone report and rerun validation.
