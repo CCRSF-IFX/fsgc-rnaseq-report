@@ -140,7 +140,7 @@ function packageRepoMissingDependencies(packages, found) {
   const visited = new Set();
   const queue = packages.slice();
   const basePackages = new Set([
-    'base', 'compiler', 'datasets', 'grDevices', 'graphics', 'grid', 'methods',
+    'R', 'base', 'compiler', 'datasets', 'grDevices', 'graphics', 'grid', 'methods',
     'parallel', 'splines', 'stats', 'stats4', 'tools', 'utils',
   ]);
 
