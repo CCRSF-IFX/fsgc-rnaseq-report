@@ -1,6 +1,6 @@
 import { state, setStatus, metadataColumns } from './state.js';
 import { loadCoreAssets } from './dataLoader.js';
-import { renderTable } from './tables.js';
+import { adjustVisibleDataTables, renderTable } from './tables.js';
 import { summarizeQC, badge, qcRowsWithStatus } from './qc.js';
 import { renderPCA, renderDistanceHeatmap, renderQCPlots, renderGeneCounts } from './plots.js';
 import { populateContrastSelectors, renderCurrentContrast } from './de.js';
@@ -9,7 +9,9 @@ import { renderGeneSearch } from './geneSearch.js';
 import { renderDownstreamCards } from './downstreamPlugins.js';
 import { renderPackageRepositoryPanel } from './packageRepository.js';
 import { setupDeseqControls } from './deseq2.js';
+import { setupFgseaControls } from './fgsea.js';
 import { renderExpressionHeatmap, resizeExpressionHeatmap, setupExpressionHeatmapControls } from './heatmap.js';
+import { setupUserDataControls } from './userData.js';
 
 async function main() {
   wireTabs();
@@ -20,6 +22,7 @@ async function main() {
     renderSamples();
     populateContrastSelectors();
     setupDeseqControls({ populateContrastSelectors, renderCurrentContrast });
+    setupFgseaControls();
     renderDownstreamCards();
     renderPackageRepositoryPanel();
     setStatus('Report assets loaded; loading plots...');
@@ -29,6 +32,7 @@ async function main() {
     setupExpressionHeatmapControls();
     await renderCurrentContrast();
     await renderCurrentEnrichment();
+    setupUserDataControls({ refresh: refreshReportFromState });
     wireControls();
     setStatus('Report assets loaded');
   } catch (error) {
@@ -94,11 +98,12 @@ function renderOverview() {
 
 function renderSamples() {
   renderTable('samples-table', state.samples, { exportName: 'samples.csv' });
-  document.getElementById('sample-search')?.addEventListener('input', (event) => {
+  const search = document.getElementById('sample-search');
+  if (search) search.oninput = (event) => {
     const q = event.target.value.toLowerCase();
     const filtered = state.samples.filter((row) => Object.values(row).some((v) => String(v).toLowerCase().includes(q)));
     renderTable('samples-table', filtered, { exportName: 'samples.filtered.csv' });
-  });
+  };
 }
 
 function renderQC() {
@@ -142,6 +147,23 @@ function wireControls() {
   renderTable('counts-table', state.counts, { limit: 50, exportName: 'counts.preview.csv' });
 }
 
+async function refreshReportFromState() {
+  renderHeader();
+  renderOverview();
+  renderSamples();
+  populateContrastSelectors();
+  setupDeseqControls({ populateContrastSelectors, renderCurrentContrast });
+  setupFgseaControls();
+  renderDownstreamCards();
+  renderPackageRepositoryPanel();
+  renderQC();
+  setupPcaControls();
+  setupExpressionHeatmapControls();
+  renderTable('counts-table', state.counts, { exportName: 'counts.csv' });
+  await renderCurrentContrast();
+  await renderCurrentEnrichment();
+}
+
 function wireTabs() {
   document.querySelectorAll('.tab-button').forEach((button) => {
     button.addEventListener('click', () => {
@@ -150,6 +172,7 @@ function wireTabs() {
       button.classList.add('active');
       const panel = document.getElementById(`tab-${button.dataset.tab}`);
       panel.classList.add('active');
+      requestAnimationFrame(adjustVisibleDataTables);
       if (globalThis.Plotly?.Plots) {
         requestAnimationFrame(() => {
           panel.querySelectorAll('.js-plotly-plot').forEach((plot) => Plotly.Plots.resize(plot));

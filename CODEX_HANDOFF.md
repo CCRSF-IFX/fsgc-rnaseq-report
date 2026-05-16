@@ -25,6 +25,7 @@ https://omicsreporthub.github.io/rnaseq-report/webr-packages/v0.1.0/
 
   ```text
   bioc::DESeq2
+  bioc::fgsea
   bioc::S4Vectors
   bioc::IRanges
   bioc::GenomicRanges
@@ -63,7 +64,8 @@ https://omicsreporthub.github.io/rnaseq-report/webr-packages/v0.1.0/
   `Rscript` is required for that parsing step.
 - Patches `rwasm::add_pkg()` to use `remotes = NULL`, matching the current
   resolver workaround. The package list explicitly includes DESeq2's
-  Bioconductor hard dependency closure.
+  Bioconductor hard dependency closure; fgsea is added as a browser-side GSEA
+  package.
 - Builds the current wasm package repo into `_site/webr-packages/${VERSION}/`.
 - Writes `_site/webr-packages/${VERSION}/webr-packages-${VERSION}.zip` so users
   can download or mirror the compiled package snapshot.
@@ -80,6 +82,11 @@ https://omicsreporthub.github.io/rnaseq-report/webr-packages/v0.1.0/
   Clustergrammer-JS is loaded from its npm browser bundle at runtime.
 - The Differential Expression tab has a basic webR DESeq2 runner for two-group
   contrasts. It installs/loads `DESeq2` from the configured package snapshot.
+- The Sample Metadata tab lets users upload a replacement count matrix plus a
+  required sample manifest; uploaded count matrices are refused without matching
+  sample metadata.
+- The Enrichment tab can run browser-side fgsea from the current DE contrast
+  using hg38/mm10 GMT pathway references or a user-uploaded GMT file.
 - The Optional Analysis tab shows the configured package repository, can check
   the remote `PACKAGES` index, can install/load configured webR packages, and
   links to the snapshot ZIP.
@@ -111,9 +118,11 @@ node --check assets/js/analysis.js
 node --check assets/js/dataLoader.js
 node --check assets/js/downstreamPlugins.js
 node --check assets/js/deseq2.js
+node --check assets/js/fgsea.js
 node --check assets/js/heatmap.js
 node --check assets/js/packageRepository.js
 node --check assets/js/plots.js
+node --check assets/js/userData.js
 ruby -e 'require "yaml"; YAML.load_file(".github/workflows/deploy-pages.yml"); puts "yaml ok"'
 awk '{ gsub(/^[[:space:]]+|[[:space:]]+$/, "", $0); if ($0 == "" || substr($0, 1, 1) == "#") next; if (!seen[$0]++) { if (out != "") out = out ","; out = out $0 } } END { print out }' webr-packages/packages
 python3 scripts/build_standalone_report.py
@@ -122,7 +131,7 @@ python3 scripts/build_standalone_report.py
 Expected package parser output:
 
 ```text
-bioc::DESeq2,bioc::S4Vectors,bioc::IRanges,bioc::GenomicRanges,bioc::SummarizedExperiment,bioc::BiocGenerics,bioc::Biobase,bioc::BiocParallel,bioc::MatrixGenerics,bioc::Seqinfo,bioc::S4Arrays,bioc::DelayedArray,bioc::SparseArray,bioc::XVector,cran::locfit
+bioc::DESeq2,bioc::fgsea,bioc::S4Vectors,bioc::IRanges,bioc::GenomicRanges,bioc::SummarizedExperiment,bioc::BiocGenerics,bioc::Biobase,bioc::BiocParallel,bioc::MatrixGenerics,bioc::Seqinfo,bioc::S4Arrays,bioc::DelayedArray,bioc::SparseArray,bioc::XVector,cran::locfit
 ```
 
 ## Verification URL

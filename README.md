@@ -12,10 +12,11 @@ are present, the report displays those instead of recomputing them.
 
 Optional browser-side R analysis is available through a small plugin layer. The
 default optional backend is webR, intended only for small exploratory analyses.
-The report can install/load DESeq2 from the configured wasm package snapshot and
-run a basic two-group DESeq2 contrast in the browser. For production statistics,
-keep DESeq2 or another mature RNA-seq method in the pipeline and export the
-final results into this report.
+The report can install/load DESeq2 and fgsea from the configured wasm package
+snapshot, run a basic two-group DESeq2 contrast in the browser, and run
+preranked GSEA from that contrast. For production statistics, keep DESeq2 or
+another mature RNA-seq method in the pipeline and export the final results into
+this report.
 
 ## Repository Contents
 
@@ -65,9 +66,16 @@ That file embeds the report data, CSS, and application JavaScript. By default it
 still loads Plotly from the public CDN, which keeps the file small.
 
 The standalone file also keeps the configured webR and package-repository URLs.
-Users can run the browser DESeq2 module when the browser can reach those URLs.
-The Optional Analysis tab includes install/load controls and a link to download
-the compiled package snapshot ZIP.
+Users can run the browser DESeq2 and fgsea modules when the browser can reach
+those URLs. The Optional Analysis tab includes install/load controls and a link
+to download the compiled package snapshot ZIP.
+
+Users can also replace or augment the embedded defaults in the Sample Metadata
+tab. A sample manifest is required; the count matrix is optional. If a user
+uploads only a manifest, the app uses the embedded count matrix. If a user
+uploads a new count matrix, it must be uploaded with a matching manifest because
+DESeq2, PCA coloring, heatmap annotations, and fgsea contrast setup all depend
+on sample-level metadata.
 
 For a larger report that can render plots without internet access, inline Plotly:
 
@@ -175,6 +183,7 @@ With those two data files, the report derives:
 - sample distances from log2(CPM + 1) expression.
 - a Clustergrammer expression heatmap with metadata annotation and row/column clustering toggles.
 - two-group differential expression from metadata-defined contrasts.
+- optional fgsea results from the selected DE contrast and a configured or uploaded GMT pathway file.
 
 For production reports, the pipeline can also export precomputed assets. When
 present, these files override browser-computed fallbacks:
@@ -208,6 +217,7 @@ Conventions:
 - `gene_id` and `gene_symbol` identify gene-level records.
 - DE tables should include `gene_id`, `gene_symbol`, `log2FoldChange`, `pvalue`, and `padj`.
 - Count matrices are expected in wide CSV format with gene columns first and one column per sample.
+- Browser fgsea uses `gene_symbol` when available, otherwise `gene_id`, so pathway GMT identifiers must match one of those columns.
 
 Browser-generated contrasts use `analysis.conditionColumn` from
 `assets/report_config.json`. If it is not set, the report uses `condition` when
@@ -246,7 +256,20 @@ a module that needs R packages. The package repository is configured in
 {
   "analysis": {
     "conditionColumn": "condition",
-    "referenceLevel": "control"
+    "referenceLevel": "control",
+    "gseaReference": "hg38"
+  },
+  "gsea": {
+    "references": {
+      "hg38": {
+        "label": "hg38",
+        "pathwayFile": "gsea/hg38_demo.gmt"
+      },
+      "mm10": {
+        "label": "mm10",
+        "pathwayFile": "gsea/mm10_demo.gmt"
+      }
+    }
   },
   "webr": {
     "enabled": true,
@@ -259,6 +282,12 @@ a module that needs R packages. The package repository is configured in
         "packages": ["DESeq2"],
         "memoryWarning": "high",
         "experimental": true
+      },
+      "fgsea": {
+        "enabled": true,
+        "packages": ["fgsea"],
+        "memoryWarning": "medium",
+        "experimental": true
       }
     }
   }
@@ -269,10 +298,11 @@ The built-in browser DE fallback uses Welch t-tests on log2(CPM + 1) values and
 Benjamini-Hochberg adjusted p-values. Treat those results as exploratory. Use
 pipeline-generated DESeq2 or another mature RNA-seq method for final analysis.
 
-The current package snapshot includes:
+The configured package snapshot definition includes:
 
 ```text
 bioc::DESeq2
+bioc::fgsea
 bioc::S4Vectors
 bioc::IRanges
 bioc::GenomicRanges
@@ -289,8 +319,13 @@ bioc::XVector
 cran::locfit
 ```
 
-DESeq2 is the only R package enabled in the optional-analysis UI. The
-Differential Expression tab has a browser DESeq2 runner for two-group contrasts.
+DESeq2 and fgsea are enabled in the optional-analysis UI. The
+Differential Expression tab has a browser DESeq2 runner for two-group contrasts,
+and the Enrichment tab can run fgsea from the selected DE contrast. The demo
+GMT files under `assets/data/gsea/` are placeholders for testing the mechanics;
+replace them with compact hg38/mm10 production GMT files before delivering real
+biological interpretation.
+
 The Clustering tab has a Clustergrammer-JS heatmap using the count matrix, with
 row z-score or log2(CPM + 1) scale, sample annotation, and row/column clustering
 controls. Clustergrammer-JS is loaded from the npm package bundle at runtime so
@@ -339,9 +374,11 @@ node --check assets/js/analysis.js
 node --check assets/js/dataLoader.js
 node --check assets/js/downstreamPlugins.js
 node --check assets/js/deseq2.js
+node --check assets/js/fgsea.js
 node --check assets/js/heatmap.js
 node --check assets/js/packageRepository.js
 node --check assets/js/plots.js
+node --check assets/js/userData.js
 ruby -e 'require "yaml"; YAML.load_file(".github/workflows/deploy-pages.yml"); puts "yaml ok"'
 awk '{ gsub(/^[[:space:]]+|[[:space:]]+$/, "", $0); if ($0 == "" || substr($0, 1, 1) == "#") next; if (!seen[$0]++) { if (out != "") out = out ","; out = out $0 } } END { print out }' webr-packages/packages
 python3 scripts/build_standalone_report.py
@@ -350,7 +387,7 @@ python3 scripts/build_standalone_report.py
 Expected package parser output for the current repo:
 
 ```text
-bioc::DESeq2,bioc::S4Vectors,bioc::IRanges,bioc::GenomicRanges,bioc::SummarizedExperiment,bioc::BiocGenerics,bioc::Biobase,bioc::BiocParallel,bioc::MatrixGenerics,bioc::Seqinfo,bioc::S4Arrays,bioc::DelayedArray,bioc::SparseArray,bioc::XVector,cran::locfit
+bioc::DESeq2,bioc::fgsea,bioc::S4Vectors,bioc::IRanges,bioc::GenomicRanges,bioc::SummarizedExperiment,bioc::BiocGenerics,bioc::Biobase,bioc::BiocParallel,bioc::MatrixGenerics,bioc::Seqinfo,bioc::S4Arrays,bioc::DelayedArray,bioc::SparseArray,bioc::XVector,cran::locfit
 ```
 
 ## Troubleshooting

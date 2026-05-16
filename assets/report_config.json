@@ -5,7 +5,20 @@
   "dataRoot": "assets/data",
   "analysis": {
     "conditionColumn": "condition",
-    "referenceLevel": "control"
+    "referenceLevel": "control",
+    "gseaReference": "hg38"
+  },
+  "gsea": {
+    "references": {
+      "hg38": {
+        "label": "hg38",
+        "pathwayFile": "gsea/hg38_demo.gmt"
+      },
+      "mm10": {
+        "label": "mm10",
+        "pathwayFile": "gsea/mm10_demo.gmt"
+      }
+    }
   },
   "qcThresholds": {
     "mapping_rate": {
@@ -37,6 +50,14 @@
           "DESeq2"
         ],
         "memoryWarning": "high",
+        "experimental": true
+      },
+      "fgsea": {
+        "enabled": true,
+        "packages": [
+          "fgsea"
+        ],
+        "memoryWarning": "medium",
         "experimental": true
       }
     }

@@ -28,6 +28,7 @@ const CLUSTERGRAMMER_ASSETS = [
 
 let clustergrammerAssetPromise = null;
 let clustergrammerInstance = null;
+let heatmapControlsWired = false;
 
 export function setupExpressionHeatmapControls() {
   const annotationSelect = document.getElementById('heatmap-annotation-column');
@@ -39,12 +40,15 @@ export function setupExpressionHeatmapControls() {
     if (columns.includes('condition')) annotationSelect.value = 'condition';
   }
 
-  document.getElementById('heatmap-render')?.addEventListener('click', renderExpressionHeatmap);
-  document.getElementById('heatmap-annotation-column')?.addEventListener('change', renderExpressionHeatmap);
-  document.getElementById('heatmap-scale')?.addEventListener('change', renderExpressionHeatmap);
-  document.getElementById('heatmap-cluster-rows')?.addEventListener('change', renderExpressionHeatmap);
-  document.getElementById('heatmap-cluster-columns')?.addEventListener('change', renderExpressionHeatmap);
-  globalThis.addEventListener?.('resize', resizeExpressionHeatmap);
+  if (!heatmapControlsWired) {
+    heatmapControlsWired = true;
+    document.getElementById('heatmap-render')?.addEventListener('click', renderExpressionHeatmap);
+    document.getElementById('heatmap-annotation-column')?.addEventListener('change', renderExpressionHeatmap);
+    document.getElementById('heatmap-scale')?.addEventListener('change', renderExpressionHeatmap);
+    document.getElementById('heatmap-cluster-rows')?.addEventListener('change', renderExpressionHeatmap);
+    document.getElementById('heatmap-cluster-columns')?.addEventListener('change', renderExpressionHeatmap);
+    globalThis.addEventListener?.('resize', resizeExpressionHeatmap);
+  }
   const container = document.getElementById('expression-heatmap');
   if (container) container.innerHTML = '<p class="note">Open the clustering tab to render the Clustergrammer heatmap.</p>';
   if (document.getElementById('tab-clustering')?.classList.contains('active')) renderExpressionHeatmap();
@@ -100,7 +104,7 @@ export async function renderExpressionHeatmap() {
       tile_colors: ['#dc2626', '#2563eb'],
       opacity_scale: 'linear',
       input_domain: scale === 'row' ? 2 : undefined,
-      sidebar_width: 165,
+      sidebar_width: 260,
       ini_expand: true,
       make_modals: false,
       about: `${rows.length} most variable genes from log2(CPM + 1).`,

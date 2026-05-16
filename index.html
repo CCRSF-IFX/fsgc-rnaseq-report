@@ -55,6 +55,16 @@
 
       <section class="tab-panel" id="tab-samples">
         <article class="card">
+          <h3>User data</h3>
+          <p class="note">Upload a sample manifest for the embedded count matrix, or upload a new count matrix with its matching manifest.</p>
+          <div class="toolbar upload-toolbar">
+            <label>Count matrix CSV <input id="user-counts-file" type="file" accept=".csv,text/csv" /></label>
+            <label>Sample manifest <input id="user-manifest-file" type="file" accept=".csv,.tsv,.txt,application/json" /></label>
+            <button id="user-data-apply">Use uploaded data</button>
+          </div>
+          <p class="note" id="user-data-status">Pipeline defaults are loaded. A sample manifest is required for user-driven DESeq2 and fgsea.</p>
+        </article>
+        <article class="card">
           <h3>Sample metadata</h3>
           <div class="table-toolbar"><input id="sample-search" placeholder="Search samples" /></div>
           <div id="samples-table"></div>
@@ -155,7 +165,15 @@
       <section class="tab-panel" id="tab-enrichment">
         <article class="card">
           <h3>Pathway / enrichment</h3>
-          <div class="toolbar"><label>Contrast <select id="enrichment-contrast-select"></select></label></div>
+          <div class="toolbar">
+            <label>Contrast <select id="enrichment-contrast-select"></select></label>
+            <label>Reference <select id="gsea-reference"></select></label>
+            <label>Pathway GMT <input id="gsea-gmt-file" type="file" accept=".gmt,.txt" /></label>
+            <label>Min size <input id="gsea-min-size" type="number" min="1" value="1" /></label>
+            <label>Max size <input id="gsea-max-size" type="number" min="1" value="500" /></label>
+            <button id="gsea-run">Run fgsea</button>
+          </div>
+          <p class="note" id="gsea-status">Run DESeq2 first for uploaded data, then run fgsea against hg38 or mm10 pathway sets.</p>
           <div id="enrichment-plot" class="plot tall"></div>
           <div id="enrichment-table"></div>
         </article>

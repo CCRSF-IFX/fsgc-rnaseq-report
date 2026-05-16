@@ -1,5 +1,6 @@
 import { state, logAnalysis } from './state.js';
 import { ensureRPackages, getPackageStatus } from './packageManager.js';
+import { enhanceTablesWithin } from './tables.js';
 
 export function renderPackageRepositoryPanel() {
   const container = document.getElementById('package-repository-panel');
@@ -176,8 +177,12 @@ function packageRepoSetStatus(message, tone = 'info', html = false) {
   const status = document.getElementById('package-repository-status');
   if (!status) return;
   status.className = `package-status ${tone}`;
-  if (html) status.innerHTML = message;
-  else status.textContent = message;
+  if (html) {
+    status.innerHTML = message;
+    enhanceTablesWithin(status, { pageLength: 10 });
+  } else {
+    status.textContent = message;
+  }
 }
 
 function packageRepoEscapeHtml(value) {

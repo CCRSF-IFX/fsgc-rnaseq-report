@@ -5,6 +5,7 @@ import { ensureRPackages } from './packageManager.js';
 import { evalR } from './webrManager.js';
 
 let deseqCallbacks = {};
+let deseqControlsWired = false;
 
 export function setupDeseqControls(callbacks = {}) {
   deseqCallbacks = callbacks;
@@ -19,9 +20,12 @@ export function setupDeseqControls(callbacks = {}) {
     designSelect.value = 'condition';
   }
 
-  designSelect.addEventListener('change', updateDeseqLevelControls);
-  document.getElementById('deseq-reference-level')?.addEventListener('change', updateDeseqLevelControls);
-  document.getElementById('deseq-run')?.addEventListener('click', runDeseq2Analysis);
+  if (!deseqControlsWired) {
+    deseqControlsWired = true;
+    designSelect.addEventListener('change', updateDeseqLevelControls);
+    document.getElementById('deseq-reference-level')?.addEventListener('change', updateDeseqLevelControls);
+    document.getElementById('deseq-run')?.addEventListener('click', runDeseq2Analysis);
+  }
   updateDeseqLevelControls();
 }
 

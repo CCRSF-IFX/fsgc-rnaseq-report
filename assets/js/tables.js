@@ -1,3 +1,10 @@
+const DATATABLES_VERSION = '2.3.8';
+const JQUERY_JS = 'https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js';
+const DATATABLES_CSS = `https://cdn.datatables.net/${DATATABLES_VERSION}/css/dataTables.dataTables.min.css`;
+const DATATABLES_JS = `https://cdn.datatables.net/${DATATABLES_VERSION}/js/dataTables.min.js`;
+
+let dataTablesAssetPromise = null;
+
 export function renderTable(containerId, rows, options = {}) {
   const el = document.getElementById(containerId);
   if (!el) return;
@@ -5,18 +12,99 @@ export function renderTable(containerId, rows, options = {}) {
     el.innerHTML = '<p class="note">No table data available.</p>';
     return;
   }
-  const limit = options.limit || 200;
   const columns = options.columns || Object.keys(rows[0]);
-  const shown = rows.slice(0, limit);
   const header = columns.map((c) => `<th>${escapeHtml(c)}</th>`).join('');
-  const body = shown.map((row) => `<tr>${columns.map((c) => `<td>${formatCell(row[c])}</td>`).join('')}</tr>`).join('');
-  const more = rows.length > limit ? `<p class="note">Showing first ${limit} of ${rows.length} rows.</p>` : '';
+  const body = rows.map((row) => `<tr>${columns.map((c) => `<td>${formatCell(row[c])}</td>`).join('')}</tr>`).join('');
   const button = options.exportName ? `<button class="secondary" data-export-table="${containerId}">Export CSV</button>` : '';
-  el.innerHTML = `${button}<div class="table-wrap"><table><thead><tr>${header}</tr></thead><tbody>${body}</tbody></table></div>${more}`;
+  el.innerHTML = `${button}<div class="table-wrap data-table-wrap"><table class="report-table"><thead><tr>${header}</tr></thead><tbody>${body}</tbody></table></div>`;
   const exportButton = el.querySelector('[data-export-table]');
   if (exportButton) {
     exportButton.addEventListener('click', () => downloadCsv(options.exportName, rows, columns));
   }
+  enhanceTablesWithin(el, options);
+}
+
+export function enhanceTablesWithin(root, options = {}) {
+  const container = typeof root === 'string' ? document.getElementById(root) : root;
+  if (!container) return;
+  const tables = Array.from(container.querySelectorAll('table')).filter((table) => !table.dataset.datatableReady);
+  if (!tables.length) return;
+
+  loadDataTablesAssets()
+    .then(() => {
+      if (!globalThis.DataTable) return;
+      tables.forEach((table) => {
+        if (!table.isConnected || table.dataset.datatableReady) return;
+        table.dataset.datatableReady = 'true';
+        table.classList.add('display', 'report-data-table');
+        new globalThis.DataTable(table, {
+          pageLength: options.pageLength || 25,
+          lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, 'All']],
+          order: [],
+          autoWidth: false,
+          scrollX: true,
+          deferRender: true,
+        });
+      });
+    })
+    .catch(() => {
+      // Keep the plain HTML table usable if the CDN is unavailable.
+    });
+}
+
+export function adjustVisibleDataTables() {
+  try {
+    globalThis.DataTable?.tables?.({ visible: true, api: true })?.columns?.adjust?.();
+  } catch (_) {
+    // Hidden-tab sizing is best-effort; tables remain usable without an adjustment.
+  }
+}
+
+function loadDataTablesAssets() {
+  if (!dataTablesAssetPromise) {
+    dataTablesAssetPromise = loadStylesheet(DATATABLES_CSS)
+      .then(() => (globalThis.jQuery ? null : loadScript(JQUERY_JS)))
+      .then(() => (globalThis.DataTable ? null : loadScript(DATATABLES_JS)));
+  }
+  return dataTablesAssetPromise;
+}
+
+function loadStylesheet(href) {
+  return new Promise((resolve, reject) => {
+    const existing = document.querySelector(`link[href="${href}"]`);
+    if (existing) {
+      existing.addEventListener('load', resolve, { once: true });
+      existing.addEventListener('error', () => reject(new Error(`Failed to load ${href}`)), { once: true });
+      if (existing.dataset.loaded === 'true' || existing.sheet) resolve();
+      return;
+    }
+
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = href;
+    link.onload = () => { link.dataset.loaded = 'true'; resolve(); };
+    link.onerror = () => reject(new Error(`Failed to load ${href}`));
+    document.head.appendChild(link);
+  });
+}
+
+function loadScript(src) {
+  return new Promise((resolve, reject) => {
+    const existing = document.querySelector(`script[src="${src}"]`);
+    if (existing) {
+      existing.addEventListener('load', resolve, { once: true });
+      existing.addEventListener('error', () => reject(new Error(`Failed to load ${src}`)), { once: true });
+      if (existing.dataset.loaded === 'true') resolve();
+      return;
+    }
+
+    const script = document.createElement('script');
+    script.src = src;
+    script.async = false;
+    script.onload = () => { script.dataset.loaded = 'true'; resolve(); };
+    script.onerror = () => reject(new Error(`Failed to load ${src}`));
+    document.head.appendChild(script);
+  });
 }
 
 export function downloadCsv(filename, rows, columns = null) {

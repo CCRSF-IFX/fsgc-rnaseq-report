@@ -1,4 +1,5 @@
 bioc::DESeq2
+bioc::fgsea
 bioc::S4Vectors
 bioc::IRanges
 bioc::GenomicRanges

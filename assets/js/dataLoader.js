@@ -179,8 +179,9 @@ export async function loadDeForContrast(contrast) {
 }
 
 export async function loadEnrichmentForContrast(contrast) {
-  if (!contrast || !contrast.enrichment_file) return [];
+  if (!contrast) return [];
   if (state.enrichmentResults.has(contrast.id)) return state.enrichmentResults.get(contrast.id);
+  if (!contrast.enrichment_file) return [];
   const dataRoot = state.config.dataRoot || 'assets/data';
   const rows = parseCsv(await loadText(`${dataRoot}/${contrast.enrichment_file}`, false));
   state.enrichmentResults.set(contrast.id, rows);

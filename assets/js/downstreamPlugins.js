@@ -27,6 +27,18 @@ export function pluginDefinitions() {
     });
   }
 
+  if (modules.fgsea?.enabled !== false) {
+    plugins.push({
+      id: 'fgsea_experimental',
+      name: 'fgsea experimental module',
+      description: 'Run preranked GSEA from the current DE contrast using hg38 or mm10 GMT pathway sets.',
+      packages: modules.fgsea?.packages || ['fgsea'],
+      memory: modules.fgsea?.memoryWarning || 'medium',
+      experimental: true,
+      run: async () => { logAnalysis('fgsea module loaded. Run fgsea from the Enrichment tab.'); },
+    });
+  }
+
   return plugins;
 }
 
