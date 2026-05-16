@@ -73,10 +73,14 @@ https://omicsreporthub.github.io/rnaseq-report/webr-packages/v0.1.0/
 
 ## Current Browser Features
 
-- Minimum inputs: `counts.csv` plus a sample metadata file such as
-  `sample_manifest.csv`.
-- Browser fallbacks compute PCA, sample distances, exploratory Welch-test DE,
-  and a Clustergrammer expression heatmap from counts.
+- Minimum buildable input: `counts.csv`. If no sample metadata file is present,
+  the browser infers sample IDs from numeric count columns.
+- QC metrics can be supplied as `qc_metrics.json`, `.csv`, or `.tsv`. For
+  standalone builds, `qc_metrics.xlsx` is also supported; the builder reads the
+  `Summary` worksheet and embeds it as JSON.
+- Browser fallbacks compute PCA, sample distances, and a Clustergrammer
+  expression heatmap from counts. Exploratory Welch-test DE is available when a
+  sample manifest provides a usable two-level contrast.
 - The Clustering tab has a Clustergrammer-JS expression heatmap with metadata
   annotation, row z-score/logCPM scale, and row/column clustering toggles.
   Clustergrammer-JS is loaded from its npm browser bundle at runtime.
@@ -85,9 +89,9 @@ https://omicsreporthub.github.io/rnaseq-report/webr-packages/v0.1.0/
   covariate/blocking columns from the sample manifest, for example
   `~ batch + sex + condition`. It installs/loads `DESeq2` from the configured
   package snapshot.
-- The Sample Metadata tab lets users upload a replacement count matrix plus a
-  required sample manifest; uploaded count matrices are refused without matching
-  sample metadata.
+- The Sample Metadata tab lets users upload a manifest for the embedded count
+  matrix, or a replacement count matrix plus matching manifest. Uploaded count
+  matrices are refused without matching sample metadata.
 - The Enrichment tab can run browser-side fgsea from the current DE contrast
   using hg38/mm10 GMT pathway references or a user-uploaded GMT file.
 - The Optional Analysis tab shows the configured package repository, can check
@@ -115,7 +119,7 @@ From `/Users/xies4/github/rna_report/rnaseq-report`:
 python3 scripts/validate_assets.py assets/data
 python3 scripts/validate_assets.py assets/data/simulated
 python3 -m json.tool assets/report_config.json >/dev/null
-python3 -m py_compile scripts/validate_assets.py scripts/build_standalone_report.py
+python3 -m py_compile scripts/validate_assets.py scripts/build_standalone_report.py scripts/qc_excel.py
 node --check assets/js/app.js
 node --check assets/js/analysis.js
 node --check assets/js/dataLoader.js
@@ -129,6 +133,7 @@ node --check assets/js/userData.js
 ruby -e 'require "yaml"; YAML.load_file(".github/workflows/deploy-pages.yml"); puts "yaml ok"'
 awk '{ gsub(/^[[:space:]]+|[[:space:]]+$/, "", $0); if ($0 == "" || substr($0, 1, 1) == "#") next; if (!seen[$0]++) { if (out != "") out = out ","; out = out $0 } } END { print out }' webr-packages/packages
 python3 scripts/build_standalone_report.py
+python3 scripts/build_standalone_report.py --data-root assets/data/simulated --output dist/simulated-report.html
 ```
 
 Expected package parser output:

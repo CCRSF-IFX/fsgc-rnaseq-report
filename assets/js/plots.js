@@ -11,22 +11,23 @@ const PCA_SYMBOLS = ['circle', 'square', 'diamond', 'cross', 'x', 'triangle-up',
 export function renderPCA(colorBy = 'condition', pair = 'PC1,PC2', shapeBy = 'none') {
   const [xKey, yKey] = pair.split(',');
   const points = state.pca.samples || [];
-  const colorLevels = uniqueValues(points.map((point) => sampleMetadata(point.sample_id, colorBy)));
+  const colorColumn = colorBy || '';
+  const colorLevels = uniqueValues(points.map((point) => pcaGroupValue(point.sample_id, colorColumn)));
   const hasShape = shapeBy && shapeBy !== 'none';
   const shapeLevels = hasShape ? uniqueValues(points.map((point) => sampleMetadata(point.sample_id, shapeBy))) : [''];
   const colorMap = new Map(colorLevels.map((level, index) => [level, PCA_COLORS[index % PCA_COLORS.length]]));
   const symbolMap = new Map(shapeLevels.map((level, index) => [level, PCA_SYMBOLS[index % PCA_SYMBOLS.length]]));
   const traces = colorLevels.map((colorLevel, index) => {
-    const subset = points.filter((point) => sampleMetadata(point.sample_id, colorBy) === colorLevel);
+    const subset = points.filter((point) => pcaGroupValue(point.sample_id, colorColumn) === colorLevel);
     return {
       x: subset.map((p) => p[xKey]),
       y: subset.map((p) => p[yKey]),
-      text: subset.map((p) => pcaHoverText(p, colorBy, shapeBy)),
+      text: subset.map((p) => pcaHoverText(p, colorColumn, shapeBy)),
       name: colorLevel,
       mode: 'markers',
       type: 'scatter',
       legendgroup: 'pca-color',
-      legendgrouptitle: index === 0 ? { text: colorBy } : undefined,
+      legendgrouptitle: index === 0 ? { text: colorColumn || 'Samples' } : undefined,
       marker: {
         size: 13,
         opacity: 0.85,
@@ -90,9 +91,28 @@ export function renderDistanceHeatmap() {
 export function renderQCPlots() {
   const rows = qcRowsWithStatus();
   const plots = document.getElementById('qc-plots');
-  if (plots) plots.innerHTML = '<div id="reads-plot" class="plot"></div><div id="mapping-plot" class="plot"></div>';
-  Plotly.react('reads-plot', [{ x: rows.map((r) => r.sample_id), y: rows.map((r) => r.total_reads), type: 'bar' }], plotLayout('Total reads'), { responsive: true });
-  Plotly.react('mapping-plot', [{ x: rows.map((r) => r.sample_id), y: rows.map((r) => r.mapping_rate), type: 'bar' }], { ...plotLayout('Mapping rate'), yaxis: { tickformat: '.0%' } }, { responsive: true });
+  if (!plots) return;
+  const specs = [
+    { id: 'reads-plot', key: 'total_reads', title: 'Total reads (PF)', yaxis: { title: 'reads' } },
+    { id: 'mapping-plot', key: 'mapping_rate', title: 'Mapped reads (trimmed)', yaxis: { tickformat: '.0%', range: [0, 1] } },
+    { id: 'q30-plot', key: 'q30_bases_rate', title: 'PF bases >= Q30', yaxis: { tickformat: '.0%', range: [0, 1] } },
+    { id: 'rrna-plot', key: 'rrna_rate', title: 'Ribosomal bases', yaxis: { tickformat: '.1%' } },
+    { id: 'duplication-plot', key: 'duplication_rate', title: 'Duplicate mapped reads', yaxis: { tickformat: '.0%', range: [0, 1] } },
+  ].filter((spec) => rows.some((row) => Number.isFinite(Number(row[spec.key]))));
+
+  if (specs.length === 0) {
+    plots.innerHTML = '<p class="note">No numeric QC metrics available for plotting.</p>';
+    return;
+  }
+
+  plots.innerHTML = specs.map((spec) => `<div id="${spec.id}" class="plot"></div>`).join('');
+  specs.forEach((spec) => {
+    Plotly.react(spec.id, [{
+      x: rows.map((r) => r.sample_id),
+      y: rows.map((r) => Number(r[spec.key])),
+      type: 'bar',
+    }], { ...plotLayout(spec.title), yaxis: spec.yaxis }, { responsive: true });
+  });
 }
 
 export function renderVolcano(rows, padj = 0.05, lfc = 1) {
@@ -132,13 +152,30 @@ export function renderGeneCounts(geneQuery) {
 
 export function renderEnrichment(rows) {
   const top = rows.slice().sort((a, b) => Number(a.padj) - Number(b.padj)).slice(0, 15).reverse();
+  const termLabels = top.map((row) => row.term_name || row.term_id || 'term');
+  const wrappedLabels = termLabels.map((label) => wrapPlotLabel(label, 32));
+  const termKeys = top.map((row, index) => `${row.term_id || 'term'}_${index}`);
+  const layout = plotLayout('Top enriched terms');
   Plotly.react('enrichment-plot', [{
     x: top.map((r) => -Math.log10(plotPValue(r.padj))),
-    y: top.map((r) => r.term_name),
+    y: termKeys,
     type: 'bar',
     orientation: 'h',
-    text: top.map((r) => `${r.term_id}<br>${r.genes}`),
-  }], { ...plotLayout('Top enriched terms'), xaxis: { title: '-log10 adjusted p-value' } }, { responsive: true });
+    customdata: top.map((r, index) => [termLabels[index], r.term_id || '', r.genes || '']),
+    hovertemplate: '<b>%{customdata[0]}</b><br>%{customdata[1]}<br>Genes: %{customdata[2]}<br>-log10 adjusted p-value: %{x:.3g}<extra></extra>',
+  }], {
+    ...layout,
+    margin: { ...layout.margin, l: enrichmentLeftMargin(wrappedLabels), r: 30 },
+    xaxis: { title: '-log10 adjusted p-value', automargin: true },
+    yaxis: {
+      automargin: true,
+      tickmode: 'array',
+      tickvals: termKeys,
+      ticktext: wrappedLabels,
+      categoryorder: 'array',
+      categoryarray: termKeys,
+    },
+  }, { responsive: true });
 }
 
 function pct(value) {
@@ -149,18 +186,46 @@ function sampleMetadata(sampleId, column) {
   return String(getSampleById(sampleId)?.[column] ?? 'NA');
 }
 
+function pcaGroupValue(sampleId, column) {
+  return column ? sampleMetadata(sampleId, column) : 'All samples';
+}
+
 function pcaHoverText(point, colorBy, shapeBy) {
   const sample = getSampleById(point.sample_id) || {};
   const fields = Object.entries(sample)
     .filter(([key]) => key !== 'sample_id')
     .map(([key, value]) => `${key}: ${value}`);
-  const emphasized = [`${colorBy}: ${sampleMetadata(point.sample_id, colorBy)}`];
+  const emphasized = colorBy ? [`${colorBy}: ${sampleMetadata(point.sample_id, colorBy)}`] : [];
   if (shapeBy && shapeBy !== 'none') emphasized.push(`${shapeBy}: ${sampleMetadata(point.sample_id, shapeBy)}`);
   return [point.sample_id].concat(Array.from(new Set(emphasized.concat(fields)))).join('<br>');
 }
 
 function uniqueValues(values) {
   return Array.from(new Set(values.map((value) => String(value ?? 'NA'))));
+}
+
+function wrapPlotLabel(label, maxLineLength = 32) {
+  const words = String(label).split(/\s+/).filter(Boolean);
+  const lines = [];
+  let line = '';
+  words.forEach((word) => {
+    if (!line) {
+      line = word;
+    } else if ((line.length + word.length + 1) <= maxLineLength) {
+      line = `${line} ${word}`;
+    } else {
+      lines.push(line);
+      line = word;
+    }
+  });
+  if (line) lines.push(line);
+  return lines.length ? lines.join('<br>') : String(label);
+}
+
+function enrichmentLeftMargin(labels) {
+  const lineLengths = labels.flatMap((label) => String(label).split('<br>').map((line) => line.length));
+  const maxLength = Math.max(12, ...lineLengths);
+  return Math.min(320, Math.max(150, maxLength * 7 + 34));
 }
 
 function plotPValue(value) {

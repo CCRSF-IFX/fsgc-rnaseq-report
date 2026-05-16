@@ -11,8 +11,12 @@ export function setupDeseqControls(callbacks = {}) {
   deseqCallbacks = callbacks;
   const designSelect = document.getElementById('deseq-design-column');
   if (!designSelect) return;
+  const status = document.getElementById('deseq-status');
 
   const eligibleColumns = metadataColumns().filter((column) => deseqUniqueValues(column).length >= 2);
+  designSelect.disabled = eligibleColumns.length === 0;
+  const runButton = document.getElementById('deseq-run');
+  if (runButton) runButton.disabled = eligibleColumns.length === 0;
   const previousDesign = designSelect.value;
   designSelect.innerHTML = eligibleColumns.map((column) => `<option value="${deseqEscapeHtml(column)}">${deseqEscapeHtml(column)}</option>`).join('');
   if (eligibleColumns.includes(previousDesign)) {
@@ -23,6 +27,11 @@ export function setupDeseqControls(callbacks = {}) {
     designSelect.value = 'condition';
   }
   updateDeseqAdjustControls();
+  if (status && eligibleColumns.length === 0) {
+    status.textContent = 'Upload a sample manifest with a grouping column to run DESeq2.';
+  } else if (status?.textContent?.startsWith('Upload a sample manifest')) {
+    status.textContent = 'DESeq2 uses webR and the configured package snapshot for small exploratory runs.';
+  }
 
   if (!deseqControlsWired) {
     deseqControlsWired = true;
@@ -45,12 +54,16 @@ function updateDeseqLevelControls() {
   const numeratorSelect = document.getElementById('deseq-numerator-level');
   const denominatorSelect = document.getElementById('deseq-denominator-level');
   if (!referenceSelect || !numeratorSelect || !denominatorSelect) return;
+  const hasLevels = levels.length > 0;
 
   const configuredReference = state.config?.analysis?.referenceLevel;
   const previousReference = referenceSelect.value;
   referenceSelect.innerHTML = levelOptions;
   numeratorSelect.innerHTML = levelOptions;
   denominatorSelect.innerHTML = levelOptions;
+  referenceSelect.disabled = !hasLevels;
+  numeratorSelect.disabled = !hasLevels;
+  denominatorSelect.disabled = !hasLevels;
 
   const reference = levels.includes(previousReference)
     ? previousReference
@@ -72,6 +85,7 @@ function updateDeseqAdjustControls() {
     const levels = deseqUniqueValues(column).length;
     return `<option value="${deseqEscapeHtml(column)}"${previous.has(column) ? ' selected' : ''}>${deseqEscapeHtml(column)} (${levels})</option>`;
   }).join('');
+  adjustSelect.disabled = candidates.length === 0;
 }
 
 export async function runDeseq2Analysis() {

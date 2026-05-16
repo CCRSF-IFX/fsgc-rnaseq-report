@@ -5,6 +5,7 @@ import {
   computeSampleDistanceFromCounts,
   inferContrastsFromSamples,
 } from './analysis.js';
+import { normalizeQcMetrics } from './qc.js';
 
 function getEmbeddedAsset(path) {
   const assets = globalThis.REPORT_EMBEDDED_ASSETS;
@@ -91,9 +92,9 @@ function parseValue(value) {
 export async function loadCoreAssets() {
   state.config = await loadJson('assets/report_config.json', true);
   const dataRoot = state.config.dataRoot || 'assets/data';
-  state.samples = await loadSampleMetadata(dataRoot);
   state.counts = parseCsv(await loadText(`${dataRoot}/counts.csv`, true));
-  state.qc = await loadJson(`${dataRoot}/qc_metrics.json`, false) || [];
+  state.samples = await loadSampleMetadata(dataRoot, state.counts);
+  state.qc = await loadQcMetrics(dataRoot);
   state.pca = await loadJson(`${dataRoot}/pca.json`, false);
   state.distance = await loadJson(`${dataRoot}/sample_distance_matrix.json`, false);
   state.geneAnnotation = await loadJson(`${dataRoot}/gene_annotation.json`, false) || [];
@@ -110,7 +111,7 @@ export async function loadCoreAssets() {
   if (state.distance) validateDistance(state.distance);
 }
 
-async function loadSampleMetadata(dataRoot) {
+async function loadSampleMetadata(dataRoot, counts) {
   const configured = state.config.sampleManifest || state.config.samplesFile;
   if (configured) {
     return loadSampleFile(`${dataRoot}/${configured}`, true);
@@ -121,7 +122,54 @@ async function loadSampleMetadata(dataRoot) {
     const rows = await loadSampleFile(`${dataRoot}/${candidate}`, false);
     if (rows) return rows;
   }
-  throw new Error(`Required sample metadata failed: ${dataRoot}/samples.json, sample_manifest.csv, sample_manifest.tsv, samples.csv, or samples.tsv was not found.`);
+  return inferSamplesFromCounts(counts);
+}
+
+async function loadQcMetrics(dataRoot) {
+  const candidates = ['qc_metrics.json', 'qc_metrics.csv', 'qc_metrics.tsv'];
+  for (const candidate of candidates) {
+    const rows = await loadSampleFile(`${dataRoot}/${candidate}`, false);
+    if (rows) return normalizeQcMetrics(rows);
+  }
+  return [];
+}
+
+const COUNT_METADATA_COLUMNS = new Set([
+  'gene_id',
+  'gene_symbol',
+  'gene_name',
+  'description',
+  'gene_description',
+  'chromosome',
+  'chr',
+  'start',
+  'end',
+  'strand',
+  'length',
+  'gene_biotype',
+  'biotype',
+]);
+
+function inferSamplesFromCounts(counts) {
+  if (!Array.isArray(counts) || counts.length === 0) return [];
+  const sampleIds = Object.keys(counts[0]).filter((column) => isLikelyCountColumn(counts, column));
+  if (sampleIds.length < 2) {
+    throw new Error('No sample manifest was found, and counts.csv did not include at least two numeric sample columns.');
+  }
+  return sampleIds.map((sample_id) => ({ sample_id }));
+}
+
+function isLikelyCountColumn(counts, column) {
+  if (COUNT_METADATA_COLUMNS.has(String(column).trim().toLowerCase())) return false;
+  let observed = false;
+  for (const row of counts.slice(0, 50)) {
+    const value = row[column];
+    if (value === '' || value === null || value === undefined) continue;
+    observed = true;
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric)) return false;
+  }
+  return observed;
 }
 
 async function loadSampleFile(path, required) {

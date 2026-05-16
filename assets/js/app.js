@@ -120,12 +120,19 @@ function setupPcaControls() {
   const shape = document.getElementById('pca-shape');
   const shapeLabel = document.getElementById('pca-shape-label');
   const columns = metadataColumns();
-  color.innerHTML = columns.map((c) => `<option value="${c}">${c}</option>`).join('');
-  if (columns.includes('condition')) color.value = 'condition';
+  if (columns.length === 0) {
+    color.innerHTML = '<option value="">None</option>';
+    color.disabled = true;
+  } else {
+    color.disabled = false;
+    color.innerHTML = columns.map((c) => `<option value="${c}">${c}</option>`).join('');
+    if (columns.includes('condition')) color.value = 'condition';
+  }
   const shapeColumns = columns.filter((column) => column !== color.value);
   if (shape) {
     shape.innerHTML = ['none'].concat(shapeColumns).map((c) => `<option value="${c}">${c === 'none' ? 'None' : c}</option>`).join('');
     shape.value = shapeColumns[0] || 'none';
+    shape.disabled = columns.length <= 1;
   }
   if (shapeLabel) shapeLabel.hidden = columns.length <= 1;
   const pair = document.getElementById('pca-pair');
@@ -169,6 +176,7 @@ function syncPcaShapeOptions() {
   const shapeColumns = columns.filter((column) => column !== color?.value);
   shape.innerHTML = ['none'].concat(shapeColumns).map((c) => `<option value="${c}">${c === 'none' ? 'None' : c}</option>`).join('');
   shape.value = shapeColumns.includes(previous) ? previous : (shapeColumns[0] || 'none');
+  shape.disabled = columns.length <= 1;
   if (shapeLabel) shapeLabel.hidden = columns.length <= 1;
 }
 

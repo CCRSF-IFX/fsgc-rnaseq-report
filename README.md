@@ -1,9 +1,10 @@
 # RNA-seq Report
 
 A static, portable RNA-seq report application for pipeline outputs. The minimum
-inputs are a count matrix and a sample manifest. From those, the browser can
-compute PCA coordinates, a sample-distance matrix, an expression heatmap, and
-exploratory two-group differential expression, then visualize the results
+buildable input is a count matrix; when a sample manifest is present, the
+browser can also drive metadata-aware PCA, heatmap annotations, DESeq2, and
+fgsea. From the count matrix, the browser can compute PCA coordinates, a
+sample-distance matrix, and an expression heatmap, then visualize the results
 without running a backend server.
 
 Precomputed pipeline outputs are still preferred when available. If files such
@@ -71,7 +72,8 @@ those URLs. The Optional Analysis tab includes install/load controls and a link
 to download the compiled package snapshot ZIP.
 
 Users can also replace or augment the embedded defaults in the Sample Metadata
-tab. A sample manifest is required; the count matrix is optional. If a user
+tab. The standalone report can be built with only a count matrix, but a sample
+manifest is required before users run metadata-driven DESeq2 or fgsea. If a user
 uploads only a manifest, the app uses the embedded count matrix. If a user
 uploads a new count matrix, it must be uploaded with a matching manifest because
 DESeq2, PCA coloring, heatmap annotations, and fgsea contrast setup all depend
@@ -90,10 +92,18 @@ scripts and update `assets/js/heatmap.js`.
 Useful builder options:
 
 ```bash
+python3 scripts/build_standalone_report.py --data-root path/to/data
 python3 scripts/build_standalone_report.py --output path/to/report.html
 python3 scripts/build_standalone_report.py --plotly-file path/to/plotly.min.js
 python3 scripts/build_standalone_report.py --plotly-url https://cdn.plot.ly/plotly-2.35.2.min.js
 ```
+
+`--data-root` lets you build a standalone report from a specific data directory
+without editing `assets/report_config.json`. The directory can be repo-relative
+or absolute, and its files are embedded into the generated HTML under the
+report's internal `assets/data/` path. If that directory contains
+`qc_metrics.xlsx`, the builder reads the `Summary` sheet and embeds it as
+`qc_metrics.json` in the generated HTML.
 
 `dist/` is ignored by git because generated report files can contain run-specific
 data.
@@ -146,17 +156,21 @@ using their pinned package URLs.
 
 ## Data Model
 
-The smallest useful report needs:
+The smallest buildable report needs:
 
 ```text
 assets/
   report_config.json
   data/
-    sample_manifest.csv
     counts.csv
 ```
 
-The sample manifest may be any one of these files:
+With `counts.csv` alone, the report infers `sample_id` values from numeric count
+columns and can render count-derived PCA, sample distances, and expression
+heatmaps. Add a sample manifest to enable metadata annotations, PCA color/shape
+controls, browser-generated DE contrasts, DESeq2, and fgsea.
+
+The optional sample manifest may be any one of these files:
 
 ```text
 samples.json
@@ -166,8 +180,9 @@ samples.csv
 samples.tsv
 ```
 
-The report checks those names in that order. To use a different manifest name,
-set it in `assets/report_config.json`:
+The report checks those names in that order. If none is present, it falls back
+to inferred sample IDs from `counts.csv`. To use a different manifest name, set
+it in `assets/report_config.json`:
 
 ```json
 {
@@ -175,9 +190,11 @@ set it in `assets/report_config.json`:
 }
 ```
 
-`sampleManifest` is resolved relative to `dataRoot`.
+`sampleManifest` is resolved relative to `dataRoot`. A configured
+`sampleManifest` is treated as required, which is useful when a production
+report should fail the build if metadata is missing.
 
-With those two data files, the report derives:
+With counts and a manifest, the report derives:
 
 - PCA coordinates from log2(CPM + 1) expression.
 - sample distances from log2(CPM + 1) expression.
@@ -199,7 +216,7 @@ assets/
   report_config.json
   data/
     samples.json OR sample_manifest.csv
-    qc_metrics.json
+    qc_metrics.json OR qc_metrics.csv OR qc_metrics.tsv OR qc_metrics.xlsx
     pca.json
     sample_distance_matrix.json
     counts.csv
@@ -217,17 +234,48 @@ assets/
 Conventions:
 
 - `sample_id` is the primary key for sample-level files.
-- The sample manifest must include `sample_id`; analysis group columns such as `condition`, `treatment`, `batch`, and `sex` are preserved as metadata.
+- If a sample manifest is supplied, it must include `sample_id`; analysis group columns such as `condition`, `treatment`, `batch`, and `sex` are preserved as metadata.
 - `counts.csv` must include at least one gene identifier column, such as `gene_id`, `gene_symbol`, or `gene_name`.
-- Count matrix sample columns must match `sample_id` values in the sample manifest.
+- Count matrix sample columns must match `sample_id` values when a sample manifest is supplied. Without a manifest, sample IDs are inferred from numeric count columns.
 - `gene_id` and `gene_symbol` identify gene-level records.
 - DE tables should include `gene_id`, `gene_symbol`, `log2FoldChange`, `pvalue`, and `padj`.
 - Count matrices are expected in wide CSV format with gene columns first and one column per sample.
 - Browser fgsea uses `gene_symbol` when available, otherwise `gene_id`, so pathway GMT identifiers must match one of those columns.
 
-Browser-generated contrasts use `analysis.conditionColumn` from
-`assets/report_config.json`. If it is not set, the report uses `condition` when
-available, otherwise the first metadata column with at least two groups.
+Browser-generated contrasts require a sample manifest. They use
+`analysis.conditionColumn` from `assets/report_config.json`. If it is not set,
+the report uses `condition` when available, otherwise the first metadata column
+with at least two groups.
+
+QC metrics can use canonical report fields or the Excel-style headers from the
+pipeline summary. For browser-hosted assets, use JSON/CSV/TSV. For standalone
+HTML builds, `qc_metrics.xlsx` is also supported; the builder reads the
+`Summary` worksheet. Supported summary headers include:
+
+```text
+Sample ID
+Sample Yield (Mbases)
+Percent of (PF) Bases >= Q30
+Total Reads (PF)
+Total Reads After Trimming
+Percent Total Reads after Trimming
+Total Mapped Reads (Trimmed)
+Percent Total Mapped Reads (Trimmed)
+Uniquely Mapped Reads (Trimmed)
+Percent Uniquely Mapped Reads (Trimmed)
+Percent Non-duplicate Reads (Mapped Trimmed)
+PCT_RIBOSOMAL_BASES
+PCT_CODING_BASES
+PCT_UTR_BASES
+PCT_INTRONIC_BASES
+PCT_INTERGENIC_BASES
+PCT_MRNA_BASES
+PCT_CORRECT_STRAND_READS
+MEDIAN_5PRIME_TO_3PRIME_BIAS
+```
+
+Percent-style values may be written as `95.74`, `95.74%`, or `0.9574`; the app
+normalizes them to fractions for plots and threshold checks.
 
 Validate assets with:
 
@@ -388,7 +436,7 @@ Run these before pushing workflow or report changes:
 ```bash
 python3 scripts/validate_assets.py assets/data
 python3 -m json.tool assets/report_config.json >/dev/null
-python3 -m py_compile scripts/build_standalone_report.py
+python3 -m py_compile scripts/build_standalone_report.py scripts/validate_assets.py scripts/qc_excel.py
 node --check assets/js/app.js
 node --check assets/js/analysis.js
 node --check assets/js/dataLoader.js

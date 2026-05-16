@@ -11,10 +11,14 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
+from qc_excel import load_summary_sheet
+
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_OUTPUT = Path("dist/rnaseq-report.html")
 PLOTLY_CDN = "https://cdn.plot.ly/plotly-2.35.2.min.js"
+EMBEDDED_DATA_ROOT = "assets/data"
+QC_EXCEL_NAMES = {"qc_metrics.xlsx", "qc_metrics.xlsm"}
 
 JS_ORDER = [
     "assets/js/state.js",
@@ -69,28 +73,56 @@ def data_root_from_config(config_text: str) -> str:
     try:
         config = json.loads(config_text)
     except json.JSONDecodeError:
-        return "assets/data"
-    return str(config.get("dataRoot") or "assets/data").strip("/")
+        return EMBEDDED_DATA_ROOT
+    return normalize_data_root(config.get("dataRoot") or EMBEDDED_DATA_ROOT)
 
 
-def embedded_assets(repo_root: Path) -> dict[str, str]:
+def normalize_data_root(data_root: object) -> str:
+    return str(data_root or EMBEDDED_DATA_ROOT).strip("/") or EMBEDDED_DATA_ROOT
+
+
+def resolve_repo_path(path: Path, repo_root: Path) -> Path:
+    return path if path.is_absolute() else repo_root / path
+
+
+def embedded_assets(repo_root: Path, data_root_override: Path | None = None) -> dict[str, str]:
     config_path = repo_root / "assets/report_config.json"
     config_text = read_text(config_path)
+    virtual_data_root = data_root_from_config(config_text)
+    data_dir = repo_root / virtual_data_root
+
+    if data_root_override:
+        data_dir = resolve_repo_path(data_root_override, repo_root).resolve()
+        if not data_dir.is_dir():
+            raise FileNotFoundError(f"--data-root does not exist or is not a directory: {data_dir}")
+
+        config = json.loads(config_text)
+        virtual_data_root = EMBEDDED_DATA_ROOT
+        config["dataRoot"] = virtual_data_root
+        config_text = json.dumps(config, ensure_ascii=False, indent=2)
+
     assets = {"assets/report_config.json": config_text}
 
-    data_root = data_root_from_config(config_text)
-    data_dir = repo_root / data_root
     if not data_dir.exists():
         return assets
 
     for path in sorted(data_dir.rglob("*")):
         if path.is_file():
-            assets[path.relative_to(repo_root).as_posix()] = read_text(path)
+            embedded_path = Path(virtual_data_root) / path.relative_to(data_dir)
+            if path.name.lower() in QC_EXCEL_NAMES:
+                embedded_qc_path = (Path(virtual_data_root) / "qc_metrics.json").as_posix()
+                if embedded_qc_path not in assets:
+                    rows = load_summary_sheet(path, sheet_name="Summary")
+                    assets[embedded_qc_path] = json.dumps(rows, ensure_ascii=False, indent=2)
+                continue
+            if path.suffix.lower() in {".xlsx", ".xlsm"}:
+                continue
+            assets[embedded_path.as_posix()] = read_text(path)
     return assets
 
 
-def bundled_app_script(repo_root: Path) -> str:
-    assets_json = json.dumps(embedded_assets(repo_root), ensure_ascii=False, separators=(",", ":"))
+def bundled_app_script(repo_root: Path, data_root_override: Path | None = None) -> str:
+    assets_json = json.dumps(embedded_assets(repo_root, data_root_override), ensure_ascii=False, separators=(",", ":"))
     chunks = [
         "const REPORT_EMBEDDED_ASSETS = Object.freeze(" + assets_json + ");",
         "globalThis.REPORT_EMBEDDED_ASSETS = REPORT_EMBEDDED_ASSETS;",
@@ -132,7 +164,7 @@ def download_text(url: str) -> str:
 def standalone_html(args: argparse.Namespace, repo_root: Path) -> str:
     html = read_text(repo_root / "index.html")
     css = read_text(repo_root / "assets/css/style.css")
-    script = bundled_app_script(repo_root)
+    script = bundled_app_script(repo_root, args.data_root)
 
     html = html.replace(
         '  <link rel="stylesheet" href="assets/css/style.css" />',
@@ -172,6 +204,11 @@ def main() -> None:
     parser.add_argument(
         "--plotly-file",
         help="Inline Plotly from a local JavaScript file instead of the CDN.",
+    )
+    parser.add_argument(
+        "--data-root",
+        type=Path,
+        help="Data directory to embed instead of assets/report_config.json dataRoot. Relative paths resolve from the repo root.",
     )
     args = parser.parse_args()
 
