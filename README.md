@@ -114,9 +114,10 @@ The actual package repo build is delegated to `r-wasm/actions`.
 The package list includes DESeq2 plus the Bioconductor hard dependency closure
 that is not available from the default webR package repository. This keeps the
 snapshot focused while still making `library(DESeq2)` loadable in webR.
-The workflow also installs the project-local `webr-packages/patches/locfit.mk`
-override before building packages so `locfit`, a DESeq2 import that requires
-C17, compiles with Emscripten instead of the host C compiler.
+The workflow also appends the project-local
+`webr-packages/patches/rwasm-c17.mk` override before building packages so
+`locfit`, a DESeq2 import that requires C17, compiles with Emscripten instead
+of the host C compiler.
 
 Package snapshots are overwrite-protected by default. If
 `webr-packages/<VERSION>/bin/emscripten/contrib/4.5/PACKAGES` already exists on

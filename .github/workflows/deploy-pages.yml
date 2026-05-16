@@ -177,11 +177,11 @@ jobs:
           install = 'pak::pak(c("r-wasm/rwasm"))'
           patch = (
               'pak::pak(c("r-wasm/rwasm"))\n\n'
-              'locfit_makevars_src <- file.path("webr-packages", "patches", "locfit.mk")\n'
-              'if (file.exists(locfit_makevars_src)) {\n'
-              '  locfit_makevars_dest <- file.path(system.file("Makevars", package = "rwasm"), "locfit.mk")\n'
-              '  file.copy(locfit_makevars_src, locfit_makevars_dest, overwrite = TRUE)\n'
-              '  message("Installed locfit webR Makevars override: ", locfit_makevars_dest)\n'
+              'c17_makevars_src <- file.path("webr-packages", "patches", "rwasm-c17.mk")\n'
+              'if (file.exists(c17_makevars_src)) {\n'
+              '  webr_vars <- system.file("webr-vars.mk", package = "rwasm")\n'
+              '  cat(c("", readLines(c17_makevars_src)), file = webr_vars, sep = "\\n", append = TRUE)\n'
+              '  message("Installed webR C17 compiler override: ", webr_vars)\n'
               '}\n'
           )
           if install not in text:
