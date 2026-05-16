@@ -190,14 +190,18 @@ jobs:
 
           old = 'rwasm::add_pkg(packages, repo_dir = repo_path, compress = compress)'
           new = (
-              'patched_remotes <- character()\n'
               'fastmatch_src <- file.path("webr-packages", "patched-src", "fastmatch")\n'
               'if (dir.exists(fastmatch_src)) {\n'
-              '  patched_remotes <- c(patched_remotes, paste0("local::", normalizePath(fastmatch_src, winslash = "/", mustWork = TRUE)))\n'
+              '  fastmatch_ref <- paste0("local::", normalizePath(fastmatch_src, winslash = "/", mustWork = TRUE))\n'
+              '  packages <- vapply(packages, function(pkg) {\n'
+              '    pkg_name <- sub("@.*$", "", pkg)\n'
+              '    pkg_name <- sub("^.*::", "", pkg_name)\n'
+              '    pkg_name <- sub("^.*/", "", pkg_name)\n'
+              '    if (identical(pkg_name, "fastmatch")) fastmatch_ref else pkg\n'
+              '  }, character(1))\n'
+              '  message("Using patched fastmatch package ref: ", fastmatch_ref)\n'
               '}\n'
-              'preferred_remotes <- if (length(patched_remotes)) patched_remotes else NULL\n'
-              'if (length(patched_remotes)) message("Using patched webR package remotes: ", paste(patched_remotes, collapse = ", "))\n'
-              'rwasm::add_pkg(packages, repo_dir = repo_path, remotes = preferred_remotes, compress = compress)'
+              'rwasm::add_pkg(packages, repo_dir = repo_path, remotes = NULL, compress = compress)'
           )
           if old not in text:
               raise SystemExit("Expected rwasm::add_pkg() call was not found")
