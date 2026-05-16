@@ -189,10 +189,23 @@ jobs:
           text = text.replace(install, patch)
 
           old = 'rwasm::add_pkg(packages, repo_dir = repo_path, compress = compress)'
-          new = 'rwasm::add_pkg(packages, repo_dir = repo_path, remotes = NULL, compress = compress)'
+          new = (
+              'patched_remotes <- character()\n'
+              'fastmatch_src <- file.path("webr-packages", "patched-src", "fastmatch")\n'
+              'if (dir.exists(fastmatch_src)) {\n'
+              '  patched_remotes <- c(patched_remotes, paste0("local::", normalizePath(fastmatch_src, winslash = "/", mustWork = TRUE)))\n'
+              '}\n'
+              'preferred_remotes <- if (length(patched_remotes)) patched_remotes else NULL\n'
+              'if (length(patched_remotes)) message("Using patched webR package remotes: ", paste(patched_remotes, collapse = ", "))\n'
+              'rwasm::add_pkg(packages, repo_dir = repo_path, remotes = preferred_remotes, compress = compress)'
+          )
           if old not in text:
               raise SystemExit("Expected rwasm::add_pkg() call was not found")
           path.write_text(text.replace(old, new))
+
+      - name: Prepare patched fastmatch source
+        shell: bash
+        run: python3 webr-packages/patches/prepare_fastmatch_source.py
 
       - name: Build versioned webR package repo
         uses: ./.actions/build-rwasm
@@ -243,6 +256,23 @@ jobs:
           fi
 
           printf 'Verified webR package snapshot packages: %s\n' "${expected[*]}"
+
+      - name: Verify webR package ABI
+        shell: bash
+        run: |
+          package_dir="_site/webr-packages/${{ steps.webr-snapshot.outputs.version }}/bin/emscripten/contrib/4.5"
+          fastmatch_pkg="$(find "$package_dir" -maxdepth 1 -name 'fastmatch_*.tgz' -print -quit)"
+          if [[ -z "$fastmatch_pkg" ]]; then
+            echo "fastmatch package was not built in $package_dir" >&2
+            exit 1
+          fi
+
+          runtime_base="$(python3 -c 'import json; print(json.load(open("assets/report_config.json", encoding="utf-8"))["webr"]["baseUrl"].rstrip("/"))')"
+          tmpdir="$(mktemp -d)"
+          trap 'rm -rf "$tmpdir"' EXIT
+          curl -fsSL "$runtime_base/R.wasm" -o "$tmpdir/R.wasm"
+          tar -xzf "$fastmatch_pkg" -C "$tmpdir"
+          node scripts/check_webr_package_abi.js "$tmpdir/R.wasm" "$tmpdir/fastmatch/libs/fastmatch.so"
 
       - name: Build webR package snapshot archive
         shell: bash

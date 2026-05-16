@@ -156,6 +156,10 @@ The workflow also appends the project-local
 `webr-packages/patches/rwasm-c17.mk` override before building packages so
 `locfit`, a DESeq2 import that requires C17, compiles with Emscripten instead
 of the host C compiler.
+The workflow also prepares a patched `fastmatch` source tree before building
+the package snapshot. The CRAN source includes dummy no-prototype calls to
+`R_registerRoutines()` and `R_useDynamicSymbols()` that create invalid wasm
+imports under webR; the patch makes that dummy file inert.
 
 Package snapshots are overwrite-protected by default. If
 `webr-packages/<VERSION>/bin/emscripten/contrib/4.5/PACKAGES` already exists on
@@ -490,7 +494,9 @@ is loaded from the npm package bundle at runtime so the development app and
 generated standalone HTML can stay build-free.
 
 The Pages workflow verifies that every package listed above appears in the
-generated wasm `PACKAGES` index before publishing the snapshot.
+generated wasm `PACKAGES` index before publishing the snapshot. It also checks
+the built `fastmatch.so` wasm imports against the pinned webR runtime ABI, which
+catches strict-linking failures before deployment.
 
 Each deployed snapshot also exposes a ZIP archive:
 

@@ -39,7 +39,41 @@ https://omicsreporthub.github.io/rnaseq-report/webr-packages/v0.1.0/
   bioc::DelayedArray
   bioc::SparseArray
   bioc::XVector
+  cran::BH
+  cran::Matrix
+  cran::R6
+  cran::RColorBrewer
+  cran::Rcpp
+  cran::RcppArmadillo
+  cran::S7
+  cran::abind
+  cran::cli
+  cran::codetools
+  cran::cowplot
+  cran::cpp11
+  cran::data.table
+  cran::farver
+  cran::fastmatch
+  cran::formatR
+  cran::futile.logger
+  cran::futile.options
+  cran::generics
+  cran::ggplot2
+  cran::glue
+  cran::gtable
+  cran::isoband
+  cran::labeling
+  cran::lambda.r
+  cran::lattice
+  cran::lifecycle
   cran::locfit
+  cran::matrixStats
+  cran::rlang
+  cran::scales
+  cran::snow
+  cran::vctrs
+  cran::viridisLite
+  cran::withr
   ```
 
 - `webr-packages/published_versions` currently lists:
@@ -63,7 +97,10 @@ https://omicsreporthub.github.io/rnaseq-report/webr-packages/v0.1.0/
 - Reads package refs from `webr-packages/packages` using Bash/`awk`; no
   `Rscript` is required for that parsing step.
 - Patches `rwasm::add_pkg()` to use `remotes = NULL`, matching the current
-  resolver workaround. The package list explicitly includes DESeq2's
+  resolver workaround, unless a project-local patched remote is prepared.
+  `fastmatch` is built from a patched source tree because the CRAN dummy
+  registration file creates no-argument wasm imports for `R_registerRoutines`
+  and `R_useDynamicSymbols`. The package list explicitly includes DESeq2's
   Bioconductor hard dependency closure; fgsea is added as a browser-side GSEA
   package.
 - Builds the current wasm package repo into `_site/webr-packages/${VERSION}/`.
@@ -139,7 +176,7 @@ python3 scripts/build_standalone_report.py --data-root assets/data/simulated --o
 Expected package parser output:
 
 ```text
-bioc::DESeq2,bioc::fgsea,bioc::S4Vectors,bioc::IRanges,bioc::GenomicRanges,bioc::SummarizedExperiment,bioc::BiocGenerics,bioc::Biobase,bioc::BiocParallel,bioc::MatrixGenerics,bioc::Seqinfo,bioc::S4Arrays,bioc::DelayedArray,bioc::SparseArray,bioc::XVector,cran::locfit
+bioc::DESeq2,bioc::fgsea,bioc::S4Vectors,bioc::IRanges,bioc::GenomicRanges,bioc::SummarizedExperiment,bioc::BiocGenerics,bioc::Biobase,bioc::BiocParallel,bioc::MatrixGenerics,bioc::Seqinfo,bioc::S4Arrays,bioc::DelayedArray,bioc::SparseArray,bioc::XVector,cran::BH,cran::Matrix,cran::R6,cran::RColorBrewer,cran::Rcpp,cran::RcppArmadillo,cran::S7,cran::abind,cran::cli,cran::codetools,cran::cowplot,cran::cpp11,cran::data.table,cran::farver,cran::fastmatch,cran::formatR,cran::futile.logger,cran::futile.options,cran::generics,cran::ggplot2,cran::glue,cran::gtable,cran::isoband,cran::labeling,cran::lambda.r,cran::lattice,cran::lifecycle,cran::locfit,cran::matrixStats,cran::rlang,cran::scales,cran::snow,cran::vctrs,cran::viridisLite,cran::withr
 ```
 
 ## Verification URL
