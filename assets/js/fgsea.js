@@ -43,7 +43,7 @@ export async function runFgseaAnalysis() {
 
     fgseaSetStatus(status, 'Loading fgsea package in webR. First run can take a few minutes.');
     await progress.step('Loading fgsea package in webR', 3);
-    await ensureRPackages(['fgsea']);
+    await ensureRPackages(fgseaPackageSet(), { load: ['fgsea'] });
 
     const runMessage = `Running fgsea in webR for ${deRows.length} ranked genes`;
     fgseaSetStatus(status, `${runMessage}. Keep this tab open.`);
@@ -78,6 +78,10 @@ export async function runFgseaAnalysis() {
       runButton.removeAttribute('aria-busy');
     }
   }
+}
+
+function fgseaPackageSet() {
+  return state.config?.webr?.modules?.fgsea?.packages || ['fgsea'];
 }
 
 function populateGseaReferences() {

@@ -1,5 +1,8 @@
+# Top-level browser analysis packages.
 bioc::DESeq2
 bioc::fgsea
+
+# Bioconductor hard dependencies for DESeq2/fgsea.
 bioc::S4Vectors
 bioc::IRanges
 bioc::GenomicRanges
@@ -13,4 +16,41 @@ bioc::S4Arrays
 bioc::DelayedArray
 bioc::SparseArray
 bioc::XVector
+
+# CRAN hard dependencies. Keep these in the same snapshot as the Bioconductor
+# packages so compiled wasm libraries are built against the same webR runtime.
+cran::BH
+cran::Matrix
+cran::R6
+cran::RColorBrewer
+cran::Rcpp
+cran::RcppArmadillo
+cran::S7
+cran::abind
+cran::cli
+cran::codetools
+cran::cowplot
+cran::cpp11
+cran::data.table
+cran::farver
+cran::fastmatch
+cran::formatR
+cran::futile.logger
+cran::futile.options
+cran::generics
+cran::ggplot2
+cran::glue
+cran::gtable
+cran::isoband
+cran::labeling
+cran::lambda.r
+cran::lattice
+cran::lifecycle
 cran::locfit
+cran::matrixStats
+cran::rlang
+cran::scales
+cran::snow
+cran::vctrs
+cran::viridisLite
+cran::withr

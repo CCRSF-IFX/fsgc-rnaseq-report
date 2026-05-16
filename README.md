@@ -140,9 +140,13 @@ The workflow reads package refs from `webr-packages/packages` using Bash/`awk`.
 It does not require `Rscript` to be present on the runner for that parsing step.
 The actual package repo build is delegated to `r-wasm/actions`.
 
-The package list includes DESeq2 plus the Bioconductor hard dependency closure
-that is not available from the default webR package repository. This keeps the
-snapshot focused while still making `library(DESeq2)` loadable in webR.
+The package list includes DESeq2, fgsea, and their hard dependency closure.
+This keeps compiled wasm dependencies in the same snapshot as the top-level
+Bioconductor packages, which avoids ABI mismatches when packages such as
+`fastmatch` or `data.table` are loaded by fgsea.
+The webR runtime URL in `assets/report_config.json` and the workflow
+`webr-image` are pinned to the same webR release so the runtime and package
+builder move together.
 At runtime, the app passes the report snapshot through webR's
 `webr_pkg_repos`/`webr::install(..., repos = ...)` path; setting only the
 standard R `repos` option is not enough for webR package installation.
@@ -344,7 +348,8 @@ python3 scripts/build_standalone_report.py --data-root assets/data/gse164073 --o
 
 webR is lazy-loaded only when a user opens optional downstream analysis and runs
 a module that needs R packages. The package repository is configured in
-`assets/report_config.json`:
+`assets/report_config.json`; the package arrays are abbreviated in this example
+because the actual config lists the full dependency closure:
 
 When a report is opened directly from `file://`, the app applies a small worker
 URL compatibility shim for current webR builds. If the browser still blocks
@@ -373,7 +378,7 @@ views remain usable from the standalone file.
   },
   "webr": {
     "enabled": true,
-    "baseUrl": "https://webr.r-wasm.org/latest/",
+    "baseUrl": "https://webr.r-wasm.org/v0.5.9/",
     "packageRepo": "https://omicsreporthub.github.io/rnaseq-report/webr-packages/v0.1.0/",
     "packageRepoVersion": "v0.1.0",
     "modules": {
@@ -412,7 +417,10 @@ the subject or pair ID column as an adjustment/blocking column. The runner does
 not currently support arbitrary interaction terms such as
 `genotype:treatment`.
 
-The configured package snapshot definition includes:
+The configured package snapshot definition includes DESeq2, fgsea, and their
+hard dependency closure. Keeping compiled dependencies such as `fastmatch`,
+`data.table`, `Rcpp`, and `Matrix` in the same report snapshot avoids mixing
+wasm binaries built against different webR runtimes.
 
 ```text
 bioc::DESeq2
@@ -430,7 +438,41 @@ bioc::S4Arrays
 bioc::DelayedArray
 bioc::SparseArray
 bioc::XVector
+cran::BH
+cran::Matrix
+cran::R6
+cran::RColorBrewer
+cran::Rcpp
+cran::RcppArmadillo
+cran::S7
+cran::abind
+cran::cli
+cran::codetools
+cran::cowplot
+cran::cpp11
+cran::data.table
+cran::farver
+cran::fastmatch
+cran::formatR
+cran::futile.logger
+cran::futile.options
+cran::generics
+cran::ggplot2
+cran::glue
+cran::gtable
+cran::isoband
+cran::labeling
+cran::lambda.r
+cran::lattice
+cran::lifecycle
 cran::locfit
+cran::matrixStats
+cran::rlang
+cran::scales
+cran::snow
+cran::vctrs
+cran::viridisLite
+cran::withr
 ```
 
 DESeq2 and fgsea are enabled in the optional-analysis UI. The
@@ -503,7 +545,7 @@ python3 scripts/build_standalone_report.py
 Expected package parser output for the current repo:
 
 ```text
-bioc::DESeq2,bioc::fgsea,bioc::S4Vectors,bioc::IRanges,bioc::GenomicRanges,bioc::SummarizedExperiment,bioc::BiocGenerics,bioc::Biobase,bioc::BiocParallel,bioc::MatrixGenerics,bioc::Seqinfo,bioc::S4Arrays,bioc::DelayedArray,bioc::SparseArray,bioc::XVector,cran::locfit
+bioc::DESeq2,bioc::fgsea,bioc::S4Vectors,bioc::IRanges,bioc::GenomicRanges,bioc::SummarizedExperiment,bioc::BiocGenerics,bioc::Biobase,bioc::BiocParallel,bioc::MatrixGenerics,bioc::Seqinfo,bioc::S4Arrays,bioc::DelayedArray,bioc::SparseArray,bioc::XVector,cran::BH,cran::Matrix,cran::R6,cran::RColorBrewer,cran::Rcpp,cran::RcppArmadillo,cran::S7,cran::abind,cran::cli,cran::codetools,cran::cowplot,cran::cpp11,cran::data.table,cran::farver,cran::fastmatch,cran::formatR,cran::futile.logger,cran::futile.options,cran::generics,cran::ggplot2,cran::glue,cran::gtable,cran::isoband,cran::labeling,cran::lambda.r,cran::lattice,cran::lifecycle,cran::locfit,cran::matrixStats,cran::rlang,cran::scales,cran::snow,cran::vctrs,cran::viridisLite,cran::withr
 ```
 
 ## Troubleshooting

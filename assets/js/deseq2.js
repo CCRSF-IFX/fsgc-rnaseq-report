@@ -125,7 +125,7 @@ export async function runDeseq2Analysis() {
     await progress.step(`Using ${sampleIds.length} samples for ${numerator} vs ${denominator}`, 2);
     deseqSetStatus(status, 'Loading DESeq2 package in webR. First run can take a few minutes.');
     await progress.step('Loading DESeq2 package in webR', 3);
-    await ensureRPackages(['DESeq2']);
+    await ensureRPackages(deseqPackageSet(), { load: ['DESeq2'] });
 
     const modelMessage = `Running DESeq2 in webR for ${state.counts.length} genes and ${sampleIds.length} samples`;
     deseqSetStatus(status, `${modelMessage}. Keep this tab open.`);
@@ -180,6 +180,10 @@ export async function runDeseq2Analysis() {
       runButton.removeAttribute('aria-busy');
     }
   }
+}
+
+function deseqPackageSet() {
+  return state.config?.webr?.modules?.deseq2?.packages || ['DESeq2'];
 }
 
 async function deseqRunInWebR(sampleIds, column, adjustColumns, reference, numerator, denominator) {
