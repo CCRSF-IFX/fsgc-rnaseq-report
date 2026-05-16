@@ -84,6 +84,7 @@
         <article class="card">
           <div class="toolbar">
             <label>Color by <select id="pca-color"></select></label>
+            <label id="pca-shape-label">Shape by <select id="pca-shape"></select></label>
             <label>X/Y PCs <select id="pca-pair"><option value="PC1,PC2">PC1 vs PC2</option><option value="PC2,PC3">PC2 vs PC3</option></select></label>
           </div>
           <div id="pca-plot" class="plot tall"></div>
@@ -141,11 +142,15 @@
         <article class="card">
           <h3>DESeq2 in browser</h3>
           <div class="toolbar">
-            <label>Design <select id="deseq-design-column"></select></label>
+            <label>Primary factor <select id="deseq-design-column"></select></label>
             <label>Reference <select id="deseq-reference-level"></select></label>
             <label>Numerator <select id="deseq-numerator-level"></select></label>
             <label>Denominator <select id="deseq-denominator-level"></select></label>
             <button id="deseq-run">Run DESeq2</button>
+          </div>
+          <div class="toolbar deseq-adjust-toolbar">
+            <label>Adjust/block by <select id="deseq-adjust-columns" multiple size="4"></select></label>
+            <p class="note">Choose optional batch, sex, subject, or paired-sample columns. The primary factor is tested after these terms.</p>
           </div>
           <p class="note" id="deseq-status">DESeq2 uses webR and the configured package snapshot for small exploratory runs.</p>
         </article>

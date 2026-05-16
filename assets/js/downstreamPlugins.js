@@ -11,7 +11,14 @@ export function pluginDefinitions() {
       description: 'Re-render PCA using current metadata coloring. No package installation required.',
       packages: [],
       memory: 'low',
-      run: async () => { renderPCA(document.getElementById('pca-color')?.value || 'condition'); logAnalysis('PCA replot complete.'); },
+      run: async () => {
+        renderPCA(
+          document.getElementById('pca-color')?.value || 'condition',
+          document.getElementById('pca-pair')?.value || 'PC1,PC2',
+          document.getElementById('pca-shape')?.value || 'none',
+        );
+        logAnalysis('PCA replot complete.');
+      },
     },
   ];
 

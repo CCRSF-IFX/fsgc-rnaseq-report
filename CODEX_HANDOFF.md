@@ -81,7 +81,10 @@ https://omicsreporthub.github.io/rnaseq-report/webr-packages/v0.1.0/
   annotation, row z-score/logCPM scale, and row/column clustering toggles.
   Clustergrammer-JS is loaded from its npm browser bundle at runtime.
 - The Differential Expression tab has a basic webR DESeq2 runner for two-group
-  contrasts. It installs/loads `DESeq2` from the configured package snapshot.
+  contrasts. It supports one primary factor plus optional additive
+  covariate/blocking columns from the sample manifest, for example
+  `~ batch + sex + condition`. It installs/loads `DESeq2` from the configured
+  package snapshot.
 - The Sample Metadata tab lets users upload a replacement count matrix plus a
   required sample manifest; uploaded count matrices are refused without matching
   sample metadata.

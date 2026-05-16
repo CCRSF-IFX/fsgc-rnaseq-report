@@ -185,6 +185,12 @@ With those two data files, the report derives:
 - two-group differential expression from metadata-defined contrasts.
 - optional fgsea results from the selected DE contrast and a configured or uploaded GMT pathway file.
 
+The PCA view supports one metadata column as color and, when more than one
+metadata factor is available, a second metadata column as marker shape. The
+legend separates color and shape guides to avoid listing every combination.
+Extra metadata columns remain available in hover labels and tables rather than
+being forced into additional visual encodings.
+
 For production reports, the pipeline can also export precomputed assets. When
 present, these files override browser-computed fallbacks:
 
@@ -297,6 +303,20 @@ a module that needs R packages. The package repository is configured in
 The built-in browser DE fallback uses Welch t-tests on log2(CPM + 1) values and
 Benjamini-Hochberg adjusted p-values. Treat those results as exploratory. Use
 pipeline-generated DESeq2 or another mature RNA-seq method for final analysis.
+
+The browser DESeq2 runner supports one primary contrast factor plus optional
+additive adjustment or blocking columns from the sample manifest. For example,
+choosing `condition` as the primary factor and `batch` plus `sex` as adjustment
+columns runs a model equivalent to:
+
+```r
+~ batch + sex + condition
+```
+
+For paired designs, choose the treatment/group column as the primary factor and
+the subject or pair ID column as an adjustment/blocking column. The runner does
+not currently support arbitrary interaction terms such as
+`genotype:treatment`.
 
 The configured package snapshot definition includes:
 

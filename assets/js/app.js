@@ -117,15 +117,23 @@ function renderQC() {
 
 function setupPcaControls() {
   const color = document.getElementById('pca-color');
+  const shape = document.getElementById('pca-shape');
+  const shapeLabel = document.getElementById('pca-shape-label');
   const columns = metadataColumns();
   color.innerHTML = columns.map((c) => `<option value="${c}">${c}</option>`).join('');
   if (columns.includes('condition')) color.value = 'condition';
+  const shapeColumns = columns.filter((column) => column !== color.value);
+  if (shape) {
+    shape.innerHTML = ['none'].concat(shapeColumns).map((c) => `<option value="${c}">${c === 'none' ? 'None' : c}</option>`).join('');
+    shape.value = shapeColumns[0] || 'none';
+  }
+  if (shapeLabel) shapeLabel.hidden = columns.length <= 1;
   const pair = document.getElementById('pca-pair');
   const pcs = Object.keys(state.pca?.variance_explained || {});
   if (pair && pcs.length >= 2) {
     pair.innerHTML = pcs.slice(0, -1).map((pc, i) => `<option value="${pc},${pcs[i + 1]}">${pc} vs ${pcs[i + 1]}</option>`).join('');
   }
-  renderPCA(color.value || columns[0], pair?.value || 'PC1,PC2');
+  renderPCA(color.value || columns[0], pair?.value || 'PC1,PC2', shape?.value || 'none');
   renderDistanceHeatmap();
 }
 
@@ -137,14 +145,31 @@ function renderProvenance() {
 }
 
 function wireControls() {
-  document.getElementById('pca-color')?.addEventListener('change', () => renderPCA(document.getElementById('pca-color').value, document.getElementById('pca-pair').value));
-  document.getElementById('pca-pair')?.addEventListener('change', () => renderPCA(document.getElementById('pca-color').value, document.getElementById('pca-pair').value));
+  document.getElementById('pca-color')?.addEventListener('change', () => {
+    syncPcaShapeOptions();
+    renderPCA(document.getElementById('pca-color').value, document.getElementById('pca-pair').value, document.getElementById('pca-shape')?.value || 'none');
+  });
+  document.getElementById('pca-shape')?.addEventListener('change', () => renderPCA(document.getElementById('pca-color').value, document.getElementById('pca-pair').value, document.getElementById('pca-shape').value));
+  document.getElementById('pca-pair')?.addEventListener('change', () => renderPCA(document.getElementById('pca-color').value, document.getElementById('pca-pair').value, document.getElementById('pca-shape')?.value || 'none'));
   document.getElementById('de-apply')?.addEventListener('click', renderCurrentContrast);
   document.getElementById('contrast-select')?.addEventListener('change', renderCurrentContrast);
   document.getElementById('enrichment-contrast-select')?.addEventListener('change', renderCurrentEnrichment);
   document.getElementById('gene-search-button')?.addEventListener('click', renderGeneSearch);
   document.getElementById('count-gene-button')?.addEventListener('click', () => renderGeneCounts(document.getElementById('count-gene-input').value));
   renderTable('counts-table', state.counts, { limit: 50, exportName: 'counts.preview.csv' });
+}
+
+function syncPcaShapeOptions() {
+  const color = document.getElementById('pca-color');
+  const shape = document.getElementById('pca-shape');
+  const shapeLabel = document.getElementById('pca-shape-label');
+  if (!shape) return;
+  const columns = metadataColumns();
+  const previous = shape.value;
+  const shapeColumns = columns.filter((column) => column !== color?.value);
+  shape.innerHTML = ['none'].concat(shapeColumns).map((c) => `<option value="${c}">${c === 'none' ? 'None' : c}</option>`).join('');
+  shape.value = shapeColumns.includes(previous) ? previous : (shapeColumns[0] || 'none');
+  if (shapeLabel) shapeLabel.hidden = columns.length <= 1;
 }
 
 async function refreshReportFromState() {

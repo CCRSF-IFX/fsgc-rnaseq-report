@@ -5,21 +5,68 @@ function plotLayout(title) {
   return { title, margin: { l: 60, r: 30, b: 60, t: 60 }, paper_bgcolor: 'white', plot_bgcolor: 'white' };
 }
 
-export function renderPCA(colorBy = 'condition', pair = 'PC1,PC2') {
+const PCA_COLORS = ['#2563eb', '#dc2626', '#16a34a', '#d97706', '#7c3aed', '#0891b2', '#be123c', '#475569'];
+const PCA_SYMBOLS = ['circle', 'square', 'diamond', 'cross', 'x', 'triangle-up', 'triangle-down', 'star'];
+
+export function renderPCA(colorBy = 'condition', pair = 'PC1,PC2', shapeBy = 'none') {
   const [xKey, yKey] = pair.split(',');
   const points = state.pca.samples || [];
-  const colors = points.map((point) => getSampleById(point.sample_id)?.[colorBy] ?? 'NA');
-  const trace = {
-    x: points.map((p) => p[xKey]),
-    y: points.map((p) => p[yKey]),
-    text: points.map((p) => `${p.sample_id}<br>${colorBy}: ${getSampleById(p.sample_id)?.[colorBy] ?? 'NA'}`),
-    mode: 'markers',
-    type: 'scatter',
-    marker: { size: 13, opacity: 0.85 },
-    transforms: [{ type: 'groupby', groups: colors }],
-  };
+  const colorLevels = uniqueValues(points.map((point) => sampleMetadata(point.sample_id, colorBy)));
+  const hasShape = shapeBy && shapeBy !== 'none';
+  const shapeLevels = hasShape ? uniqueValues(points.map((point) => sampleMetadata(point.sample_id, shapeBy))) : [''];
+  const colorMap = new Map(colorLevels.map((level, index) => [level, PCA_COLORS[index % PCA_COLORS.length]]));
+  const symbolMap = new Map(shapeLevels.map((level, index) => [level, PCA_SYMBOLS[index % PCA_SYMBOLS.length]]));
+  const traces = colorLevels.map((colorLevel, index) => {
+    const subset = points.filter((point) => sampleMetadata(point.sample_id, colorBy) === colorLevel);
+    return {
+      x: subset.map((p) => p[xKey]),
+      y: subset.map((p) => p[yKey]),
+      text: subset.map((p) => pcaHoverText(p, colorBy, shapeBy)),
+      name: colorLevel,
+      mode: 'markers',
+      type: 'scatter',
+      legendgroup: 'pca-color',
+      legendgrouptitle: index === 0 ? { text: colorBy } : undefined,
+      marker: {
+        size: 13,
+        opacity: 0.85,
+        color: colorMap.get(colorLevel),
+        symbol: hasShape ? subset.map((p) => symbolMap.get(sampleMetadata(p.sample_id, shapeBy))) : 'circle',
+        line: { width: 0.5, color: '#ffffff' },
+      },
+    };
+  });
+
+  if (hasShape) {
+    shapeLevels.forEach((shapeLevel, index) => {
+      traces.push({
+        x: [null],
+        y: [null],
+        text: [shapeLevel],
+        name: shapeLevel,
+        mode: 'markers',
+        type: 'scatter',
+        hoverinfo: 'skip',
+        legendgroup: 'pca-shape',
+        legendgrouptitle: index === 0 ? { text: shapeBy } : undefined,
+        marker: {
+          size: 13,
+          opacity: 0.85,
+          color: '#334155',
+          symbol: symbolMap.get(shapeLevel),
+          line: { width: 0.5, color: '#ffffff' },
+        },
+      });
+    });
+  }
+
   const variance = state.pca.variance_explained || {};
-  Plotly.react('pca-plot', [trace], { ...plotLayout('PCA'), xaxis: { title: `${xKey} (${pct(variance[xKey])})` }, yaxis: { title: `${yKey} (${pct(variance[yKey])})` } }, { responsive: true });
+  Plotly.react('pca-plot', traces, {
+    ...plotLayout('PCA'),
+    legend: { tracegroupgap: hasShape ? 10 : 0, itemclick: false, itemdoubleclick: false },
+    xaxis: { title: `${xKey} (${pct(variance[xKey])})` },
+    yaxis: { title: `${yKey} (${pct(variance[yKey])})` },
+  }, { responsive: true });
   renderScree();
 }
 
@@ -96,6 +143,24 @@ export function renderEnrichment(rows) {
 
 function pct(value) {
   return value === undefined ? '' : `${(value * 100).toFixed(1)}%`;
+}
+
+function sampleMetadata(sampleId, column) {
+  return String(getSampleById(sampleId)?.[column] ?? 'NA');
+}
+
+function pcaHoverText(point, colorBy, shapeBy) {
+  const sample = getSampleById(point.sample_id) || {};
+  const fields = Object.entries(sample)
+    .filter(([key]) => key !== 'sample_id')
+    .map(([key, value]) => `${key}: ${value}`);
+  const emphasized = [`${colorBy}: ${sampleMetadata(point.sample_id, colorBy)}`];
+  if (shapeBy && shapeBy !== 'none') emphasized.push(`${shapeBy}: ${sampleMetadata(point.sample_id, shapeBy)}`);
+  return [point.sample_id].concat(Array.from(new Set(emphasized.concat(fields)))).join('<br>');
+}
+
+function uniqueValues(values) {
+  return Array.from(new Set(values.map((value) => String(value ?? 'NA'))));
 }
 
 function plotPValue(value) {

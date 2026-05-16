@@ -13,16 +13,23 @@ export function setupDeseqControls(callbacks = {}) {
   if (!designSelect) return;
 
   const eligibleColumns = metadataColumns().filter((column) => deseqUniqueValues(column).length >= 2);
+  const previousDesign = designSelect.value;
   designSelect.innerHTML = eligibleColumns.map((column) => `<option value="${deseqEscapeHtml(column)}">${deseqEscapeHtml(column)}</option>`).join('');
-  if (eligibleColumns.includes(state.config?.analysis?.conditionColumn)) {
+  if (eligibleColumns.includes(previousDesign)) {
+    designSelect.value = previousDesign;
+  } else if (eligibleColumns.includes(state.config?.analysis?.conditionColumn)) {
     designSelect.value = state.config.analysis.conditionColumn;
   } else if (eligibleColumns.includes('condition')) {
     designSelect.value = 'condition';
   }
+  updateDeseqAdjustControls();
 
   if (!deseqControlsWired) {
     deseqControlsWired = true;
-    designSelect.addEventListener('change', updateDeseqLevelControls);
+    designSelect.addEventListener('change', () => {
+      updateDeseqLevelControls();
+      updateDeseqAdjustControls();
+    });
     document.getElementById('deseq-reference-level')?.addEventListener('change', updateDeseqLevelControls);
     document.getElementById('deseq-run')?.addEventListener('click', runDeseq2Analysis);
   }
@@ -53,8 +60,23 @@ function updateDeseqLevelControls() {
   numeratorSelect.value = levels.find((level) => level !== reference) || levels[0] || '';
 }
 
+function updateDeseqAdjustControls() {
+  const adjustSelect = document.getElementById('deseq-adjust-columns');
+  if (!adjustSelect) return;
+  const primary = document.getElementById('deseq-design-column')?.value;
+  const previous = new Set(Array.from(adjustSelect.selectedOptions || []).map((option) => option.value));
+  const candidates = metadataColumns()
+    .filter((column) => column !== primary)
+    .filter((column) => deseqUniqueValues(column).length >= 2);
+  adjustSelect.innerHTML = candidates.map((column) => {
+    const levels = deseqUniqueValues(column).length;
+    return `<option value="${deseqEscapeHtml(column)}"${previous.has(column) ? ' selected' : ''}>${deseqEscapeHtml(column)} (${levels})</option>`;
+  }).join('');
+}
+
 export async function runDeseq2Analysis() {
   const column = document.getElementById('deseq-design-column')?.value;
+  const adjustColumns = deseqSelectedAdjustColumns(column);
   const reference = document.getElementById('deseq-reference-level')?.value;
   const numerator = document.getElementById('deseq-numerator-level')?.value;
   const denominator = document.getElementById('deseq-denominator-level')?.value || reference;
@@ -74,22 +96,26 @@ export async function runDeseq2Analysis() {
     const numeratorCount = sampleIds.filter((sampleId) => String(state.samples.find((sample) => sample.sample_id === sampleId)?.[column] ?? '') === numerator).length;
     const denominatorCount = sampleIds.filter((sampleId) => String(state.samples.find((sample) => sample.sample_id === sampleId)?.[column] ?? '') === denominator).length;
     if (numeratorCount < 2 || denominatorCount < 2) throw new Error('DESeq2 requires at least two samples per group for this browser runner.');
+    validateDeseqDesign(sampleIds, column, adjustColumns);
 
     deseqSetStatus(status, 'Loading DESeq2 package in webR...');
     setStatus('Running DESeq2 in webR...');
     await ensureRPackages(['DESeq2']);
 
     deseqSetStatus(status, 'Running DESeq2...');
-    const rows = await deseqRunInWebR(sampleIds, column, reference, numerator, denominator);
+    const rows = await deseqRunInWebR(sampleIds, column, adjustColumns, reference, numerator, denominator);
     if (rows.length === 0) throw new Error('DESeq2 returned no result rows.');
 
-    const contrastId = `deseq2_${deseqSlug(numerator)}_vs_${deseqSlug(denominator)}`;
+    const designLabel = deseqDesignLabel(column, adjustColumns);
+    const contrastId = `deseq2_${deseqSlug(numerator)}_vs_${deseqSlug(denominator)}${adjustColumns.length ? `_adj_${deseqSlug(adjustColumns.join('_'))}` : ''}`;
     const contrast = {
       id: contrastId,
-      label: `DESeq2 ${numerator} vs ${denominator}`,
+      label: `DESeq2 ${numerator} vs ${denominator}${adjustColumns.length ? ' adjusted' : ''}`,
       column,
       numerator,
       denominator,
+      adjustColumns,
+      design: designLabel,
       generated: true,
       method: 'DESeq2 webR',
     };
@@ -103,8 +129,8 @@ export async function runDeseq2Analysis() {
     if (contrastSelect) contrastSelect.value = contrastId;
     await deseqCallbacks.renderCurrentContrast?.();
 
-    logAnalysis(`DESeq2 completed for ${numerator} vs ${denominator}: ${rows.length} genes.`);
-    deseqSetStatus(status, `DESeq2 complete: ${rows.length} genes.`);
+    logAnalysis(`DESeq2 completed for ${numerator} vs ${denominator} with ${designLabel}: ${rows.length} genes.`);
+    deseqSetStatus(status, `DESeq2 complete: ${rows.length} genes. Design ${designLabel}.`);
     setStatus('Report assets loaded');
   } catch (error) {
     logAnalysis(`DESeq2 failed: ${error.message}`);
@@ -113,25 +139,60 @@ export async function runDeseq2Analysis() {
   }
 }
 
-async function deseqRunInWebR(sampleIds, column, reference, numerator, denominator) {
+async function deseqRunInWebR(sampleIds, column, adjustColumns, reference, numerator, denominator) {
   const countsCsv = deseqCountsCsv(sampleIds);
-  const metadataCsv = deseqMetadataCsv(sampleIds, column);
+  const metadataColumns = [column].concat(adjustColumns);
+  const metadataCsv = deseqMetadataCsv(sampleIds, metadataColumns);
   const code = `
 suppressPackageStartupMessages(library(DESeq2))
 count_text <- ${deseqRString(countsCsv)}
 metadata_text <- ${deseqRString(metadataCsv)}
+primary_col_raw <- ${deseqRString(column)}
+adjust_cols_raw <- c(${adjustColumns.map(deseqRString).join(', ')})
+reference_level <- ${deseqRString(reference)}
+numerator_level <- ${deseqRString(numerator)}
+denominator_level <- ${deseqRString(denominator)}
 countData <- read.csv(text = count_text, row.names = 1, check.names = FALSE)
 rownames(countData) <- make.unique(rownames(countData))
 countData <- as.matrix(round(countData))
 storage.mode(countData) <- "integer"
 colData <- read.csv(text = metadata_text, row.names = 1, check.names = FALSE, stringsAsFactors = FALSE)
-colnames(colData) <- make.names(colnames(colData))
-design_col <- make.names(${deseqRString(column)})
-colData[[design_col]] <- relevel(factor(colData[[design_col]]), ref = ${deseqRString(reference)})
 countData <- countData[, rownames(colData), drop = FALSE]
-dds <- DESeqDataSetFromMatrix(countData = countData, colData = colData, design = as.formula(paste("~", design_col)))
+raw_names <- colnames(colData)
+safe_names <- make.names(raw_names, unique = TRUE)
+colnames(colData) <- safe_names
+safe_lookup <- setNames(safe_names, raw_names)
+design_col <- unname(safe_lookup[[primary_col_raw]])
+adjust_cols <- unname(safe_lookup[adjust_cols_raw])
+adjust_cols <- adjust_cols[!is.na(adjust_cols)]
+coerce_design_term <- function(value) {
+  value <- trimws(as.character(value))
+  numeric_value <- suppressWarnings(as.numeric(value))
+  if (all(nzchar(value)) && all(is.finite(numeric_value)) && length(unique(numeric_value)) > 2) {
+    numeric_value
+  } else {
+    factor(value)
+  }
+}
+for (adjust_col in adjust_cols) {
+  colData[[adjust_col]] <- coerce_design_term(colData[[adjust_col]])
+  if (is.factor(colData[[adjust_col]]) && nlevels(colData[[adjust_col]]) < 2) {
+    stop(paste("Adjustment factor has fewer than two levels:", adjust_col))
+  }
+}
+colData[[design_col]] <- relevel(factor(trimws(as.character(colData[[design_col]]))), ref = reference_level)
+design_terms <- c(adjust_cols, design_col)
+design_formula <- reformulate(design_terms)
+design_matrix <- model.matrix(design_formula, colData)
+if (qr(design_matrix)$rank < ncol(design_matrix)) {
+  stop("DESeq2 design is not full rank. Remove confounded covariates or blocking factors.")
+}
+if (nrow(design_matrix) <= ncol(design_matrix)) {
+  stop("DESeq2 design has too many terms for the number of selected samples.")
+}
+dds <- DESeqDataSetFromMatrix(countData = countData, colData = colData, design = design_formula)
 dds <- DESeq(dds, quiet = TRUE)
-res <- results(dds, contrast = c(design_col, ${deseqRString(numerator)}, ${deseqRString(denominator)}))
+res <- results(dds, contrast = c(design_col, numerator_level, denominator_level))
 out <- as.data.frame(res)
 out$gene_id <- rownames(out)
 out <- out[, c("gene_id", "baseMean", "log2FoldChange", "lfcSE", "stat", "pvalue", "padj")]
@@ -143,7 +204,7 @@ paste(capture.output(write.csv(out, row.names = FALSE, na = "")), collapse = "\\
   return parseCsv(text).map((row) => ({
     ...row,
     gene_symbol: state.geneAnnotation.find((gene) => gene.gene_id === row.gene_id)?.gene_symbol || row.gene_symbol || '',
-    method: 'DESeq2 webR',
+    method: `DESeq2 webR ${deseqDesignLabel(column, adjustColumns)}`,
   })).sort((a, b) => Number(a.padj || 1) - Number(b.padj || 1));
 }
 
@@ -155,12 +216,12 @@ function deseqCountsCsv(sampleIds) {
   return deseqCsv([['gene_id'].concat(sampleIds)].concat(rows));
 }
 
-function deseqMetadataCsv(sampleIds, column) {
+function deseqMetadataCsv(sampleIds, columns) {
   const rows = sampleIds.map((sampleId) => {
     const sample = state.samples.find((item) => item.sample_id === sampleId) || {};
-    return [sampleId, sample[column] ?? ''];
+    return [sampleId].concat(columns.map((column) => sample[column] ?? ''));
   });
-  return deseqCsv([['sample_id', column]].concat(rows));
+  return deseqCsv([['sample_id'].concat(columns)].concat(rows));
 }
 
 function deseqCsv(rows) {
@@ -182,6 +243,49 @@ function deseqResultText(result) {
 function deseqUniqueValues(column) {
   if (!column) return [];
   return Array.from(new Set(state.samples.map((sample) => sample[column]).filter((value) => value !== undefined && value !== null && value !== '').map(String)));
+}
+
+function deseqSelectedAdjustColumns(primaryColumn) {
+  const selected = Array.from(document.getElementById('deseq-adjust-columns')?.selectedOptions || [])
+    .map((option) => option.value)
+    .filter((column) => column && column !== primaryColumn);
+  return Array.from(new Set(selected));
+}
+
+function validateDeseqDesign(sampleIds, primaryColumn, adjustColumns) {
+  const modelTerms = adjustColumns.map((column) => ({
+    column,
+    values: sampleIds.map((sampleId) => deseqSampleValue(sampleId, column)),
+  }));
+
+  modelTerms.forEach((term) => {
+    if (term.values.some((value) => value === '')) {
+      throw new Error(`Selected adjustment column "${term.column}" has missing values in the selected samples.`);
+    }
+    if (new Set(term.values).size < 2) {
+      throw new Error(`Selected adjustment column "${term.column}" has fewer than two levels in the selected samples.`);
+    }
+  });
+
+  const approximateCoefficientCount = 1
+    + 1
+    + modelTerms.reduce((sum, term) => {
+      const numericValues = term.values.map(Number);
+      const isContinuous = numericValues.every((value) => Number.isFinite(value)) && new Set(numericValues).size > 2;
+      return sum + (isContinuous ? 1 : Math.max(1, new Set(term.values).size - 1));
+    }, 0);
+  if (sampleIds.length <= approximateCoefficientCount) {
+    throw new Error(`The DESeq2 design ${deseqDesignLabel(primaryColumn, adjustColumns)} has too many terms for ${sampleIds.length} selected samples.`);
+  }
+}
+
+function deseqSampleValue(sampleId, column) {
+  const value = state.samples.find((sample) => sample.sample_id === sampleId)?.[column];
+  return value === undefined || value === null ? '' : String(value);
+}
+
+function deseqDesignLabel(primaryColumn, adjustColumns) {
+  return `~ ${adjustColumns.concat(primaryColumn).join(' + ')}`;
 }
 
 function deseqSetStatus(element, message) {
