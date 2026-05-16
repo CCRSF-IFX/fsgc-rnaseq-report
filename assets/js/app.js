@@ -89,7 +89,12 @@ function renderHeader() {
   document.getElementById('project-title').textContent = projectTitle;
   document.getElementById('report-title').textContent = projectTitle;
   document.getElementById('report-subtitle').textContent = cfg.reportSubtitle || 'Interactive pipeline summary';
-  document.getElementById('run-label').textContent = cfg.runId || 'demo-run';
+  const runLabel = document.getElementById('run-label');
+  const runId = cleanHeaderText(cfg.runId);
+  if (runLabel) {
+    runLabel.textContent = runId;
+    runLabel.hidden = !runId;
+  }
 }
 
 function cleanHeaderText(value) {

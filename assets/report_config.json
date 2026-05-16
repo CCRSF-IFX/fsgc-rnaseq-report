@@ -3,7 +3,7 @@
   "projectAbbreviation": "RNA",
   "reportTitle": "Demo RNA-seq Report",
   "reportSubtitle": "Static report with optional webR downstream analysis",
-  "runId": "demo-run-001",
+  "runId": "",
   "dataRoot": "assets/data",
   "analysis": {
     "conditionColumn": "condition",

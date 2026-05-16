@@ -91,6 +91,7 @@ def embedded_assets(
     data_root_override: Path | None = None,
     project_title: str | None = None,
     project_abbreviation: str | None = None,
+    run_id: str | None = None,
 ) -> dict[str, str]:
     config_path = repo_root / "assets/report_config.json"
     config_text = read_text(config_path)
@@ -108,13 +109,15 @@ def embedded_assets(
         config["dataRoot"] = virtual_data_root
         config_modified = True
 
-    if project_title or project_abbreviation:
+    if project_title or project_abbreviation or run_id:
         config = json.loads(config_text) if not config_modified else config
         if project_title:
             config["projectTitle"] = project_title
             config["reportTitle"] = project_title
         if project_abbreviation:
             config["projectAbbreviation"] = project_abbreviation
+        if run_id:
+            config["runId"] = run_id
         config_modified = True
 
     if config_modified:
@@ -147,6 +150,7 @@ def bundled_app_script(repo_root: Path, args: argparse.Namespace) -> str:
             data_root_override=args.data_root,
             project_title=clean_optional_text(args.project_title),
             project_abbreviation=clean_optional_text(args.project_abbreviation),
+            run_id=clean_optional_text(args.run_id),
         ),
         ensure_ascii=False,
         separators=(",", ":"),
@@ -260,6 +264,12 @@ def main() -> None:
         "--project-abbriviations",
         dest="project_abbreviation",
         help="Override the short project label shown in the sidebar brand mark.",
+    )
+    parser.add_argument(
+        "--run-id",
+        "--run-name",
+        dest="run_id",
+        help="Override the run identifier shown under the project title in the sidebar.",
     )
     args = parser.parse_args()
 
