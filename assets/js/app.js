@@ -135,12 +135,21 @@ function setupPcaControls() {
     shape.disabled = columns.length <= 1;
   }
   if (shapeLabel) shapeLabel.hidden = columns.length <= 1;
+  const projection = document.getElementById('pca-projection');
+  const pcs = pcaComponentKeys();
+  if (projection) {
+    const previous = projection.value || '2d';
+    const canRender3d = pcs.length >= 3;
+    projection.innerHTML = `<option value="2d">2D scatter</option><option value="3d"${canRender3d ? '' : ' disabled'}>3D scatter</option>`;
+    projection.value = canRender3d && previous === '3d' ? '3d' : '2d';
+    projection.disabled = !canRender3d;
+  }
   const pair = document.getElementById('pca-pair');
-  const pcs = Object.keys(state.pca?.variance_explained || {});
   if (pair && pcs.length >= 2) {
     pair.innerHTML = pcs.slice(0, -1).map((pc, i) => `<option value="${pc},${pcs[i + 1]}">${pc} vs ${pcs[i + 1]}</option>`).join('');
   }
-  renderPCA(color.value || columns[0], pair?.value || 'PC1,PC2', shape?.value || 'none');
+  syncPcaProjectionControls();
+  renderCurrentPCA();
   renderDistanceHeatmap();
 }
 
@@ -154,10 +163,14 @@ function renderProvenance() {
 function wireControls() {
   document.getElementById('pca-color')?.addEventListener('change', () => {
     syncPcaShapeOptions();
-    renderPCA(document.getElementById('pca-color').value, document.getElementById('pca-pair').value, document.getElementById('pca-shape')?.value || 'none');
+    renderCurrentPCA();
   });
-  document.getElementById('pca-shape')?.addEventListener('change', () => renderPCA(document.getElementById('pca-color').value, document.getElementById('pca-pair').value, document.getElementById('pca-shape').value));
-  document.getElementById('pca-pair')?.addEventListener('change', () => renderPCA(document.getElementById('pca-color').value, document.getElementById('pca-pair').value, document.getElementById('pca-shape')?.value || 'none'));
+  document.getElementById('pca-shape')?.addEventListener('change', renderCurrentPCA);
+  document.getElementById('pca-pair')?.addEventListener('change', renderCurrentPCA);
+  document.getElementById('pca-projection')?.addEventListener('change', () => {
+    syncPcaProjectionControls();
+    renderCurrentPCA();
+  });
   document.getElementById('de-apply')?.addEventListener('click', renderCurrentContrast);
   document.getElementById('contrast-select')?.addEventListener('change', renderCurrentContrast);
   document.getElementById('enrichment-contrast-select')?.addEventListener('change', renderCurrentEnrichment);
@@ -178,6 +191,37 @@ function syncPcaShapeOptions() {
   shape.value = shapeColumns.includes(previous) ? previous : (shapeColumns[0] || 'none');
   shape.disabled = columns.length <= 1;
   if (shapeLabel) shapeLabel.hidden = columns.length <= 1;
+}
+
+function syncPcaProjectionControls() {
+  const projection = document.getElementById('pca-projection');
+  const pair = document.getElementById('pca-pair');
+  const pairLabel = document.getElementById('pca-pair-label');
+  const is3d = projection?.value === '3d';
+  if (pair) pair.disabled = is3d || pair.options.length === 0;
+  if (pairLabel) pairLabel.classList.toggle('muted-control', is3d);
+}
+
+function renderCurrentPCA() {
+  renderPCA(
+    document.getElementById('pca-color')?.value || '',
+    document.getElementById('pca-pair')?.value || 'PC1,PC2',
+    document.getElementById('pca-shape')?.value || 'none',
+    document.getElementById('pca-projection')?.value || '2d',
+  );
+}
+
+function pcaComponentKeys() {
+  const points = state.pca?.samples || [];
+  const keys = new Set();
+  points.forEach((point) => {
+    Object.keys(point).forEach((key) => {
+      if (/^PC\d+$/.test(key) && Number.isFinite(Number(point[key]))) keys.add(key);
+    });
+  });
+  return Array.from(keys)
+    .filter((key) => points.every((point) => Number.isFinite(Number(point[key]))))
+    .sort((a, b) => Number(a.slice(2)) - Number(b.slice(2)));
 }
 
 async function refreshReportFromState() {

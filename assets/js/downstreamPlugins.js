@@ -13,9 +13,10 @@ export function pluginDefinitions() {
       memory: 'low',
       run: async () => {
         renderPCA(
-          document.getElementById('pca-color')?.value || 'condition',
+          document.getElementById('pca-color')?.value || '',
           document.getElementById('pca-pair')?.value || 'PC1,PC2',
           document.getElementById('pca-shape')?.value || 'none',
+          document.getElementById('pca-projection')?.value || '2d',
         );
         logAnalysis('PCA replot complete.');
       },

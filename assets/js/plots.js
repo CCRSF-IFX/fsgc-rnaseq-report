@@ -7,67 +7,87 @@ function plotLayout(title) {
 
 const PCA_COLORS = ['#2563eb', '#dc2626', '#16a34a', '#d97706', '#7c3aed', '#0891b2', '#be123c', '#475569'];
 const PCA_SYMBOLS = ['circle', 'square', 'diamond', 'cross', 'x', 'triangle-up', 'triangle-down', 'star'];
+const PCA_SYMBOLS_3D = ['circle', 'square', 'diamond', 'cross', 'x', 'circle-open', 'square-open', 'diamond-open'];
 
-export function renderPCA(colorBy = 'condition', pair = 'PC1,PC2', shapeBy = 'none') {
-  const [xKey, yKey] = pair.split(',');
+export function renderPCA(colorBy = 'condition', pair = 'PC1,PC2', shapeBy = 'none', projection = '2d') {
   const points = state.pca.samples || [];
+  const pcKeys = pcaComponentKeys(points);
+  const is3d = projection === '3d' && pcKeys.length >= 3;
+  const [pairX, pairY] = pair.split(',');
+  const xKey = is3d ? pcKeys[0] : (pcKeys.includes(pairX) ? pairX : pcKeys[0] || 'PC1');
+  const yKey = is3d ? pcKeys[1] : (pcKeys.includes(pairY) ? pairY : pcKeys[1] || 'PC2');
+  const zKey = is3d ? pcKeys[2] : null;
   const colorColumn = colorBy || '';
   const colorLevels = uniqueValues(points.map((point) => pcaGroupValue(point.sample_id, colorColumn)));
   const hasShape = shapeBy && shapeBy !== 'none';
   const shapeLevels = hasShape ? uniqueValues(points.map((point) => sampleMetadata(point.sample_id, shapeBy))) : [''];
   const colorMap = new Map(colorLevels.map((level, index) => [level, PCA_COLORS[index % PCA_COLORS.length]]));
-  const symbolMap = new Map(shapeLevels.map((level, index) => [level, PCA_SYMBOLS[index % PCA_SYMBOLS.length]]));
+  const symbols = is3d ? PCA_SYMBOLS_3D : PCA_SYMBOLS;
+  const symbolMap = new Map(shapeLevels.map((level, index) => [level, symbols[index % symbols.length]]));
   const traces = colorLevels.map((colorLevel, index) => {
     const subset = points.filter((point) => pcaGroupValue(point.sample_id, colorColumn) === colorLevel);
-    return {
+    const trace = {
       x: subset.map((p) => p[xKey]),
       y: subset.map((p) => p[yKey]),
       text: subset.map((p) => pcaHoverText(p, colorColumn, shapeBy)),
       name: colorLevel,
       mode: 'markers',
-      type: 'scatter',
+      type: is3d ? 'scatter3d' : 'scatter',
       legendgroup: 'pca-color',
       legendgrouptitle: index === 0 ? { text: colorColumn || 'Samples' } : undefined,
       marker: {
-        size: 13,
+        size: is3d ? 6 : 13,
         opacity: 0.85,
         color: colorMap.get(colorLevel),
         symbol: hasShape ? subset.map((p) => symbolMap.get(sampleMetadata(p.sample_id, shapeBy))) : 'circle',
         line: { width: 0.5, color: '#ffffff' },
       },
     };
+    if (is3d) trace.z = subset.map((p) => p[zKey]);
+    return trace;
   });
 
   if (hasShape) {
     shapeLevels.forEach((shapeLevel, index) => {
-      traces.push({
+      const trace = {
         x: [null],
         y: [null],
         text: [shapeLevel],
         name: shapeLevel,
         mode: 'markers',
-        type: 'scatter',
+        type: is3d ? 'scatter3d' : 'scatter',
         hoverinfo: 'skip',
         legendgroup: 'pca-shape',
         legendgrouptitle: index === 0 ? { text: shapeBy } : undefined,
         marker: {
-          size: 13,
+          size: is3d ? 6 : 13,
           opacity: 0.85,
           color: '#334155',
           symbol: symbolMap.get(shapeLevel),
           line: { width: 0.5, color: '#ffffff' },
         },
-      });
+      };
+      if (is3d) trace.z = [null];
+      traces.push(trace);
     });
   }
 
   const variance = state.pca.variance_explained || {};
-  Plotly.react('pca-plot', traces, {
-    ...plotLayout('PCA'),
+  const layout = {
+    ...plotLayout(is3d ? 'PCA 3D' : 'PCA'),
     legend: { tracegroupgap: hasShape ? 10 : 0, itemclick: false, itemdoubleclick: false },
-    xaxis: { title: `${xKey} (${pct(variance[xKey])})` },
-    yaxis: { title: `${yKey} (${pct(variance[yKey])})` },
-  }, { responsive: true });
+  };
+  if (is3d) {
+    layout.scene = {
+      xaxis: { title: `${xKey} (${pct(variance[xKey])})` },
+      yaxis: { title: `${yKey} (${pct(variance[yKey])})` },
+      zaxis: { title: `${zKey} (${pct(variance[zKey])})` },
+    };
+  } else {
+    layout.xaxis = { title: `${xKey} (${pct(variance[xKey])})` };
+    layout.yaxis = { title: `${yKey} (${pct(variance[yKey])})` };
+  }
+  Plotly.react('pca-plot', traces, layout, { responsive: true });
   renderScree();
 }
 
@@ -202,6 +222,18 @@ function pcaHoverText(point, colorBy, shapeBy) {
 
 function uniqueValues(values) {
   return Array.from(new Set(values.map((value) => String(value ?? 'NA'))));
+}
+
+function pcaComponentKeys(points) {
+  const keys = new Set();
+  points.forEach((point) => {
+    Object.keys(point).forEach((key) => {
+      if (/^PC\d+$/.test(key) && Number.isFinite(Number(point[key]))) keys.add(key);
+    });
+  });
+  return Array.from(keys)
+    .filter((key) => points.every((point) => Number.isFinite(Number(point[key]))))
+    .sort((a, b) => Number(a.slice(2)) - Number(b.slice(2)));
 }
 
 function wrapPlotLabel(label, maxLineLength = 32) {

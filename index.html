@@ -85,7 +85,8 @@
           <div class="toolbar">
             <label>Color by <select id="pca-color"></select></label>
             <label id="pca-shape-label">Shape by <select id="pca-shape"></select></label>
-            <label>X/Y PCs <select id="pca-pair"><option value="PC1,PC2">PC1 vs PC2</option><option value="PC2,PC3">PC2 vs PC3</option></select></label>
+            <label>Projection <select id="pca-projection"><option value="2d">2D scatter</option><option value="3d">3D scatter</option></select></label>
+            <label id="pca-pair-label">X/Y PCs <select id="pca-pair"><option value="PC1,PC2">PC1 vs PC2</option><option value="PC2,PC3">PC2 vs PC3</option></select></label>
           </div>
           <div id="pca-plot" class="plot tall"></div>
           <div id="scree-plot" class="plot short"></div>
@@ -106,6 +107,9 @@
             <label>Scale <select id="heatmap-scale"><option value="row">Row z-score</option><option value="logcpm">log2(CPM + 1)</option></select></label>
             <label class="check-label"><input id="heatmap-cluster-rows" type="checkbox" checked /> Cluster rows</label>
             <label class="check-label"><input id="heatmap-cluster-columns" type="checkbox" checked /> Cluster columns</label>
+            <label class="heatmap-slider-label">Row group size <input id="heatmap-row-group-size" type="range" min="1" max="10" step="1" value="5" /><output id="heatmap-row-group-value">5</output></label>
+            <label class="heatmap-slider-label">Column group size <input id="heatmap-column-group-size" type="range" min="1" max="10" step="1" value="5" /><output id="heatmap-column-group-value">5</output></label>
+            <label class="heatmap-slider-label">Opacity <input id="heatmap-opacity" type="range" min="0.1" max="1.9" step="0.1" value="1" /><output id="heatmap-opacity-value">1.0</output></label>
             <button id="heatmap-render">Update</button>
           </div>
           <div id="heatmap-annotation-strip"></div>

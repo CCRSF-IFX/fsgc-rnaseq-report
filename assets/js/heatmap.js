@@ -29,6 +29,7 @@ const CLUSTERGRAMMER_ASSETS = [
 let clustergrammerAssetPromise = null;
 let clustergrammerInstance = null;
 let heatmapControlsWired = false;
+let heatmapOpacityValue = 1;
 
 export function setupExpressionHeatmapControls() {
   const annotationSelect = document.getElementById('heatmap-annotation-column');
@@ -47,8 +48,18 @@ export function setupExpressionHeatmapControls() {
     document.getElementById('heatmap-scale')?.addEventListener('change', renderExpressionHeatmap);
     document.getElementById('heatmap-cluster-rows')?.addEventListener('change', renderExpressionHeatmap);
     document.getElementById('heatmap-cluster-columns')?.addEventListener('change', renderExpressionHeatmap);
+    document.getElementById('heatmap-row-group-size')?.addEventListener('input', syncHeatmapControlLabels);
+    document.getElementById('heatmap-row-group-size')?.addEventListener('change', renderExpressionHeatmap);
+    document.getElementById('heatmap-column-group-size')?.addEventListener('input', syncHeatmapControlLabels);
+    document.getElementById('heatmap-column-group-size')?.addEventListener('change', renderExpressionHeatmap);
+    document.getElementById('heatmap-opacity')?.addEventListener('input', () => {
+      syncHeatmapControlLabels();
+      heatmapOpacityValue = heatmapFloatControl('heatmap-opacity', 0.1, 1.9, 1);
+      applyHeatmapOpacity();
+    });
     globalThis.addEventListener?.('resize', resizeExpressionHeatmap);
   }
+  syncHeatmapControlLabels();
   const container = document.getElementById('expression-heatmap');
   if (container) container.innerHTML = '<p class="note">Open the clustering tab to render the Clustergrammer heatmap.</p>';
   if (document.getElementById('tab-clustering')?.classList.contains('active')) renderExpressionHeatmap();
@@ -69,6 +80,9 @@ export async function renderExpressionHeatmap() {
   const clusterRows = Boolean(document.getElementById('heatmap-cluster-rows')?.checked);
   const clusterColumns = Boolean(document.getElementById('heatmap-cluster-columns')?.checked);
   const annotationColumn = document.getElementById('heatmap-annotation-column')?.value || 'none';
+  const rowGroupLevel = heatmapIntegerControl('heatmap-row-group-size', 1, 10, 5);
+  const columnGroupLevel = heatmapIntegerControl('heatmap-column-group-size', 1, 10, 5);
+  heatmapOpacityValue = heatmapFloatControl('heatmap-opacity', 0.1, 1.9, 1);
 
   const rows = heatmapExpressionRows(sampleIds)
     .filter((row) => row.values.some((value) => value > 0))
@@ -107,12 +121,15 @@ export async function renderExpressionHeatmap() {
       sidebar_width: 260,
       ini_expand: true,
       make_modals: false,
+      group_level: { row: rowGroupLevel, col: columnGroupLevel },
       about: `${rows.length} most variable genes from log2(CPM + 1).`,
       tile_tip_callback: heatmapTileTip,
       row_tip_callback: heatmapNodeTip,
       col_tip_callback: heatmapNodeTip,
     });
     container.querySelector('.wait_message')?.remove();
+    finalizeClustergrammerControls();
+    applyHeatmapOpacity();
   } catch (error) {
     clustergrammerInstance = null;
     container.innerHTML = `<p class="note">Clustergrammer heatmap failed to render: ${heatmapEscapeHtml(error.message)}</p>`;
@@ -172,6 +189,8 @@ function renderHeatmapAnnotation(sampleIds, annotationColumn) {
 function makeClustergrammerNetwork(rows, sampleIds, matrix, rowOrder, columnOrder, annotationColumn, scale) {
   const rowClusterRanks = heatmapOrderRanks(rowOrder);
   const columnClusterRanks = heatmapOrderRanks(columnOrder);
+  const rowGroups = heatmapDendrogramGroups(rowOrder, 'row');
+  const columnGroups = heatmapDendrogramGroups(columnOrder, 'col');
   const rowRankVar = heatmapOrderRanks(rows.map((_, index) => index).sort((a, b) => rows[b].variance - rows[a].variance));
   const columnRank = heatmapOrderRanks(sampleIds.map((_, index) => index));
   const annotationInfo = heatmapAnnotationInfo(sampleIds, annotationColumn);
@@ -184,7 +203,7 @@ function makeClustergrammerNetwork(rows, sampleIds, matrix, rowOrder, columnOrde
       clust: rowClusterRanks[index],
       rank: index,
       rankvar: rowRankVar[index],
-      group: [],
+      group: rowGroups[index],
       value: row.variance,
       gene_id: row.id,
       scale,
@@ -194,11 +213,60 @@ function makeClustergrammerNetwork(rows, sampleIds, matrix, rowOrder, columnOrde
       clust: columnClusterRanks[index],
       rank: columnRank[index],
       rankvar: columnRank[index],
-      group: [],
+      group: columnGroups[index],
       ...(annotationInfo.nodeFields[index] || {}),
     })),
     cat_colors: annotationInfo.catColors,
   };
+}
+
+function heatmapDendrogramGroups(order, prefix) {
+  const ranks = heatmapOrderRanks(order);
+  const count = order.length;
+  return ranks.map((rank) => (
+    Array.from({ length: 11 }, (_, level) => {
+      const groupSize = heatmapGroupSizeForLevel(level, count);
+      return `${prefix}_${level}_${Math.floor(rank / groupSize) + 1}`;
+    })
+  ));
+}
+
+function heatmapGroupSizeForLevel(level, count) {
+  if (count <= 1) return 1;
+  const normalized = Math.min(10, Math.max(0, Number(level))) / 10;
+  return Math.max(1, Math.ceil(1 + normalized * (count - 1)));
+}
+
+function finalizeClustergrammerControls() {
+  const root = document.getElementById('expression-heatmap');
+  if (!root) return;
+  root.querySelector('.opacity_slider_container')?.setAttribute('aria-hidden', 'true');
+  root.querySelector('.row_slider_group')?.setAttribute('aria-label', 'Row group size');
+  root.querySelector('.col_slider_group')?.setAttribute('aria-label', 'Column group size');
+  root.querySelector('.row_slider_group')?.setAttribute('role', 'slider');
+  root.querySelector('.col_slider_group')?.setAttribute('role', 'slider');
+  resizeExpressionHeatmap();
+}
+
+function applyHeatmapOpacity() {
+  if (!clustergrammerInstance?.params?.matrix?.opacity_scale || !globalThis.d3) return;
+  const matrix = clustergrammerInstance.params.matrix;
+  if (!matrix.codex_abs_max_val) matrix.codex_abs_max_val = matrix.abs_max_val || 1;
+  const domainMax = Math.max(1e-9, matrix.codex_abs_max_val * (2 - heatmapOpacityValue));
+  matrix.opacity_scale.domain([0, domainMax]);
+  globalThis.d3.selectAll('#expression-heatmap .tile').style('fill-opacity', (d) => matrix.opacity_scale(Math.abs(d.value)));
+}
+
+function syncHeatmapControlLabels() {
+  const rowValue = heatmapIntegerControl('heatmap-row-group-size', 1, 10, 5);
+  const columnValue = heatmapIntegerControl('heatmap-column-group-size', 1, 10, 5);
+  const opacityValue = heatmapFloatControl('heatmap-opacity', 0.1, 1.9, 1);
+  const rowOutput = document.getElementById('heatmap-row-group-value');
+  const columnOutput = document.getElementById('heatmap-column-group-value');
+  const opacityOutput = document.getElementById('heatmap-opacity-value');
+  if (rowOutput) rowOutput.textContent = String(rowValue);
+  if (columnOutput) columnOutput.textContent = String(columnValue);
+  if (opacityOutput) opacityOutput.textContent = opacityValue.toFixed(1);
 }
 
 function heatmapAnnotationInfo(sampleIds, annotationColumn) {
@@ -337,6 +405,17 @@ function heatmapNonnegativeNumber(value) {
 
 function heatmapClampedInteger(value, min, max, fallback) {
   const n = Number.parseInt(value, 10);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(max, Math.max(min, n));
+}
+
+function heatmapIntegerControl(id, min, max, fallback) {
+  const element = document.getElementById(id);
+  return heatmapClampedInteger(element?.value, min, max, fallback);
+}
+
+function heatmapFloatControl(id, min, max, fallback) {
+  const n = Number.parseFloat(document.getElementById(id)?.value);
   if (!Number.isFinite(n)) return fallback;
   return Math.min(max, Math.max(min, n));
 }
