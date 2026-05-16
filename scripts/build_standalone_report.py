@@ -9,6 +9,7 @@ import re
 import subprocess
 import urllib.error
 import urllib.request
+from html import escape as html_escape
 from pathlib import Path
 
 from qc_excel import load_summary_sheet
@@ -85,11 +86,17 @@ def resolve_repo_path(path: Path, repo_root: Path) -> Path:
     return path if path.is_absolute() else repo_root / path
 
 
-def embedded_assets(repo_root: Path, data_root_override: Path | None = None) -> dict[str, str]:
+def embedded_assets(
+    repo_root: Path,
+    data_root_override: Path | None = None,
+    project_title: str | None = None,
+    project_abbreviation: str | None = None,
+) -> dict[str, str]:
     config_path = repo_root / "assets/report_config.json"
     config_text = read_text(config_path)
     virtual_data_root = data_root_from_config(config_text)
     data_dir = repo_root / virtual_data_root
+    config_modified = False
 
     if data_root_override:
         data_dir = resolve_repo_path(data_root_override, repo_root).resolve()
@@ -99,6 +106,18 @@ def embedded_assets(repo_root: Path, data_root_override: Path | None = None) -> 
         config = json.loads(config_text)
         virtual_data_root = EMBEDDED_DATA_ROOT
         config["dataRoot"] = virtual_data_root
+        config_modified = True
+
+    if project_title or project_abbreviation:
+        config = json.loads(config_text) if not config_modified else config
+        if project_title:
+            config["projectTitle"] = project_title
+            config["reportTitle"] = project_title
+        if project_abbreviation:
+            config["projectAbbreviation"] = project_abbreviation
+        config_modified = True
+
+    if config_modified:
         config_text = json.dumps(config, ensure_ascii=False, indent=2)
 
     assets = {"assets/report_config.json": config_text}
@@ -121,8 +140,17 @@ def embedded_assets(repo_root: Path, data_root_override: Path | None = None) -> 
     return assets
 
 
-def bundled_app_script(repo_root: Path, data_root_override: Path | None = None) -> str:
-    assets_json = json.dumps(embedded_assets(repo_root, data_root_override), ensure_ascii=False, separators=(",", ":"))
+def bundled_app_script(repo_root: Path, args: argparse.Namespace) -> str:
+    assets_json = json.dumps(
+        embedded_assets(
+            repo_root,
+            data_root_override=args.data_root,
+            project_title=clean_optional_text(args.project_title),
+            project_abbreviation=clean_optional_text(args.project_abbreviation),
+        ),
+        ensure_ascii=False,
+        separators=(",", ":"),
+    )
     chunks = [
         "const REPORT_EMBEDDED_ASSETS = Object.freeze(" + assets_json + ");",
         "globalThis.REPORT_EMBEDDED_ASSETS = REPORT_EMBEDDED_ASSETS;",
@@ -164,12 +192,15 @@ def download_text(url: str) -> str:
 def standalone_html(args: argparse.Namespace, repo_root: Path) -> str:
     html = read_text(repo_root / "index.html")
     css = read_text(repo_root / "assets/css/style.css")
-    script = bundled_app_script(repo_root, args.data_root)
+    script = bundled_app_script(repo_root, args)
+    project_title = clean_optional_text(args.project_title)
 
     html = html.replace(
         '  <link rel="stylesheet" href="assets/css/style.css" />',
         f"  <style>\n{css}\n  </style>",
     )
+    if project_title:
+        html = re.sub(r"<title>.*?</title>", f"<title>{html_escape(project_title)}</title>", html, count=1)
     html = re.sub(
         r"\s*<script[^>]+src=\"https://cdn\.plot\.ly/plotly-2\.35\.2\.min\.js\"[^>]*></script>",
         "",
@@ -180,6 +211,13 @@ def standalone_html(args: argparse.Namespace, repo_root: Path) -> str:
         f"  {plotly_tag(args, repo_root)}\n  <script>\n{script}  </script>",
     )
     return html
+
+
+def clean_optional_text(value: str | None) -> str | None:
+    if value is None:
+        return None
+    value = str(value).strip()
+    return value or None
 
 
 def main() -> None:
@@ -209,6 +247,19 @@ def main() -> None:
         "--data-root",
         type=Path,
         help="Data directory to embed instead of assets/report_config.json dataRoot. Relative paths resolve from the repo root.",
+    )
+    parser.add_argument(
+        "--project-title",
+        help="Override the project/report title embedded in the standalone HTML.",
+    )
+    parser.add_argument(
+        "--project-abbreviation",
+        "--project-abbr",
+        "--project-abbreviations",
+        "--project-abbriviation",
+        "--project-abbriviations",
+        dest="project_abbreviation",
+        help="Override the short project label shown in the sidebar brand mark.",
     )
     args = parser.parse_args()
 

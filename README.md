@@ -69,7 +69,11 @@ still loads Plotly from the public CDN, which keeps the file small.
 The standalone file also keeps the configured webR and package-repository URLs.
 Users can run the browser DESeq2 and fgsea modules when the browser can reach
 those URLs. The Optional Analysis tab includes install/load controls and a link
-to download the compiled package snapshot ZIP.
+to download the compiled package snapshot ZIP. Static plots and tables are
+designed to work from a double-clicked standalone file, but webR creates browser
+workers and is most reliable from an `http://` or `https://` origin. If a
+browser blocks webR from a local `file://` page, host the same HTML on GitHub
+Pages or another static web server before running DESeq2 or fgsea.
 
 Users can also replace or augment the embedded defaults in the Sample Metadata
 tab. The standalone report can be built with only a count matrix, but a sample
@@ -93,6 +97,7 @@ Useful builder options:
 
 ```bash
 python3 scripts/build_standalone_report.py --data-root path/to/data
+python3 scripts/build_standalone_report.py --project-title "Study 42 RNA-seq" --project-abbr S42
 python3 scripts/build_standalone_report.py --output path/to/report.html
 python3 scripts/build_standalone_report.py --plotly-file path/to/plotly.min.js
 python3 scripts/build_standalone_report.py --plotly-url https://cdn.plot.ly/plotly-2.35.2.min.js
@@ -104,6 +109,10 @@ or absolute, and its files are embedded into the generated HTML under the
 report's internal `assets/data/` path. If that directory contains
 `qc_metrics.xlsx`, the builder reads the `Summary` sheet and embeds it as
 `qc_metrics.json` in the generated HTML.
+
+`--project-title` overrides the title shown in the browser tab, sidebar, and
+report header for that generated HTML. `--project-abbr` or
+`--project-abbreviation` overrides the short label in the sidebar brand mark.
 
 `dist/` is ignored by git because generated report files can contain run-specific
 data.
@@ -198,7 +207,7 @@ With counts and a manifest, the report derives:
 
 - PCA coordinates from log2(CPM + 1) expression.
 - sample distances from log2(CPM + 1) expression.
-- a Clustergrammer expression heatmap with metadata annotation and row/column clustering toggles.
+- a Clustergrammer expression heatmap with top-variable or custom gene-list selection, metadata annotation, and row/column clustering toggles.
 - two-group differential expression from metadata-defined contrasts.
 - optional fgsea results from the selected DE contrast and a configured or uploaded GMT pathway file.
 
@@ -300,11 +309,46 @@ Validate it with:
 python3 scripts/validate_assets.py assets/data/simulated
 ```
 
+## Public GEO Demo Data
+
+The repo also includes a human multi-factor public dataset fixture:
+
+```text
+assets/data/gse164073/
+  sample_manifest.csv
+  counts.csv
+  gene_annotation.json
+```
+
+GSE164073 profiles human cornea, limbus, and sclera cells after mock or
+SARS-CoV-2 infection. It is useful for testing PCA color/shape controls,
+Clustergrammer heatmaps, and DESeq2 with `condition` as the primary factor and
+`tissue` as an optional adjustment/blocking factor.
+
+Regenerate and validate it with:
+
+```bash
+python3 scripts/download_gse164073_demo.py
+python3 scripts/validate_assets.py assets/data/gse164073
+```
+
+Build a single-file report from this dataset with:
+
+```bash
+python3 scripts/build_standalone_report.py --data-root assets/data/gse164073 --output dist/gse164073-report.html
+```
+
 ## Optional webR Modules
 
 webR is lazy-loaded only when a user opens optional downstream analysis and runs
 a module that needs R packages. The package repository is configured in
 `assets/report_config.json`:
+
+When a report is opened directly from `file://`, the app applies a small worker
+URL compatibility shim for current webR builds. If the browser still blocks
+worker or package loading from a local file, open the same report from an
+`http://` or `https://` URL before using DESeq2 or fgsea. The non-webR report
+views remain usable from the standalone file.
 
 ```json
 {
@@ -396,8 +440,10 @@ biological interpretation.
 
 The Clustering tab has a Clustergrammer-JS heatmap using the count matrix, with
 row z-score or log2(CPM + 1) scale, sample annotation, and row/column clustering
-controls. Clustergrammer-JS is loaded from the npm package bundle at runtime so
-the development app and generated standalone HTML can stay build-free.
+controls. Users can show the default top variable genes or paste a custom list
+of gene IDs, symbols, or names for a focused expression heatmap. Clustergrammer-JS
+is loaded from the npm package bundle at runtime so the development app and
+generated standalone HTML can stay build-free.
 
 The Pages workflow verifies that every package listed above appears in the
 generated wasm `PACKAGES` index before publishing the snapshot.

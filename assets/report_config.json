@@ -1,4 +1,6 @@
 {
+  "projectTitle": "Demo RNA-seq Report",
+  "projectAbbreviation": "RNA",
   "reportTitle": "Demo RNA-seq Report",
   "reportSubtitle": "Static report with optional webR downstream analysis",
   "runId": "demo-run-001",

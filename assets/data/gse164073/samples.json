@@ -1,0 +1,182 @@
+[
+  {
+    "sample_id": "GSM4996084",
+    "title": "Cornea_mock_1",
+    "tissue": "cornea",
+    "condition": "mock",
+    "infection": "mock",
+    "time_point": "24 hours",
+    "replicate": "1",
+    "organism": "Homo sapiens"
+  },
+  {
+    "sample_id": "GSM4996085",
+    "title": "Cornea_mock_2",
+    "tissue": "cornea",
+    "condition": "mock",
+    "infection": "mock",
+    "time_point": "24 hours",
+    "replicate": "2",
+    "organism": "Homo sapiens"
+  },
+  {
+    "sample_id": "GSM4996086",
+    "title": "Cornea_mock_3",
+    "tissue": "cornea",
+    "condition": "mock",
+    "infection": "mock",
+    "time_point": "24 hours",
+    "replicate": "3",
+    "organism": "Homo sapiens"
+  },
+  {
+    "sample_id": "GSM4996087",
+    "title": "Cornea_CoV2_1",
+    "tissue": "cornea",
+    "condition": "sars_cov_2",
+    "infection": "SARS-CoV-2, MOI = 1.0",
+    "time_point": "24 hours",
+    "replicate": "1",
+    "organism": "Homo sapiens"
+  },
+  {
+    "sample_id": "GSM4996088",
+    "title": "Cornea_CoV2_2",
+    "tissue": "cornea",
+    "condition": "sars_cov_2",
+    "infection": "SARS-CoV-2, MOI = 1.0",
+    "time_point": "24 hours",
+    "replicate": "2",
+    "organism": "Homo sapiens"
+  },
+  {
+    "sample_id": "GSM4996089",
+    "title": "Cornea_CoV2_3",
+    "tissue": "cornea",
+    "condition": "sars_cov_2",
+    "infection": "SARS-CoV-2, MOI = 1.0",
+    "time_point": "24 hours",
+    "replicate": "3",
+    "organism": "Homo sapiens"
+  },
+  {
+    "sample_id": "GSM4996090",
+    "title": "Limbus_mock_1",
+    "tissue": "limbus",
+    "condition": "mock",
+    "infection": "mock",
+    "time_point": "24 hours",
+    "replicate": "1",
+    "organism": "Homo sapiens"
+  },
+  {
+    "sample_id": "GSM4996091",
+    "title": "Limbus_mock_2",
+    "tissue": "limbus",
+    "condition": "mock",
+    "infection": "mock",
+    "time_point": "24 hours",
+    "replicate": "2",
+    "organism": "Homo sapiens"
+  },
+  {
+    "sample_id": "GSM4996092",
+    "title": "Limbus_mock_3",
+    "tissue": "limbus",
+    "condition": "mock",
+    "infection": "mock",
+    "time_point": "24 hours",
+    "replicate": "3",
+    "organism": "Homo sapiens"
+  },
+  {
+    "sample_id": "GSM4996093",
+    "title": "Limbus_CoV2_1",
+    "tissue": "limbus",
+    "condition": "sars_cov_2",
+    "infection": "SARS-CoV-2, MOI = 1.0",
+    "time_point": "24 hours",
+    "replicate": "1",
+    "organism": "Homo sapiens"
+  },
+  {
+    "sample_id": "GSM4996094",
+    "title": "Limbus_CoV2_2",
+    "tissue": "limbus",
+    "condition": "sars_cov_2",
+    "infection": "SARS-CoV-2, MOI = 1.0",
+    "time_point": "24 hours",
+    "replicate": "2",
+    "organism": "Homo sapiens"
+  },
+  {
+    "sample_id": "GSM4996095",
+    "title": "Limbus_CoV2_3",
+    "tissue": "limbus",
+    "condition": "sars_cov_2",
+    "infection": "SARS-CoV-2, MOI = 1.0",
+    "time_point": "24 hours",
+    "replicate": "3",
+    "organism": "Homo sapiens"
+  },
+  {
+    "sample_id": "GSM4996096",
+    "title": "Sclera_mock_1",
+    "tissue": "sclera",
+    "condition": "mock",
+    "infection": "mock",
+    "time_point": "24 hours",
+    "replicate": "1",
+    "organism": "Homo sapiens"
+  },
+  {
+    "sample_id": "GSM4996097",
+    "title": "Sclera_mock_2",
+    "tissue": "sclera",
+    "condition": "mock",
+    "infection": "mock",
+    "time_point": "24 hours",
+    "replicate": "2",
+    "organism": "Homo sapiens"
+  },
+  {
+    "sample_id": "GSM4996098",
+    "title": "Sclera_mock_3",
+    "tissue": "sclera",
+    "condition": "mock",
+    "infection": "mock",
+    "time_point": "24 hours",
+    "replicate": "3",
+    "organism": "Homo sapiens"
+  },
+  {
+    "sample_id": "GSM4996099",
+    "title": "Sclera_CoV2_1",
+    "tissue": "sclera",
+    "condition": "sars_cov_2",
+    "infection": "SARS-CoV-2, MOI = 1.0",
+    "time_point": "24 hours",
+    "replicate": "1",
+    "organism": "Homo sapiens"
+  },
+  {
+    "sample_id": "GSM4996100",
+    "title": "Sclera_CoV2_2",
+    "tissue": "sclera",
+    "condition": "sars_cov_2",
+    "infection": "SARS-CoV-2, MOI = 1.0",
+    "time_point": "24 hours",
+    "replicate": "2",
+    "organism": "Homo sapiens"
+  },
+  {
+    "sample_id": "GSM4996101",
+    "title": "Sclera_CoV2_3",
+    "tissue": "sclera",
+    "condition": "sars_cov_2",
+    "infection": "SARS-CoV-2, MOI = 1.0",
+    "time_point": "24 hours",
+    "replicate": "3",
+    "organism": "Homo sapiens"
+  }
+]

@@ -1,0 +1,5 @@
+{
+  "demo_builder": "download_gse164073_demo.py",
+  "count_source": "NCBI GEO RNA-seq counts",
+  "gene_annotation_source": "NCBI Gene Homo_sapiens.gene_info.gz"
+}

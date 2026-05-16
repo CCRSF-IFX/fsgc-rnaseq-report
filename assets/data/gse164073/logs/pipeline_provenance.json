@@ -1,0 +1,9 @@
+{
+  "dataset": "GSE164073",
+  "title": "Response to SARS-CoV-2 infection in cornea, limbus and sclera from human donors",
+  "organism": "Homo sapiens",
+  "count_matrix_url": "https://www.ncbi.nlm.nih.gov/geo/download/?type=rnaseq_counts&acc=GSE164073&format=file&file=GSE164073_raw_counts_GRCh38.p13_NCBI.tsv.gz",
+  "metadata_url": "https://ftp.ncbi.nlm.nih.gov/geo/series/GSE164nnn/GSE164073/soft/GSE164073_family.soft.gz",
+  "gene_info_url": "https://ftp.ncbi.nlm.nih.gov/gene/DATA/GENE_INFO/Mammalia/Homo_sapiens.gene_info.gz",
+  "notes": "Counts were downloaded from NCBI GEO RNA-seq counts and gene symbols were mapped from NCBI Homo_sapiens.gene_info.gz."
+}

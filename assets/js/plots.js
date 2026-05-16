@@ -8,6 +8,13 @@ function plotLayout(title) {
 const PCA_COLORS = ['#2563eb', '#dc2626', '#16a34a', '#d97706', '#7c3aed', '#0891b2', '#be123c', '#475569'];
 const PCA_SYMBOLS = ['circle', 'square', 'diamond', 'cross', 'x', 'triangle-up', 'triangle-down', 'star'];
 const PCA_SYMBOLS_3D = ['circle', 'square', 'diamond', 'cross', 'x', 'circle-open', 'square-open', 'diamond-open'];
+const VOLCANO_DISPLAY_CAP = 50;
+const DE_CATEGORIES = [
+  { id: 'upregulated', label: 'upregulated', color: '#dc2626', opacity: 0.82 },
+  { id: 'downregulated', label: 'downregulated', color: '#2563eb', opacity: 0.82 },
+  { id: 'padj_only', label: 'padj only', color: '#7c3aed', opacity: 0.72 },
+  { id: 'not_significant', label: 'not significant', color: '#94a3b8', opacity: 0.34 },
+];
 
 export function renderPCA(colorBy = 'condition', pair = 'PC1,PC2', shapeBy = 'none', projection = '2d') {
   const points = state.pca.samples || [];
@@ -136,28 +143,56 @@ export function renderQCPlots() {
 }
 
 export function renderVolcano(rows, padj = 0.05, lfc = 1) {
-  const x = rows.map((r) => Number(r.log2FoldChange));
-  const y = rows.map((r) => -Math.log10(plotPValue(r.padj)));
-  const significant = rows.map((r) => Number(r.padj) <= padj && Math.abs(Number(r.log2FoldChange)) >= lfc ? 'significant' : 'not significant');
-  Plotly.react('volcano-plot', [{
-    x, y, text: rows.map((r) => `${r.gene_symbol || r.gene_id}<br>padj=${r.padj}`), mode: 'markers', type: 'scatter', marker: { size: 8, opacity: 0.75 }, transforms: [{ type: 'groupby', groups: significant }]
-  }], {
-    ...plotLayout('Volcano plot'),
+  const yCap = volcanoDisplayCap(rows, padj);
+  const points = rows.map((row) => volcanoPoint(row, padj, lfc, yCap)).filter(Boolean);
+  const cappedCount = points.filter((point) => point.capped).length;
+  const traces = DE_CATEGORIES.flatMap((category) => {
+    const categoryPoints = points.filter((point) => point.category === category.id);
+    const uncapped = categoryPoints.filter((point) => !point.capped);
+    const capped = categoryPoints.filter((point) => point.capped);
+    return [
+      volcanoTrace(uncapped, category, false, uncapped.length > 0),
+      volcanoTrace(capped, category, true, uncapped.length === 0 && capped.length > 0),
+    ].filter(Boolean);
+  });
+  const layout = plotLayout('Volcano plot');
+  Plotly.react('volcano-plot', traces, {
+    ...layout,
     xaxis: { title: 'log2 fold change' },
-    yaxis: { title: '-log10 adjusted p-value' },
+    yaxis: { title: '-log10 adjusted p-value', range: [0, yCap * 1.08] },
+    legend: { tracegroupgap: 4 },
     shapes: [
       { type: 'line', x0: -lfc, x1: -lfc, y0: 0, y1: 1, yref: 'paper', line: { color: '#94a3b8', dash: 'dot' } },
       { type: 'line', x0: lfc, x1: lfc, y0: 0, y1: 1, yref: 'paper', line: { color: '#94a3b8', dash: 'dot' } },
       { type: 'line', x0: 0, x1: 1, xref: 'paper', y0: -Math.log10(plotPValue(padj)), y1: -Math.log10(plotPValue(padj)), line: { color: '#94a3b8', dash: 'dot' } },
     ],
+    annotations: cappedCount ? [{
+      xref: 'paper',
+      yref: 'paper',
+      x: 0.01,
+      y: 0.99,
+      xanchor: 'left',
+      yanchor: 'top',
+      align: 'left',
+      showarrow: false,
+      font: { size: 12, color: '#475569' },
+      bgcolor: 'rgba(255,255,255,0.82)',
+      bordercolor: '#cbd5e1',
+      borderpad: 4,
+      text: `${cappedCount} point${cappedCount === 1 ? '' : 's'} capped at -log10(padj)=${formatNumber(yCap)}`,
+    }] : [],
   }, { responsive: true });
 }
 
 export function renderMA(rows, padj = 0.05, lfc = 1) {
-  const significant = rows.map((r) => Number(r.padj) <= padj && Math.abs(Number(r.log2FoldChange)) >= lfc ? 'significant' : 'not significant');
-  Plotly.react('ma-plot', [{
-    x: rows.map((r) => Number(r.baseMean)), y: rows.map((r) => Number(r.log2FoldChange)), mode: 'markers', type: 'scatter', marker: { size: 8, opacity: 0.75 }, text: rows.map((r) => r.gene_symbol || r.gene_id), transforms: [{ type: 'groupby', groups: significant }]
-  }], { ...plotLayout('MA plot'), xaxis: { title: 'baseMean', type: 'log' }, yaxis: { title: 'log2 fold change' } }, { responsive: true });
+  const points = rows.map((row) => maPoint(row, padj, lfc)).filter(Boolean);
+  const traces = DE_CATEGORIES.map((category) => maTrace(points.filter((point) => point.category === category.id), category)).filter(Boolean);
+  Plotly.react('ma-plot', traces, {
+    ...plotLayout('MA plot'),
+    xaxis: { title: 'baseMean', type: 'log' },
+    yaxis: { title: 'log2 fold change' },
+    legend: { tracegroupgap: 4 },
+  }, { responsive: true });
 }
 
 export function renderGeneCounts(geneQuery) {
@@ -196,6 +231,96 @@ export function renderEnrichment(rows) {
       categoryarray: termKeys,
     },
   }, { responsive: true });
+}
+
+function volcanoDisplayCap(rows, padj) {
+  const thresholdY = -Math.log10(plotPValue(padj));
+  const rawMax = Math.max(...rows.map((row) => -Math.log10(plotPValue(row.padj))).filter(Number.isFinite), 0);
+  const minimumCap = Math.max(10, Math.ceil(thresholdY + 1));
+  if (rawMax > VOLCANO_DISPLAY_CAP) return Math.max(VOLCANO_DISPLAY_CAP, minimumCap);
+  return Math.max(minimumCap, Math.ceil(rawMax + 1));
+}
+
+function volcanoPoint(row, padj, lfc, yCap) {
+  const log2fc = Number(row.log2FoldChange);
+  const rawY = -Math.log10(plotPValue(row.padj));
+  if (!Number.isFinite(log2fc) || !Number.isFinite(rawY)) return null;
+  const category = deCategory(row, padj, lfc);
+  const capped = rawY > yCap;
+  return { row, category, log2fc, rawY, y: capped ? yCap : rawY, capped };
+}
+
+function volcanoTrace(points, category, capped, showLegend) {
+  if (!points.length) return null;
+  return {
+    x: points.map((point) => point.log2fc),
+    y: points.map((point) => point.y),
+    text: points.map((point) => deHoverText(point.row, category.label, point.capped, point.rawY)),
+    name: category.label,
+    mode: 'markers',
+    type: 'scattergl',
+    legendgroup: category.id,
+    showlegend: showLegend,
+    marker: {
+      color: category.color,
+      opacity: category.opacity,
+      size: capped ? 9 : 6,
+      symbol: capped ? 'triangle-up' : 'circle',
+      line: { width: capped ? 0.8 : 0, color: '#0f172a' },
+    },
+    hovertemplate: '%{text}<extra></extra>',
+  };
+}
+
+function maPoint(row, padj, lfc) {
+  const baseMean = Number(row.baseMean);
+  const log2fc = Number(row.log2FoldChange);
+  if (!Number.isFinite(baseMean) || baseMean <= 0 || !Number.isFinite(log2fc)) return null;
+  return { row, category: deCategory(row, padj, lfc), baseMean, log2fc };
+}
+
+function maTrace(points, category) {
+  if (!points.length) return null;
+  return {
+    x: points.map((point) => point.baseMean),
+    y: points.map((point) => point.log2fc),
+    text: points.map((point) => deHoverText(point.row, category.label)),
+    name: category.label,
+    mode: 'markers',
+    type: 'scattergl',
+    legendgroup: category.id,
+    marker: {
+      color: category.color,
+      opacity: category.opacity,
+      size: category.id === 'not_significant' ? 5 : 7,
+    },
+    hovertemplate: '%{text}<extra></extra>',
+  };
+}
+
+function deCategory(row, padj, lfc) {
+  const adjustedP = Number(row.padj);
+  const log2fc = Number(row.log2FoldChange);
+  const passesP = Number.isFinite(adjustedP) && adjustedP <= padj;
+  if (!passesP || !Number.isFinite(log2fc)) return 'not_significant';
+  if (log2fc >= lfc) return 'upregulated';
+  if (log2fc <= -lfc) return 'downregulated';
+  return 'padj_only';
+}
+
+function deHoverText(row, category, capped = false, rawY = null) {
+  const label = row.gene_symbol || row.gene_id || 'gene';
+  const fields = [
+    `<b>${escapePlotText(label)}</b>`,
+    `class: ${escapePlotText(category)}`,
+    `gene_id: ${escapePlotText(row.gene_id || 'NA')}`,
+    `baseMean: ${formatNumber(row.baseMean)}`,
+    `log2FC: ${formatNumber(row.log2FoldChange)}`,
+    `pvalue: ${formatPValue(row.pvalue)}`,
+    `padj: ${formatPValue(row.padj)}`,
+  ];
+  if (capped && rawY !== null) fields.push(`shown capped; true -log10(padj): ${formatNumber(rawY)}`);
+  return fields.join('<br>');
 }
 
 function pct(value) {
@@ -263,4 +388,28 @@ function enrichmentLeftMargin(labels) {
 function plotPValue(value) {
   const n = Number(value);
   return Number.isFinite(n) ? Math.max(n, 1e-300) : 1;
+}
+
+function formatPValue(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return escapePlotText(value || 'NA');
+  if (n === 0) return '0';
+  if (Math.abs(n) < 0.001) return n.toExponential(2);
+  return n.toPrecision(3);
+}
+
+function formatNumber(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return escapePlotText(value || 'NA');
+  if (n === 0) return '0';
+  if (Math.abs(n) >= 1000 || Math.abs(n) < 0.001) return n.toExponential(2);
+  return n.toFixed(Math.abs(n) >= 10 ? 1 : 3).replace(/\.?0+$/, '');
+}
+
+function escapePlotText(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
 }

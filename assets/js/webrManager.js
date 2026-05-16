@@ -8,17 +8,26 @@ export async function initWebR() {
   if (initialized) return webR;
   const cfg = state.config?.webr || {};
   if (!cfg.enabled) throw new Error('webR is disabled in report_config.json.');
-  const baseUrl = cfg.baseUrl || 'https://webr.r-wasm.org/latest/';
-  logAnalysis(`Loading webR from ${baseUrl}`);
-  const module = await import(`${baseUrl.replace(/\/$/, '')}/webr.mjs`);
-  webR = new module.WebR({ baseUrl });
-  await webR.init();
-  initialized = true;
-  const repos = packageRepoEntries();
-  await evalR(`options(webr_pkg_repos = ${rNamedVector(repos)}, repos = ${rNamedVector(repos)})`);
-  logAnalysis(`webR package repositories: ${repos.map((repo) => repo.url).join(', ')}`);
-  logAnalysis('webR initialized.');
-  return webR;
+  const baseUrl = normalizeWebRBaseUrl(cfg.baseUrl || 'https://webr.r-wasm.org/latest/');
+  try {
+    logAnalysis(`Loading webR from ${baseUrl}`);
+    if (isNullOriginFilePage()) {
+      logAnalysis('Local file page detected; applying webR worker URL compatibility shim.');
+    }
+    const module = await import(`${baseUrl.replace(/\/$/, '')}/webr.mjs`);
+    webR = withFileOriginUrlFallback(() => new module.WebR({ baseUrl }));
+    await withFileOriginUrlFallback(() => webR.init());
+    initialized = true;
+    const repos = packageRepoEntries();
+    await evalR(`options(webr_pkg_repos = ${rNamedVector(repos)}, repos = ${rNamedVector(repos)})`);
+    logAnalysis(`webR package repositories: ${repos.map((repo) => repo.url).join(', ')}`);
+    logAnalysis('webR initialized.');
+    return webR;
+  } catch (error) {
+    webR = null;
+    initialized = false;
+    throw new Error(webRStartupMessage(error));
+  }
 }
 
 export async function evalR(code) {
@@ -78,4 +87,71 @@ function rCharacterVector(values) {
 
 function rString(value) {
   return JSON.stringify(String(value));
+}
+
+function normalizeWebRBaseUrl(value) {
+  const raw = String(value || '').trim();
+  try {
+    const url = new URL(raw, globalThis.location?.href);
+    return url.href.replace(/\/?$/, '/');
+  } catch (_) {
+    return raw.replace(/\/?$/, '/');
+  }
+}
+
+function isNullOriginFilePage() {
+  return globalThis.location?.protocol === 'file:' || globalThis.location?.origin === 'null';
+}
+
+function withFileOriginUrlFallback(callback) {
+  if (!isNullOriginFilePage() || typeof globalThis.URL !== 'function') return callback();
+
+  const OriginalURL = globalThis.URL;
+  function WebRFileURL(value, base) {
+    if ((base === 'null' || base === null) && typeof value === 'string') {
+      if (/^[a-z][a-z0-9+.-]*:/i.test(value)) return new OriginalURL(value);
+      if (globalThis.location?.href) return new OriginalURL(value, globalThis.location.href);
+    }
+    return arguments.length >= 2 ? new OriginalURL(value, base) : new OriginalURL(value);
+  }
+
+  WebRFileURL.prototype = OriginalURL.prototype;
+  Object.setPrototypeOf(WebRFileURL, OriginalURL);
+  copyUrlStatics(OriginalURL, WebRFileURL);
+
+  globalThis.URL = WebRFileURL;
+  try {
+    const result = callback();
+    if (result && typeof result.finally === 'function') {
+      return result.finally(() => { globalThis.URL = OriginalURL; });
+    }
+    globalThis.URL = OriginalURL;
+    return result;
+  } catch (error) {
+    globalThis.URL = OriginalURL;
+    throw error;
+  }
+}
+
+function copyUrlStatics(source, target) {
+  Object.getOwnPropertyNames(source).forEach((property) => {
+    if (property in target) return;
+    try {
+      Object.defineProperty(target, property, Object.getOwnPropertyDescriptor(source, property));
+    } catch (_) {
+      // Some browser URL implementations expose non-configurable internals.
+    }
+  });
+}
+
+function webRStartupMessage(error) {
+  const message = error?.message || String(error);
+  if (isNullOriginFilePage()) {
+    return [
+      'webR could not start from this local file page.',
+      'Open the report from an HTTP(S) URL, such as GitHub Pages or a local static server, before running DESeq2 or fgsea.',
+      `Original error: ${message}`,
+    ].join(' ');
+  }
+  return message;
 }

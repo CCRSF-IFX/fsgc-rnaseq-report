@@ -2,6 +2,7 @@ import { state, getSampleById, metadataColumns } from './state.js';
 import { sampleIdsInCounts } from './analysis.js';
 
 const HEATMAP_PALETTE = ['#2563eb', '#dc2626', '#16a34a', '#d97706', '#7c3aed', '#0891b2', '#be123c', '#475569'];
+const HEATMAP_CUSTOM_GENE_LIMIT = 500;
 const CLUSTERGRAMMER_VERSION = '1.19.5';
 const CLUSTERGRAMMER_ASSETS = [
   {
@@ -44,6 +45,16 @@ export function setupExpressionHeatmapControls() {
   if (!heatmapControlsWired) {
     heatmapControlsWired = true;
     document.getElementById('heatmap-render')?.addEventListener('click', renderExpressionHeatmap);
+    document.getElementById('heatmap-top-n')?.addEventListener('change', renderExpressionHeatmap);
+    document.getElementById('heatmap-gene-mode')?.addEventListener('change', () => {
+      syncHeatmapGeneControls();
+      renderExpressionHeatmap();
+    });
+    document.getElementById('heatmap-gene-list')?.addEventListener('input', () => {
+      const status = document.getElementById('heatmap-gene-list-status');
+      if (status) status.textContent = '';
+    });
+    document.getElementById('heatmap-gene-list')?.addEventListener('change', renderExpressionHeatmap);
     document.getElementById('heatmap-annotation-column')?.addEventListener('change', renderExpressionHeatmap);
     document.getElementById('heatmap-scale')?.addEventListener('change', renderExpressionHeatmap);
     document.getElementById('heatmap-cluster-rows')?.addEventListener('change', renderExpressionHeatmap);
@@ -59,6 +70,7 @@ export function setupExpressionHeatmapControls() {
     });
     globalThis.addEventListener?.('resize', resizeExpressionHeatmap);
   }
+  syncHeatmapGeneControls();
   syncHeatmapControlLabels();
   const container = document.getElementById('expression-heatmap');
   if (container) container.innerHTML = '<p class="note">Open the clustering tab to render the Clustergrammer heatmap.</p>';
@@ -84,13 +96,15 @@ export async function renderExpressionHeatmap() {
   const columnGroupLevel = heatmapIntegerControl('heatmap-column-group-size', 1, 10, 5);
   heatmapOpacityValue = heatmapFloatControl('heatmap-opacity', 0.1, 1.9, 1);
 
-  const rows = heatmapExpressionRows(sampleIds)
+  const expressionRows = heatmapExpressionRows(sampleIds)
     .filter((row) => row.values.some((value) => value > 0))
-    .sort((a, b) => b.variance - a.variance)
-    .slice(0, topN);
+    .sort((a, b) => b.variance - a.variance);
+  const geneSelection = heatmapSelectedRows(expressionRows, topN);
+  const rows = geneSelection.rows;
+  renderHeatmapGeneStatus(geneSelection);
 
   if (rows.length === 0) {
-    container.innerHTML = '<p class="note">No nonzero count rows were available for the heatmap.</p>';
+    container.innerHTML = `<p class="note">${heatmapEscapeHtml(geneSelection.emptyMessage || 'No nonzero count rows were available for the heatmap.')}</p>`;
     return;
   }
 
@@ -122,7 +136,7 @@ export async function renderExpressionHeatmap() {
       ini_expand: true,
       make_modals: false,
       group_level: { row: rowGroupLevel, col: columnGroupLevel },
-      about: `${rows.length} most variable genes from log2(CPM + 1).`,
+      about: geneSelection.about,
       tile_tip_callback: heatmapTileTip,
       row_tip_callback: heatmapNodeTip,
       col_tip_callback: heatmapNodeTip,
@@ -150,15 +164,158 @@ function heatmapExpressionRows(sampleIds) {
     Math.max(1, state.counts.reduce((sum, row) => sum + heatmapNonnegativeNumber(row[id]), 0)),
   ]));
 
-  return state.counts.map((row) => {
+  return state.counts.map((row, index) => {
     const values = sampleIds.map((id) => Math.log2((heatmapNonnegativeNumber(row[id]) / librarySizes[id]) * 1e6 + 1));
+    const aliases = heatmapGeneAliases(row);
+    const fallbackId = aliases[0] || `gene_${index + 1}`;
     return {
-      id: row.gene_id || row.gene_symbol || row.gene_name || '',
-      label: row.gene_symbol || row.gene_name || row.gene_id || 'gene',
+      key: `row_${index}`,
+      id: row.gene_id || fallbackId,
+      label: row.gene_symbol || row.gene_name || row.gene_id || fallbackId,
+      aliases,
       values,
       variance: heatmapVariance(values),
     };
   });
+}
+
+function heatmapSelectedRows(expressionRows, topN) {
+  const mode = document.getElementById('heatmap-gene-mode')?.value || 'top';
+  if (mode !== 'custom') {
+    const rows = expressionRows.slice(0, topN);
+    return {
+      mode,
+      rows,
+      about: `${rows.length} most variable genes from log2(CPM + 1).`,
+      emptyMessage: 'No nonzero count rows were available for the heatmap.',
+    };
+  }
+
+  const terms = heatmapCustomGeneTerms();
+  if (terms.length === 0) {
+    return {
+      mode,
+      rows: [],
+      terms,
+      matchedTermCount: 0,
+      missing: [],
+      truncated: false,
+      about: 'Custom gene heatmap from log2(CPM + 1).',
+      emptyMessage: 'Enter at least one gene symbol or ID for the custom heatmap.',
+    };
+  }
+
+  const selected = heatmapRowsForGeneList(expressionRows, terms);
+  return {
+    mode,
+    ...selected,
+    about: `${selected.rows.length} custom genes from log2(CPM + 1).`,
+    emptyMessage: selected.missing.length
+      ? 'None of the requested genes matched gene_id, gene_symbol, or gene_name in the count matrix.'
+      : 'No nonzero count rows matched the custom gene list.',
+  };
+}
+
+function heatmapRowsForGeneList(rows, terms) {
+  const rowByAlias = new Map();
+  rows.forEach((row) => {
+    row.aliases.forEach((alias) => {
+      const key = heatmapNormalizeGene(alias);
+      if (!key) return;
+      if (!rowByAlias.has(key)) rowByAlias.set(key, []);
+      rowByAlias.get(key).push(row);
+    });
+  });
+
+  const selectedRows = [];
+  const selectedKeys = new Set();
+  const matchedTerms = new Set();
+  const missing = [];
+  terms.forEach((term) => {
+    const key = heatmapNormalizeGene(term);
+    const matches = rowByAlias.get(key) || [];
+    if (matches.length === 0) {
+      missing.push(term);
+      return;
+    }
+    matchedTerms.add(key);
+    matches.forEach((row) => {
+      if (selectedKeys.has(row.key)) return;
+      selectedKeys.add(row.key);
+      selectedRows.push(row);
+    });
+  });
+
+  return {
+    rows: selectedRows.slice(0, HEATMAP_CUSTOM_GENE_LIMIT),
+    terms,
+    matchedTermCount: matchedTerms.size,
+    missing,
+    truncated: selectedRows.length > HEATMAP_CUSTOM_GENE_LIMIT,
+  };
+}
+
+function syncHeatmapGeneControls() {
+  const mode = document.getElementById('heatmap-gene-mode')?.value || 'top';
+  const topInput = document.getElementById('heatmap-top-n');
+  const geneListLabel = document.getElementById('heatmap-gene-list-label');
+  const geneList = document.getElementById('heatmap-gene-list');
+  const status = document.getElementById('heatmap-gene-list-status');
+  const isCustom = mode === 'custom';
+
+  if (topInput) topInput.disabled = isCustom;
+  if (geneListLabel) geneListLabel.hidden = !isCustom;
+  if (geneList) geneList.disabled = !isCustom;
+  if (!isCustom && status) status.textContent = '';
+}
+
+function renderHeatmapGeneStatus(selection) {
+  const status = document.getElementById('heatmap-gene-list-status');
+  if (!status) return;
+  if (selection.mode !== 'custom') {
+    status.textContent = '';
+    return;
+  }
+  if (!selection.terms?.length) {
+    status.textContent = '';
+    return;
+  }
+
+  const parts = [
+    `Matched ${selection.matchedTermCount}/${selection.terms.length} requested genes (${selection.rows.length} heatmap rows).`,
+  ];
+  if (selection.missing?.length) {
+    const preview = selection.missing.slice(0, 8).join(', ');
+    const suffix = selection.missing.length > 8 ? `, +${selection.missing.length - 8} more` : '';
+    parts.push(`Missing: ${preview}${suffix}.`);
+  }
+  if (selection.truncated) parts.push(`Showing first ${HEATMAP_CUSTOM_GENE_LIMIT} matched rows.`);
+  status.textContent = parts.join(' ');
+}
+
+function heatmapCustomGeneTerms() {
+  const text = document.getElementById('heatmap-gene-list')?.value || '';
+  const seen = new Set();
+  return text
+    .split(/[\s,;]+/)
+    .map((term) => term.trim())
+    .filter(Boolean)
+    .filter((term) => {
+      const key = heatmapNormalizeGene(term);
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+}
+
+function heatmapGeneAliases(row) {
+  return [row.gene_id, row.gene_symbol, row.gene_name]
+    .map((value) => String(value ?? '').trim())
+    .filter(Boolean);
+}
+
+function heatmapNormalizeGene(value) {
+  return String(value ?? '').trim().toLowerCase();
 }
 
 function renderHeatmapAnnotation(sampleIds, annotationColumn) {

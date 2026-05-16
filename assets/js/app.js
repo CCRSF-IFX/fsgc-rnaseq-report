@@ -78,9 +78,27 @@ function waitForPlotly(timeoutMs = 30000) {
 
 function renderHeader() {
   const cfg = state.config;
-  document.getElementById('report-title').textContent = cfg.reportTitle || 'RNA-seq Report';
+  const projectTitle = cleanHeaderText(cfg.projectTitle || cfg.reportTitle) || 'RNA-seq Report';
+  const projectAbbreviation = cleanHeaderText(cfg.projectAbbreviation || cfg.projectAbbr) || abbreviationFromTitle(projectTitle) || 'OR';
+  document.title = projectTitle;
+  const brandMark = document.getElementById('project-abbreviation');
+  if (brandMark) {
+    brandMark.textContent = projectAbbreviation;
+    brandMark.title = projectTitle;
+  }
+  document.getElementById('project-title').textContent = projectTitle;
+  document.getElementById('report-title').textContent = projectTitle;
   document.getElementById('report-subtitle').textContent = cfg.reportSubtitle || 'Interactive pipeline summary';
   document.getElementById('run-label').textContent = cfg.runId || 'demo-run';
+}
+
+function cleanHeaderText(value) {
+  return String(value || '').trim();
+}
+
+function abbreviationFromTitle(title) {
+  const words = String(title || '').match(/[A-Za-z0-9]+/g) || [];
+  return words.slice(0, 4).map((word) => word[0]).join('').toUpperCase();
 }
 
 function renderOverview() {

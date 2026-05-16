@@ -11,9 +11,9 @@
   <div id="app-shell">
     <aside class="sidebar" aria-label="Report navigation">
       <div class="brand">
-        <div class="brand-mark">OR</div>
+        <div class="brand-mark" id="project-abbreviation">OR</div>
         <div>
-          <h1>RNA-seq Report</h1>
+          <h1 id="project-title">RNA-seq Report</h1>
           <p id="run-label">Loading run...</p>
         </div>
       </div>
@@ -102,7 +102,9 @@
         <article class="card">
           <h3>Clustergrammer expression heatmap</h3>
           <div class="toolbar">
+            <label>Genes <select id="heatmap-gene-mode"><option value="top">Top variable</option><option value="custom">Custom list</option></select></label>
             <label>Top genes <input id="heatmap-top-n" type="number" min="5" max="500" step="5" value="50" /></label>
+            <label id="heatmap-gene-list-label" class="heatmap-gene-list-label" hidden>Gene list <textarea id="heatmap-gene-list" rows="2" placeholder="GeneA, GeneB, ENSG00000123456"></textarea></label>
             <label>Annotation <select id="heatmap-annotation-column"></select></label>
             <label>Scale <select id="heatmap-scale"><option value="row">Row z-score</option><option value="logcpm">log2(CPM + 1)</option></select></label>
             <label class="check-label"><input id="heatmap-cluster-rows" type="checkbox" checked /> Cluster rows</label>
@@ -112,6 +114,7 @@
             <label class="heatmap-slider-label">Opacity <input id="heatmap-opacity" type="range" min="0.1" max="1.9" step="0.1" value="1" /><output id="heatmap-opacity-value">1.0</output></label>
             <button id="heatmap-render">Update</button>
           </div>
+          <div id="heatmap-gene-list-status" class="note"></div>
           <div id="heatmap-annotation-strip"></div>
           <div id="expression-heatmap" class="clustergrammer-heatmap"></div>
         </article>
