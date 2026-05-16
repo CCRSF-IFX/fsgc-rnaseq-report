@@ -114,6 +114,9 @@ The actual package repo build is delegated to `r-wasm/actions`.
 The package list includes DESeq2 plus the Bioconductor hard dependency closure
 that is not available from the default webR package repository. This keeps the
 snapshot focused while still making `library(DESeq2)` loadable in webR.
+At runtime, the app passes the report snapshot through webR's
+`webr_pkg_repos`/`webr::install(..., repos = ...)` path; setting only the
+standard R `repos` option is not enough for webR package installation.
 The workflow also appends the project-local
 `webr-packages/patches/rwasm-c17.mk` override before building packages so
 `locfit`, a DESeq2 import that requires C17, compiles with Emscripten instead
