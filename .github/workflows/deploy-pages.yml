@@ -175,7 +175,7 @@ jobs:
           path = Path(".actions/build-rwasm/code.R")
           text = path.read_text()
           old = 'rwasm::add_pkg(packages, repo_dir = repo_path, compress = compress)'
-          new = 'rwasm::add_pkg(packages, repo_dir = repo_path, remotes = NULL, dependencies = NA, compress = compress)'
+          new = 'rwasm::add_pkg(packages, repo_dir = repo_path, remotes = NULL, compress = compress)'
           if old not in text:
               raise SystemExit("Expected rwasm::add_pkg() call was not found")
           path.write_text(text.replace(old, new))

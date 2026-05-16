@@ -52,8 +52,10 @@ export async function checkPackageRepository() {
     if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
     const records = packageRepoParsePackages(await response.text());
     const found = new Map(records.map((record) => [record.Package, record]));
+    const fallbackFound = await packageRepoFallbackPackages();
+    const dependencyIndex = new Map([...fallbackFound, ...found]);
     const missing = packages.filter((pkg) => !found.has(pkg));
-    const missingDeps = packageRepoMissingDependencies(packages, found);
+    const missingDeps = packageRepoMissingDependencies(packages, dependencyIndex);
     const rows = packages.map((pkg) => {
       const record = found.get(pkg);
       return `<tr><td>${packageRepoEscapeHtml(pkg)}</td><td>${record ? packageRepoEscapeHtml(record.Version || '') : 'missing'}</td><td>${record ? 'available' : 'missing'}</td></tr>`;
@@ -71,6 +73,16 @@ export async function checkPackageRepository() {
       ${depTable}`, problemCount ? 'warn' : 'ok', true);
   } catch (error) {
     packageRepoSetStatus(`Snapshot check failed: ${error.message}`, 'fail');
+  }
+}
+
+async function packageRepoFallbackPackages() {
+  try {
+    const response = await fetch('https://repo.r-wasm.org/bin/emscripten/contrib/4.5/PACKAGES', { cache: 'force-cache' });
+    if (!response.ok) return new Map();
+    return new Map(packageRepoParsePackages(await response.text()).map((record) => [record.Package, record]));
+  } catch (_) {
+    return new Map();
   }
 }
 

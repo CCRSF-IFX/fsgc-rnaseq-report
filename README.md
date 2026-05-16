@@ -111,9 +111,9 @@ The workflow reads package refs from `webr-packages/packages` using Bash/`awk`.
 It does not require `Rscript` to be present on the runner for that parsing step.
 The actual package repo build is delegated to `r-wasm/actions`.
 
-The r-wasm build is patched to use `dependencies = NA`, so hard dependencies
-from `Depends`, `Imports`, and `LinkingTo` are included in the package snapshot.
-This is required for heavy Bioconductor packages such as DESeq2.
+The package list includes DESeq2 plus the Bioconductor hard dependency closure
+that is not available from the default webR package repository. This keeps the
+snapshot focused while still making `library(DESeq2)` loadable in webR.
 
 Package snapshots are overwrite-protected by default. If
 `webr-packages/<VERSION>/bin/emscripten/contrib/4.5/PACKAGES` already exists on
@@ -264,6 +264,20 @@ The current package snapshot includes:
 
 ```text
 bioc::DESeq2
+bioc::S4Vectors
+bioc::IRanges
+bioc::GenomicRanges
+bioc::SummarizedExperiment
+bioc::BiocGenerics
+bioc::Biobase
+bioc::BiocParallel
+bioc::MatrixGenerics
+bioc::Seqinfo
+bioc::S4Arrays
+bioc::DelayedArray
+bioc::SparseArray
+bioc::XVector
+cran::locfit
 ```
 
 DESeq2 is the only R package enabled in the optional-analysis UI. The
@@ -324,7 +338,7 @@ python3 scripts/build_standalone_report.py
 Expected package parser output for the current repo:
 
 ```text
-bioc::DESeq2
+bioc::DESeq2,bioc::S4Vectors,bioc::IRanges,bioc::GenomicRanges,bioc::SummarizedExperiment,bioc::BiocGenerics,bioc::Biobase,bioc::BiocParallel,bioc::MatrixGenerics,bioc::Seqinfo,bioc::S4Arrays,bioc::DelayedArray,bioc::SparseArray,bioc::XVector,cran::locfit
 ```
 
 ## Troubleshooting

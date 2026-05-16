@@ -25,6 +25,20 @@ https://omicsreporthub.github.io/rnaseq-report/webr-packages/v0.1.0/
 
   ```text
   bioc::DESeq2
+  bioc::S4Vectors
+  bioc::IRanges
+  bioc::GenomicRanges
+  bioc::SummarizedExperiment
+  bioc::BiocGenerics
+  bioc::Biobase
+  bioc::BiocParallel
+  bioc::MatrixGenerics
+  bioc::Seqinfo
+  bioc::S4Arrays
+  bioc::DelayedArray
+  bioc::SparseArray
+  bioc::XVector
+  cran::locfit
   ```
 
 - `webr-packages/published_versions` currently lists:
@@ -47,9 +61,9 @@ https://omicsreporthub.github.io/rnaseq-report/webr-packages/v0.1.0/
 - Checks out `r-wasm/actions@v2`.
 - Reads package refs from `webr-packages/packages` using Bash/`awk`; no
   `Rscript` is required for that parsing step.
-- Patches `rwasm::add_pkg()` to use `remotes = NULL` and `dependencies = NA`,
-  matching the resolver workaround while still building hard package
-  dependencies.
+- Patches `rwasm::add_pkg()` to use `remotes = NULL`, matching the current
+  resolver workaround. The package list explicitly includes DESeq2's
+  Bioconductor hard dependency closure.
 - Builds the current wasm package repo into `_site/webr-packages/${VERSION}/`.
 - Writes `_site/webr-packages/${VERSION}/webr-packages-${VERSION}.zip` so users
   can download or mirror the compiled package snapshot.
@@ -108,7 +122,7 @@ python3 scripts/build_standalone_report.py
 Expected package parser output:
 
 ```text
-bioc::DESeq2
+bioc::DESeq2,bioc::S4Vectors,bioc::IRanges,bioc::GenomicRanges,bioc::SummarizedExperiment,bioc::BiocGenerics,bioc::Biobase,bioc::BiocParallel,bioc::MatrixGenerics,bioc::Seqinfo,bioc::S4Arrays,bioc::DelayedArray,bioc::SparseArray,bioc::XVector,cran::locfit
 ```
 
 ## Verification URL

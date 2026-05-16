@@ -1,1 +1,15 @@
 bioc::DESeq2
+bioc::S4Vectors
+bioc::IRanges
+bioc::GenomicRanges
+bioc::SummarizedExperiment
+bioc::BiocGenerics
+bioc::Biobase
+bioc::BiocParallel
+bioc::MatrixGenerics
+bioc::Seqinfo
+bioc::S4Arrays
+bioc::DelayedArray
+bioc::SparseArray
+bioc::XVector
+cran::locfit
