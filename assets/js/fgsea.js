@@ -124,9 +124,16 @@ reference_name <- ${fgseaRString(reference)}
 min_size <- ${Number(minSize)}
 max_size <- ${Number(maxSize)}
 
-de <- read.csv(text = stats_text, check.names = FALSE, stringsAsFactors = FALSE)
-gene_col <- if ("gene_symbol" %in% names(de) && any(nzchar(de$gene_symbol))) "gene_symbol" else "gene_id"
-genes <- trimws(as.character(de[[gene_col]]))
+de <- read.csv(text = stats_text, check.names = FALSE, stringsAsFactors = FALSE, na.strings = c("", "NA", "NaN"))
+empty_gene <- function(value) {
+  value <- trimws(as.character(value))
+  is.na(value) | !nzchar(value) | toupper(value) %in% c("NA", "N/A", "NULL", "NONE")
+}
+gene_id <- if ("gene_id" %in% names(de)) trimws(as.character(de$gene_id)) else rep(NA_character_, nrow(de))
+gene_symbol <- if ("gene_symbol" %in% names(de)) trimws(as.character(de$gene_symbol)) else rep(NA_character_, nrow(de))
+genes <- gene_symbol
+use_id <- empty_gene(genes)
+genes[use_id] <- gene_id[use_id]
 stat <- suppressWarnings(as.numeric(de$statistic))
 if (!any(is.finite(stat)) && "log2FoldChange" %in% names(de)) {
   lfc <- suppressWarnings(as.numeric(de$log2FoldChange))
@@ -134,7 +141,7 @@ if (!any(is.finite(stat)) && "log2FoldChange" %in% names(de)) {
   pvalue[!is.finite(pvalue) | pvalue <= 0] <- 1
   stat <- sign(lfc) * -log10(pvalue)
 }
-keep <- nzchar(genes) & is.finite(stat)
+keep <- !empty_gene(genes) & is.finite(stat)
 genes <- genes[keep]
 stat <- stat[keep]
 if (length(stat) < 2) stop("Need at least two ranked genes for fgsea.")
