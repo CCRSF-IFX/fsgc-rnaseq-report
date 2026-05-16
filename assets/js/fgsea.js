@@ -1,4 +1,4 @@
-import { state, logAnalysis, setStatus } from './state.js';
+import { state, logAnalysis, createProgressReporter, runWithProgressPulse } from './state.js';
 import { loadDeForContrast, loadText, parseCsv } from './dataLoader.js';
 import { ensureRPackages } from './packageManager.js';
 import { renderEnrichment } from './plots.js';
@@ -19,37 +19,64 @@ export async function runFgseaAnalysis() {
   const reference = document.getElementById('gsea-reference')?.value || state.config?.analysis?.gseaReference || 'hg38';
   const contrast = state.contrasts.find((item) => item.id === contrastSelect?.value) || state.contrasts[0];
   const status = document.getElementById('gsea-status');
+  const runButton = document.getElementById('gsea-run');
+  const runButtonLabel = runButton?.textContent || 'Run fgsea';
+  const progress = createProgressReporter('fgsea', 6);
+  if (runButton) {
+    runButton.disabled = true;
+    runButton.textContent = 'Running fgsea...';
+    runButton.setAttribute('aria-busy', 'true');
+  }
 
   try {
     if (!contrast) throw new Error('Run or select a DE contrast before fgsea.');
     fgseaSetStatus(status, 'Loading ranked DE result...');
+    await progress.step('Loading ranked DE result', 1);
     const deRows = await loadDeForContrast(contrast);
     if (!deRows.length) throw new Error('No DE rows are available. Run DESeq2 first for uploaded data.');
 
     fgseaSetStatus(status, 'Loading pathway GMT...');
+    await progress.step(`Loading ${reference} pathway GMT`, 2);
     const gmtText = await loadGmtForReference(reference);
     const minSize = fgseaPositiveInteger(document.getElementById('gsea-min-size')?.value, 1, 5);
     const maxSize = fgseaPositiveInteger(document.getElementById('gsea-max-size')?.value, minSize, 500);
 
-    fgseaSetStatus(status, 'Loading fgsea package in webR...');
-    setStatus('Running fgsea in webR...');
+    fgseaSetStatus(status, 'Loading fgsea package in webR. First run can take a few minutes.');
+    await progress.step('Loading fgsea package in webR', 3);
     await ensureRPackages(['fgsea']);
 
-    fgseaSetStatus(status, 'Running fgsea...');
-    const rows = await fgseaRunInWebR(deRows, gmtText, reference, minSize, maxSize);
+    const runMessage = `Running fgsea in webR for ${deRows.length} ranked genes`;
+    fgseaSetStatus(status, `${runMessage}. Keep this tab open.`);
+    await progress.step(runMessage, 4);
+    const rows = await runWithProgressPulse(
+      progress,
+      `${runMessage}; still working`,
+      () => fgseaRunInWebR(deRows, gmtText, reference, minSize, maxSize),
+      {
+        intervalMs: 10000,
+        onPulse: (message) => fgseaSetStatus(status, `${message}. Keep this tab open.`),
+      },
+    );
     if (!rows.length) throw new Error('fgsea returned no pathways. Check gene identifiers and pathway gene sets.');
 
+    await progress.step('Rendering enrichment plot and table', 5);
     state.enrichmentResults.set(contrast.id, rows);
     renderEnrichment(rows);
     renderTable('enrichment-table', rows, { pageLength: 25, exportName: `${contrast.id}.${reference}.fgsea.csv` });
     const message = `fgsea complete for ${contrast.label || contrast.id}: ${rows.length} pathways (${reference}).`;
     fgseaSetStatus(status, message);
-    setStatus('Report assets loaded');
+    await progress.done(`${rows.length} pathways (${reference})`);
     logAnalysis(message);
   } catch (error) {
     fgseaSetStatus(status, `fgsea failed: ${error.message}`);
-    setStatus('fgsea failed');
+    await progress.fail(`failed: ${error.message}`);
     logAnalysis(`fgsea failed: ${error.message}`);
+  } finally {
+    if (runButton) {
+      runButton.disabled = false;
+      runButton.textContent = runButtonLabel;
+      runButton.removeAttribute('aria-busy');
+    }
   }
 }
 

@@ -26,7 +26,23 @@ body { margin: 0; font-family: Inter, ui-sans-serif, system-ui, -apple-system, B
 .topbar { display: flex; justify-content: space-between; gap: 20px; align-items: center; margin-bottom: 20px; }
 .topbar h2 { margin: 0; font-size: 28px; }
 .topbar p { margin: 6px 0 0; color: var(--muted); }
-.status-bar { background: var(--panel); border: 1px solid var(--line); padding: 10px 14px; border-radius: 999px; color: var(--muted); box-shadow: var(--shadow); }
+.status-bar { min-width: 260px; max-width: 520px; background: var(--panel); border: 1px solid var(--line); padding: 9px 14px; border-radius: 12px; color: var(--muted); box-shadow: var(--shadow); display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px 9px; align-items: center; }
+.status-bar.ok { border-color: #bbf7d0; color: var(--ok); }
+.status-bar.fail { border-color: #fecaca; color: var(--fail); }
+.status-bar.warn { border-color: #fde68a; color: var(--warn); }
+.status-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.status-spinner { width: 12px; height: 12px; border-radius: 999px; border: 2px solid #cbd5e1; border-top-color: var(--accent); opacity: 0; }
+.status-bar.busy .status-spinner { opacity: 1; animation: status-spin 0.85s linear infinite; }
+.status-progress { grid-column: 1 / -1; height: 4px; overflow: hidden; border-radius: 999px; background: #e2e8f0; }
+.status-progress[hidden] { display: none; }
+#status-progress-fill { display: block; height: 100%; width: 0; border-radius: inherit; background: var(--accent); transition: width 180ms ease; }
+.status-progress.indeterminate #status-progress-fill { width: 38%; animation: status-slide 1.15s ease-in-out infinite; }
+@keyframes status-spin { to { transform: rotate(360deg); } }
+@keyframes status-slide {
+  0% { transform: translateX(-110%); }
+  50% { transform: translateX(80%); }
+  100% { transform: translateX(270%); }
+}
 .tab-panel { display: none; }
 .tab-panel.active { display: block; }
 .grid { display: grid; gap: 18px; }

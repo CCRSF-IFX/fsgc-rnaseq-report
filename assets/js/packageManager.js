@@ -1,5 +1,5 @@
 import { installRPackages, loadRPackage } from './webrManager.js';
-import { logAnalysis } from './state.js';
+import { createProgressReporter, logAnalysis, runWithProgressPulse } from './state.js';
 
 const packageStatus = new Map();
 
@@ -10,14 +10,25 @@ export function getPackageStatus(pkg) {
 export async function ensureRPackages(packages) {
   const missing = packages.filter((pkg) => getPackageStatus(pkg) !== 'installed');
   if (missing.length === 0) return;
+  const progress = createProgressReporter('R package setup', Math.max(3, missing.length + 2));
+  await progress.step(`Preparing ${missing.join(', ')}`, 1);
   missing.forEach((pkg) => packageStatus.set(pkg, 'installing'));
   try {
-    await installRPackages(missing);
-    for (const pkg of missing) {
+    await progress.step('Initializing webR and installing missing packages', 2);
+    await runWithProgressPulse(
+      progress,
+      `Installing missing package snapshot: ${missing.join(', ')}`,
+      () => installRPackages(missing),
+      { intervalMs: 10000 },
+    );
+    for (const [index, pkg] of missing.entries()) {
+      await progress.step(`Loading ${pkg}`, index + 3);
       await loadPackageWithStatus(pkg);
     }
+    await progress.done(`Packages ready: ${missing.join(', ')}`);
   } catch (error) {
     missing.forEach((pkg) => packageStatus.set(pkg, 'failed'));
+    await progress.fail(`package setup failed: ${error.message}`);
     logAnalysis(`Package installation failed: ${error.message}`);
     throw error;
   }

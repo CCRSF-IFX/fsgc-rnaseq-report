@@ -1,4 +1,4 @@
-import { state, logAnalysis, metadataColumns, setStatus } from './state.js';
+import { state, logAnalysis, metadataColumns, createProgressReporter, runWithProgressPulse } from './state.js';
 import { sampleIdsInCounts } from './analysis.js';
 import { parseCsv } from './dataLoader.js';
 import { ensureRPackages } from './packageManager.js';
@@ -95,8 +95,18 @@ export async function runDeseq2Analysis() {
   const numerator = document.getElementById('deseq-numerator-level')?.value;
   const denominator = document.getElementById('deseq-denominator-level')?.value || reference;
   const status = document.getElementById('deseq-status');
+  const runButton = document.getElementById('deseq-run');
+  const runButtonLabel = runButton?.textContent || 'Run DESeq2';
+  const progress = createProgressReporter('DESeq2', 7);
+  if (runButton) {
+    runButton.disabled = true;
+    runButton.textContent = 'Running DESeq2...';
+    runButton.setAttribute('aria-busy', 'true');
+  }
 
   try {
+    deseqSetStatus(status, 'Validating DESeq2 contrast and design...');
+    await progress.step('Validating contrast and design', 1);
     if (!column || !numerator || !denominator || numerator === denominator) {
       throw new Error('Choose two different levels for the DESeq2 contrast.');
     }
@@ -112,14 +122,26 @@ export async function runDeseq2Analysis() {
     if (numeratorCount < 2 || denominatorCount < 2) throw new Error('DESeq2 requires at least two samples per group for this browser runner.');
     validateDeseqDesign(sampleIds, column, adjustColumns);
 
-    deseqSetStatus(status, 'Loading DESeq2 package in webR...');
-    setStatus('Running DESeq2 in webR...');
+    await progress.step(`Using ${sampleIds.length} samples for ${numerator} vs ${denominator}`, 2);
+    deseqSetStatus(status, 'Loading DESeq2 package in webR. First run can take a few minutes.');
+    await progress.step('Loading DESeq2 package in webR', 3);
     await ensureRPackages(['DESeq2']);
 
-    deseqSetStatus(status, 'Running DESeq2...');
-    const rows = await deseqRunInWebR(sampleIds, column, adjustColumns, reference, numerator, denominator);
+    const modelMessage = `Running DESeq2 in webR for ${state.counts.length} genes and ${sampleIds.length} samples`;
+    deseqSetStatus(status, `${modelMessage}. Keep this tab open.`);
+    await progress.step(modelMessage, 4);
+    const rows = await runWithProgressPulse(
+      progress,
+      `${modelMessage}; still working`,
+      () => deseqRunInWebR(sampleIds, column, adjustColumns, reference, numerator, denominator),
+      {
+        intervalMs: 10000,
+        onPulse: (message) => deseqSetStatus(status, `${message}. Keep this tab open.`),
+      },
+    );
     if (rows.length === 0) throw new Error('DESeq2 returned no result rows.');
 
+    await progress.step('Registering contrast and updating plots', 5);
     const designLabel = deseqDesignLabel(column, adjustColumns);
     const contrastId = `deseq2_${deseqSlug(numerator)}_vs_${deseqSlug(denominator)}${adjustColumns.length ? `_adj_${deseqSlug(adjustColumns.join('_'))}` : ''}`;
     const contrast = {
@@ -141,15 +163,22 @@ export async function runDeseq2Analysis() {
     deseqCallbacks.populateContrastSelectors?.();
     const contrastSelect = document.getElementById('contrast-select');
     if (contrastSelect) contrastSelect.value = contrastId;
+    await progress.step('Rendering DE table and volcano/MA plots', 6);
     await deseqCallbacks.renderCurrentContrast?.();
 
     logAnalysis(`DESeq2 completed for ${numerator} vs ${denominator} with ${designLabel}: ${rows.length} genes.`);
     deseqSetStatus(status, `DESeq2 complete: ${rows.length} genes. Design ${designLabel}.`);
-    setStatus('Report assets loaded');
+    await progress.done(`Complete: ${rows.length} genes. Design ${designLabel}`);
   } catch (error) {
     logAnalysis(`DESeq2 failed: ${error.message}`);
     deseqSetStatus(status, `DESeq2 failed: ${error.message}`);
-    setStatus('DESeq2 failed');
+    await progress.fail(`failed: ${error.message}`);
+  } finally {
+    if (runButton) {
+      runButton.disabled = false;
+      runButton.textContent = runButtonLabel;
+      runButton.removeAttribute('aria-busy');
+    }
   }
 }
 

@@ -38,7 +38,13 @@
           <h2 id="report-title">RNA-seq Report</h2>
           <p id="report-subtitle">Interactive pipeline summary</p>
         </div>
-        <div class="status-bar" id="status-bar">Loading assets...</div>
+        <div class="status-bar busy" id="status-bar" role="status" aria-live="polite" aria-busy="true">
+          <span class="status-spinner" id="status-spinner" aria-hidden="true"></span>
+          <span class="status-text" id="status-text">Loading assets...</span>
+          <span class="status-progress indeterminate" id="status-progress" aria-hidden="true">
+            <span id="status-progress-fill"></span>
+          </span>
+        </div>
       </header>
 
       <section class="tab-panel active" id="tab-overview">
