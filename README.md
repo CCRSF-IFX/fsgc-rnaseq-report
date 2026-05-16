@@ -14,8 +14,8 @@ Optional browser-side R analysis is available through a small plugin layer. The
 default optional backend is webR, intended only for small exploratory analyses.
 The report can install/load DESeq2 from the configured wasm package snapshot and
 run a basic two-group DESeq2 contrast in the browser. For production statistics,
-keep DESeq2, limma, or another mature RNA-seq method in the pipeline and export
-the final results into this report.
+keep DESeq2 or another mature RNA-seq method in the pipeline and export the
+final results into this report.
 
 ## Repository Contents
 
@@ -75,6 +75,10 @@ For a larger report that can render plots without internet access, inline Plotly
 python3 scripts/build_standalone_report.py --embed-plotly
 ```
 
+`--embed-plotly` only inlines Plotly. The Clustergrammer heatmap still loads
+Clustergrammer-JS and its browser dependencies from CDN unless you vendor those
+scripts and update `assets/js/heatmap.js`.
+
 Useful builder options:
 
 ```bash
@@ -106,6 +110,10 @@ https://omicsreporthub.github.io/rnaseq-report/webr-packages/v0.1.0/
 The workflow reads package refs from `webr-packages/packages` using Bash/`awk`.
 It does not require `Rscript` to be present on the runner for that parsing step.
 The actual package repo build is delegated to `r-wasm/actions`.
+
+The r-wasm build is patched to use `dependencies = NA`, so hard dependencies
+from `Depends`, `Imports`, and `LinkingTo` are included in the package snapshot.
+This is required for heavy Bioconductor packages such as DESeq2.
 
 Package snapshots are overwrite-protected by default. If
 `webr-packages/<VERSION>/bin/emscripten/contrib/4.5/PACKAGES` already exists on
@@ -156,7 +164,7 @@ With those two data files, the report derives:
 
 - PCA coordinates from log2(CPM + 1) expression.
 - sample distances from log2(CPM + 1) expression.
-- a Plotly expression heatmap with metadata annotation and row/column clustering toggles.
+- a Clustergrammer expression heatmap with metadata annotation and row/column clustering toggles.
 - two-group differential expression from metadata-defined contrasts.
 
 For production reports, the pipeline can also export precomputed assets. When
@@ -237,20 +245,11 @@ a module that needs R packages. The package repository is configured in
     "packageRepo": "https://omicsreporthub.github.io/rnaseq-report/webr-packages/v0.1.0/",
     "packageRepoVersion": "v0.1.0",
     "modules": {
-      "limma_voom": {
-        "packages": ["limma"],
-        "memoryWarning": "medium"
-      },
       "deseq2": {
         "enabled": true,
         "packages": ["DESeq2"],
         "memoryWarning": "high",
         "experimental": true
-      },
-      "pheatmap": {
-        "enabled": true,
-        "packages": ["pheatmap"],
-        "memoryWarning": "medium"
       }
     }
   }
@@ -259,22 +258,20 @@ a module that needs R packages. The package repository is configured in
 
 The built-in browser DE fallback uses Welch t-tests on log2(CPM + 1) values and
 Benjamini-Hochberg adjusted p-values. Treat those results as exploratory. Use
-pipeline-generated DESeq2, limma, or another mature RNA-seq method for final
-analysis.
+pipeline-generated DESeq2 or another mature RNA-seq method for final analysis.
 
 The current package snapshot includes:
 
 ```text
-bioc::limma
 bioc::DESeq2
-cran::pheatmap
 ```
 
-DESeq2 and pheatmap are enabled in the optional-analysis UI for small
-browser-side experiments. The Differential Expression tab has a browser DESeq2
-runner for two-group contrasts. The Clustering tab has a Plotly heatmap using
-the count matrix, with row z-score or log2(CPM + 1) scale, sample annotation,
-and row/column clustering controls.
+DESeq2 is the only R package enabled in the optional-analysis UI. The
+Differential Expression tab has a browser DESeq2 runner for two-group contrasts.
+The Clustering tab has a Clustergrammer-JS heatmap using the count matrix, with
+row z-score or log2(CPM + 1) scale, sample annotation, and row/column clustering
+controls. Clustergrammer-JS is loaded from the npm package bundle at runtime so
+the development app and generated standalone HTML can stay build-free.
 
 Each deployed snapshot also exposes a ZIP archive:
 
@@ -327,7 +324,7 @@ python3 scripts/build_standalone_report.py
 Expected package parser output for the current repo:
 
 ```text
-bioc::limma,bioc::DESeq2,cran::pheatmap
+bioc::DESeq2
 ```
 
 ## Troubleshooting

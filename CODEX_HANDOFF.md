@@ -24,9 +24,7 @@ https://omicsreporthub.github.io/rnaseq-report/webr-packages/v0.1.0/
 - `webr-packages/packages` currently contains:
 
   ```text
-  bioc::limma
   bioc::DESeq2
-  cran::pheatmap
   ```
 
 - `webr-packages/published_versions` currently lists:
@@ -49,8 +47,9 @@ https://omicsreporthub.github.io/rnaseq-report/webr-packages/v0.1.0/
 - Checks out `r-wasm/actions@v2`.
 - Reads package refs from `webr-packages/packages` using Bash/`awk`; no
   `Rscript` is required for that parsing step.
-- Patches `rwasm::add_pkg()` to use `remotes = NULL`, matching the workaround
-  used for the current resolver behavior.
+- Patches `rwasm::add_pkg()` to use `remotes = NULL` and `dependencies = NA`,
+  matching the resolver workaround while still building hard package
+  dependencies.
 - Builds the current wasm package repo into `_site/webr-packages/${VERSION}/`.
 - Writes `_site/webr-packages/${VERSION}/webr-packages-${VERSION}.zip` so users
   can download or mirror the compiled package snapshot.
@@ -61,9 +60,10 @@ https://omicsreporthub.github.io/rnaseq-report/webr-packages/v0.1.0/
 - Minimum inputs: `counts.csv` plus a sample metadata file such as
   `sample_manifest.csv`.
 - Browser fallbacks compute PCA, sample distances, exploratory Welch-test DE,
-  and a Plotly expression heatmap from counts.
-- The Clustering tab has a pheatmap-style expression heatmap with metadata
+  and a Clustergrammer expression heatmap from counts.
+- The Clustering tab has a Clustergrammer-JS expression heatmap with metadata
   annotation, row z-score/logCPM scale, and row/column clustering toggles.
+  Clustergrammer-JS is loaded from its npm browser bundle at runtime.
 - The Differential Expression tab has a basic webR DESeq2 runner for two-group
   contrasts. It installs/loads `DESeq2` from the configured package snapshot.
 - The Optional Analysis tab shows the configured package repository, can check
@@ -108,7 +108,7 @@ python3 scripts/build_standalone_report.py
 Expected package parser output:
 
 ```text
-bioc::limma,bioc::DESeq2,cran::pheatmap
+bioc::DESeq2
 ```
 
 ## Verification URL

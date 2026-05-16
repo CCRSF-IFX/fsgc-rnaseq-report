@@ -9,7 +9,7 @@ import { renderGeneSearch } from './geneSearch.js';
 import { renderDownstreamCards } from './downstreamPlugins.js';
 import { renderPackageRepositoryPanel } from './packageRepository.js';
 import { setupDeseqControls } from './deseq2.js';
-import { setupExpressionHeatmapControls } from './heatmap.js';
+import { renderExpressionHeatmap, resizeExpressionHeatmap, setupExpressionHeatmapControls } from './heatmap.js';
 
 async function main() {
   wireTabs();
@@ -153,7 +153,13 @@ function wireTabs() {
       if (globalThis.Plotly?.Plots) {
         requestAnimationFrame(() => {
           panel.querySelectorAll('.js-plotly-plot').forEach((plot) => Plotly.Plots.resize(plot));
+          if (button.dataset.tab === 'clustering') {
+            renderExpressionHeatmap();
+            resizeExpressionHeatmap();
+          }
         });
+      } else if (button.dataset.tab === 'clustering') {
+        requestAnimationFrame(() => renderExpressionHeatmap());
       }
     });
   });

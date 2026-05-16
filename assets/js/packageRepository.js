@@ -53,13 +53,22 @@ export async function checkPackageRepository() {
     const records = packageRepoParsePackages(await response.text());
     const found = new Map(records.map((record) => [record.Package, record]));
     const missing = packages.filter((pkg) => !found.has(pkg));
+    const missingDeps = packageRepoMissingDependencies(packages, found);
     const rows = packages.map((pkg) => {
       const record = found.get(pkg);
       return `<tr><td>${packageRepoEscapeHtml(pkg)}</td><td>${record ? packageRepoEscapeHtml(record.Version || '') : 'missing'}</td><td>${record ? 'available' : 'missing'}</td></tr>`;
     }).join('');
+    const depRows = missingDeps.map((dep) => (
+      `<tr><td>${packageRepoEscapeHtml(dep.package)}</td><td>${packageRepoEscapeHtml(dep.requiredBy)}</td><td>missing dependency</td></tr>`
+    )).join('');
+    const depTable = depRows
+      ? `<div class="table-wrap compact"><table><thead><tr><th>Dependency</th><th>Required by</th><th>Status</th></tr></thead><tbody>${depRows}</tbody></table></div>`
+      : '';
+    const problemCount = missing.length + missingDeps.length;
     packageRepoSetStatus(`
-      <div class="${missing.length ? 'status-message warn' : 'status-message ok'}">${missing.length ? `Missing: ${packageRepoEscapeHtml(missing.join(', '))}` : 'Snapshot contains all configured packages.'}</div>
-      <div class="table-wrap compact"><table><thead><tr><th>Package</th><th>Version</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table></div>`, missing.length ? 'warn' : 'ok', true);
+      <div class="${problemCount ? 'status-message warn' : 'status-message ok'}">${problemCount ? 'Snapshot is missing configured packages or hard dependencies.' : 'Snapshot contains configured packages and their indexed hard dependencies.'}</div>
+      <div class="table-wrap compact"><table><thead><tr><th>Package</th><th>Version</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table></div>
+      ${depTable}`, problemCount ? 'warn' : 'ok', true);
   } catch (error) {
     packageRepoSetStatus(`Snapshot check failed: ${error.message}`, 'fail');
   }
@@ -94,17 +103,61 @@ function packageRepoBundleUrl() {
 function packageRepoParsePackages(text) {
   const records = [];
   let current = {};
+  let currentKey = '';
   text.split(/\r?\n/).forEach((line) => {
     if (!line.trim()) {
       if (current.Package) records.push(current);
       current = {};
+      currentKey = '';
       return;
     }
     const match = line.match(/^([^:]+):\s*(.*)$/);
-    if (match) current[match[1]] = match[2];
+    if (match) {
+      currentKey = match[1];
+      current[currentKey] = match[2];
+    } else if (/^\s+/.test(line) && currentKey) {
+      current[currentKey] = `${current[currentKey]} ${line.trim()}`;
+    }
   });
   if (current.Package) records.push(current);
   return records;
+}
+
+function packageRepoMissingDependencies(packages, found) {
+  const missing = [];
+  const visited = new Set();
+  const queue = packages.slice();
+  const basePackages = new Set([
+    'base', 'compiler', 'datasets', 'grDevices', 'graphics', 'grid', 'methods',
+    'parallel', 'splines', 'stats', 'stats4', 'tools', 'utils',
+  ]);
+
+  while (queue.length) {
+    const pkg = queue.shift();
+    if (visited.has(pkg)) continue;
+    visited.add(pkg);
+    const record = found.get(pkg);
+    if (!record) continue;
+
+    const deps = packageRepoDependencyNames(`${record.Depends || ''}, ${record.Imports || ''}, ${record.LinkingTo || ''}`);
+    deps.forEach((dep) => {
+      if (basePackages.has(dep)) return;
+      if (found.has(dep)) {
+        queue.push(dep);
+      } else if (!missing.some((item) => item.package === dep && item.requiredBy === pkg)) {
+        missing.push({ package: dep, requiredBy: pkg });
+      }
+    });
+  }
+
+  return missing.sort((a, b) => a.package.localeCompare(b.package));
+}
+
+function packageRepoDependencyNames(text) {
+  return Array.from(new Set(text
+    .split(',')
+    .map((entry) => entry.trim().replace(/\s*\(.*?\)\s*/g, '').trim())
+    .filter((entry) => /^[A-Za-z][A-Za-z0-9.]*$/.test(entry))));
 }
 
 function packageRepoSetStatus(message, tone = 'info', html = false) {

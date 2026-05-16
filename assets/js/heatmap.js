@@ -2,6 +2,32 @@ import { state, getSampleById, metadataColumns } from './state.js';
 import { sampleIdsInCounts } from './analysis.js';
 
 const HEATMAP_PALETTE = ['#2563eb', '#dc2626', '#16a34a', '#d97706', '#7c3aed', '#0891b2', '#be123c', '#475569'];
+const CLUSTERGRAMMER_VERSION = '1.19.5';
+const CLUSTERGRAMMER_ASSETS = [
+  {
+    src: 'https://cdn.jsdelivr.net/npm/d3@3.5.17/d3.min.js',
+    test: () => globalThis.d3?.version?.startsWith('3.'),
+  },
+  {
+    src: 'https://cdn.jsdelivr.net/npm/jquery@1.11.0/dist/jquery.min.js',
+    test: () => Boolean(globalThis.jQuery),
+  },
+  {
+    src: 'https://cdn.jsdelivr.net/npm/underscore@1.8.3/underscore-min.js',
+    test: () => Boolean(globalThis._),
+  },
+  {
+    src: 'https://cdn.jsdelivr.net/npm/bootstrap@3.4.1/dist/js/bootstrap.min.js',
+    test: () => Boolean(globalThis.jQuery?.fn?.modal),
+  },
+  {
+    src: `https://cdn.jsdelivr.net/npm/clustergrammer@${CLUSTERGRAMMER_VERSION}/clustergrammer.min.js`,
+    test: () => Boolean(globalThis.Clustergrammer),
+  },
+];
+
+let clustergrammerAssetPromise = null;
+let clustergrammerInstance = null;
 
 export function setupExpressionHeatmapControls() {
   const annotationSelect = document.getElementById('heatmap-annotation-column');
@@ -18,12 +44,15 @@ export function setupExpressionHeatmapControls() {
   document.getElementById('heatmap-scale')?.addEventListener('change', renderExpressionHeatmap);
   document.getElementById('heatmap-cluster-rows')?.addEventListener('change', renderExpressionHeatmap);
   document.getElementById('heatmap-cluster-columns')?.addEventListener('change', renderExpressionHeatmap);
-  renderExpressionHeatmap();
+  globalThis.addEventListener?.('resize', resizeExpressionHeatmap);
+  const container = document.getElementById('expression-heatmap');
+  if (container) container.innerHTML = '<p class="note">Open the clustering tab to render the Clustergrammer heatmap.</p>';
+  if (document.getElementById('tab-clustering')?.classList.contains('active')) renderExpressionHeatmap();
 }
 
-export function renderExpressionHeatmap() {
+export async function renderExpressionHeatmap() {
   const container = document.getElementById('expression-heatmap');
-  if (!container || !globalThis.Plotly) return;
+  if (!container) return;
 
   const sampleIds = sampleIdsInCounts(state.samples, state.counts);
   if (sampleIds.length < 2) {
@@ -53,41 +82,45 @@ export function renderExpressionHeatmap() {
   const columnOrder = clusterColumns ? heatmapClusterOrder(columnVectors) : sampleIds.map((_, index) => index);
 
   const orderedX = columnOrder.map((index) => sampleIds[index]);
-  const orderedY = rowOrder.map((index) => rows[index].label);
-  const orderedZ = rowOrder.map((rowIndex) => columnOrder.map((columnIndex) => matrix[rowIndex][columnIndex]));
-  const orderedText = rowOrder.map((rowIndex, rowPosition) => (
-    columnOrder.map((columnIndex, columnPosition) => {
-      const row = rows[rowIndex];
-      const sampleId = sampleIds[columnIndex];
-      const annotationText = annotationColumn === 'none' ? [] : [`${annotationColumn}: ${getSampleById(sampleId)?.[annotationColumn] ?? 'NA'}`];
-      return [
-        row.label,
-        sampleId,
-        `${scale === 'row' ? 'z' : 'logCPM'}=${heatmapFormatNumber(orderedZ[rowPosition]?.[columnPosition])}`,
-      ].concat(annotationText).join('<br>');
-    })
-  ));
-
   renderHeatmapAnnotation(orderedX, annotationColumn);
 
-  Plotly.react('expression-heatmap', [{
-    x: orderedX,
-    y: orderedY,
-    z: orderedZ,
-    text: orderedText,
-    hoverinfo: 'text',
-    type: 'heatmap',
-    colorscale: scale === 'row' ? 'RdBu' : 'Viridis',
-    reversescale: scale === 'row',
-    zmid: scale === 'row' ? 0 : undefined,
-  }], {
-    title: `${rows.length} most variable genes`,
-    margin: { l: 120, r: 30, b: 90, t: 55 },
-    paper_bgcolor: 'white',
-    plot_bgcolor: 'white',
-    xaxis: { title: annotationColumn === 'none' ? 'samples' : `samples colored by ${annotationColumn}`, automargin: true },
-    yaxis: { automargin: true },
-  }, { responsive: true });
+  try {
+    container.innerHTML = '<h4 class="wait_message">Rendering Clustergrammer heatmap...</h4>';
+    container.style.height = `${Math.max(560, Math.min(1100, rows.length * 18 + 260))}px`;
+    await loadClustergrammerAssets();
+
+    const networkData = makeClustergrammerNetwork(rows, sampleIds, matrix, rowOrder, columnOrder, annotationColumn, scale);
+    clustergrammerInstance = globalThis.Clustergrammer({
+      root: '#expression-heatmap',
+      network_data: networkData,
+      row_label: 'Genes',
+      col_label: 'Samples',
+      row_order: 'clust',
+      col_order: 'clust',
+      tile_colors: ['#dc2626', '#2563eb'],
+      opacity_scale: 'linear',
+      input_domain: scale === 'row' ? 2 : undefined,
+      sidebar_width: 165,
+      ini_expand: true,
+      make_modals: false,
+      about: `${rows.length} most variable genes from log2(CPM + 1).`,
+      tile_tip_callback: heatmapTileTip,
+      row_tip_callback: heatmapNodeTip,
+      col_tip_callback: heatmapNodeTip,
+    });
+    container.querySelector('.wait_message')?.remove();
+  } catch (error) {
+    clustergrammerInstance = null;
+    container.innerHTML = `<p class="note">Clustergrammer heatmap failed to render: ${heatmapEscapeHtml(error.message)}</p>`;
+  }
+}
+
+export function resizeExpressionHeatmap() {
+  try {
+    clustergrammerInstance?.resize_viz?.();
+  } catch (_) {
+    // Clustergrammer can throw during hidden-tab resizes; the next render will recover.
+  }
 }
 
 function heatmapExpressionRows(sampleIds) {
@@ -130,6 +163,104 @@ function renderHeatmapAnnotation(sampleIds, annotationColumn) {
       <div class="annotation-samples">${samples}</div>
       <div class="annotation-legend">${legend}</div>
     </div>`;
+}
+
+function makeClustergrammerNetwork(rows, sampleIds, matrix, rowOrder, columnOrder, annotationColumn, scale) {
+  const rowClusterRanks = heatmapOrderRanks(rowOrder);
+  const columnClusterRanks = heatmapOrderRanks(columnOrder);
+  const rowRankVar = heatmapOrderRanks(rows.map((_, index) => index).sort((a, b) => rows[b].variance - rows[a].variance));
+  const columnRank = heatmapOrderRanks(sampleIds.map((_, index) => index));
+  const annotationInfo = heatmapAnnotationInfo(sampleIds, annotationColumn);
+  const rowLabels = heatmapUniqueLabels(rows.map((row) => row.label || row.id || 'gene'));
+
+  return {
+    mat: matrix,
+    row_nodes: rows.map((row, index) => ({
+      name: `Gene: ${rowLabels[index]}`,
+      clust: rowClusterRanks[index],
+      rank: index,
+      rankvar: rowRankVar[index],
+      group: [],
+      value: row.variance,
+      gene_id: row.id,
+      scale,
+    })),
+    col_nodes: sampleIds.map((sampleId, index) => ({
+      name: `Sample: ${sampleId}`,
+      clust: columnClusterRanks[index],
+      rank: columnRank[index],
+      rankvar: columnRank[index],
+      group: [],
+      ...(annotationInfo.nodeFields[index] || {}),
+    })),
+    cat_colors: annotationInfo.catColors,
+  };
+}
+
+function heatmapAnnotationInfo(sampleIds, annotationColumn) {
+  if (annotationColumn === 'none') return { nodeFields: [], catColors: { col: {}, row: {} } };
+
+  const values = sampleIds.map((sampleId) => String(getSampleById(sampleId)?.[annotationColumn] ?? 'NA'));
+  const levels = Array.from(new Set(values));
+  const colors = Object.fromEntries(levels.map((level, index) => [
+    `${annotationColumn}: ${level}`,
+    HEATMAP_PALETTE[index % HEATMAP_PALETTE.length],
+  ]));
+  return {
+    nodeFields: values.map((value, index) => ({
+      'cat-0': `${annotationColumn}: ${value}`,
+      cat_0_index: index,
+    })),
+    catColors: {
+      col: { 'cat-0': colors },
+      row: {},
+    },
+  };
+}
+
+function heatmapOrderRanks(order) {
+  const ranks = [];
+  order.forEach((index, rank) => { ranks[index] = rank; });
+  return ranks;
+}
+
+async function loadClustergrammerAssets() {
+  if (!clustergrammerAssetPromise) {
+    clustergrammerAssetPromise = CLUSTERGRAMMER_ASSETS.reduce(
+      (promise, asset) => promise.then(() => (asset.test() ? null : heatmapLoadScript(asset.src))),
+      Promise.resolve(),
+    );
+  }
+  await clustergrammerAssetPromise;
+  if (!globalThis.Clustergrammer) throw new Error('Clustergrammer failed to load.');
+}
+
+function heatmapLoadScript(src) {
+  return new Promise((resolve, reject) => {
+    const existing = document.querySelector(`script[src="${src}"]`);
+    if (existing) {
+      existing.addEventListener('load', resolve, { once: true });
+      existing.addEventListener('error', () => reject(new Error(`Failed to load ${src}`)), { once: true });
+      if (existing.dataset.loaded === 'true') resolve();
+      return;
+    }
+
+    const script = document.createElement('script');
+    script.src = src;
+    script.async = false;
+    script.onload = () => { script.dataset.loaded = 'true'; resolve(); };
+    script.onerror = () => reject(new Error(`Failed to load ${src}`));
+    document.head.appendChild(script);
+  });
+}
+
+function heatmapTileTip(tileData) {
+  const value = heatmapFormatNumber(tileData.value);
+  return `${tileData.row_name}<br>${tileData.col_name}<br>value: ${value}`;
+}
+
+function heatmapNodeTip(nodeData) {
+  return nodeData.name || '';
 }
 
 function heatmapClusterOrder(vectors) {
@@ -209,6 +340,18 @@ function heatmapClampedInteger(value, min, max, fallback) {
 function heatmapFormatNumber(value) {
   const n = Number(value);
   return Number.isFinite(n) ? n.toPrecision(4) : 'NA';
+}
+
+function heatmapUniqueLabels(labels) {
+  const counts = new Map();
+  labels.forEach((label) => counts.set(label, (counts.get(label) || 0) + 1));
+  const seen = new Map();
+  return labels.map((label) => {
+    if (counts.get(label) === 1) return label;
+    const next = (seen.get(label) || 0) + 1;
+    seen.set(label, next);
+    return `${label}_${next}`;
+  });
 }
 
 function heatmapEscapeHtml(value) {
