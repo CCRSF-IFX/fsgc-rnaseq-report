@@ -106,13 +106,24 @@ export function renderScree() {
 
 export function renderDistanceHeatmap() {
   if (!state.distance) return;
+  const sampleIds = state.distance.sample_ids || [];
+  const layout = plotLayout('Sample distance matrix');
   Plotly.react('distance-heatmap', [{
-    x: state.distance.sample_ids,
-    y: state.distance.sample_ids,
+    x: sampleIds,
+    y: sampleIds,
     z: state.distance.matrix,
     type: 'heatmap',
     colorscale: 'Viridis',
-  }], plotLayout('Sample distance matrix'), { responsive: true });
+  }], {
+    ...layout,
+    margin: {
+      ...layout.margin,
+      l: sampleAxisMargin(sampleIds, 96, 240),
+      b: sampleAxisMargin(sampleIds, 88, 170),
+    },
+    xaxis: { automargin: true, tickangle: 45 },
+    yaxis: { automargin: true },
+  }, { responsive: true });
 }
 
 export function renderQCPlots() {
@@ -540,6 +551,11 @@ function wrapPlotLabel(label, maxLineLength = 32) {
   });
   if (line) lines.push(line);
   return lines.length ? lines.join('<br>') : String(label);
+}
+
+function sampleAxisMargin(labels, min, max) {
+  const maxLength = Math.max(...labels.map((label) => String(label || '').length), 0);
+  return Math.min(max, Math.max(min, maxLength * 8 + 24));
 }
 
 function enrichmentLeftMargin(labels) {
