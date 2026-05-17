@@ -400,12 +400,90 @@ export function renderEnrichment(rows) {
   }, { responsive: true });
 }
 
+export function renderGseaRunningEnrichment(curve) {
+  const plot = document.getElementById('gsea-running-plot');
+  if (!plot) return;
+  const points = Array.isArray(curve?.points) ? curve.points : [];
+  if (!curve || points.length < 2) {
+    clearPlot(plot, 'Run browser fgsea to generate pathway-level enrichment plots.');
+    return;
+  }
+
+  const sortedPoints = points
+    .map((point) => ({ rank: Number(point.rank), runningScore: Number(point.runningScore) }))
+    .filter((point) => Number.isFinite(point.rank) && Number.isFinite(point.runningScore))
+    .sort((a, b) => a.rank - b.rank);
+  if (sortedPoints.length < 2) {
+    clearPlot(plot, 'No running enrichment-score points are available for this pathway.');
+    return;
+  }
+
+  const hits = (Array.isArray(curve.hits) ? curve.hits : [])
+    .map((hit) => ({
+      rank: Number(hit.rank),
+      gene: String(hit.gene || ''),
+      stat: Number(hit.stat),
+    }))
+    .filter((hit) => Number.isFinite(hit.rank));
+  const scores = sortedPoints.map((point) => point.runningScore);
+  const es = Number(curve.enrichmentScore);
+  const yMin = Math.min(0, ...scores, Number.isFinite(es) ? es : 0);
+  const yMax = Math.max(0, ...scores, Number.isFinite(es) ? es : 0);
+  const yRange = Math.max(0.01, yMax - yMin);
+  const rugY = yMin - yRange * 0.08;
+  const xMax = Number(curve.totalRanks) || Math.max(...sortedPoints.map((point) => point.rank));
+  const title = curve.term_name || curve.term_id || 'GSEA enrichment plot';
+  const subtitle = [
+    Number.isFinite(Number(curve.NES)) ? `NES ${formatNumber(curve.NES)}` : '',
+    Number.isFinite(Number(curve.padj)) ? `padj ${formatNumber(curve.padj)}` : '',
+    Number.isFinite(Number(curve.size)) ? `size ${curve.size}` : '',
+  ].filter(Boolean).join(' · ');
+
+  Plotly.react('gsea-running-plot', [
+    {
+      x: sortedPoints.map((point) => point.rank),
+      y: sortedPoints.map((point) => point.runningScore),
+      type: 'scatter',
+      mode: 'lines',
+      name: 'running ES',
+      line: { color: '#22c55e', width: 2.2 },
+      hovertemplate: 'rank %{x}<br>running ES %{y:.4f}<extra></extra>',
+    },
+    {
+      x: hits.map((hit) => hit.rank),
+      y: hits.map(() => rugY),
+      type: 'scatter',
+      mode: 'markers',
+      name: 'pathway genes',
+      text: hits.map((hit) => hit.gene),
+      marker: { color: '#111827', symbol: 'line-ns-open', size: 16, line: { width: 1.2 } },
+      hovertemplate: '<b>%{text}</b><br>rank %{x}<extra></extra>',
+    },
+  ], {
+    ...plotLayout(title),
+    title: { text: subtitle ? `${escapePlotText(title)}<br><sup>${escapePlotText(subtitle)}</sup>` : escapePlotText(title) },
+    margin: { l: 68, r: 30, b: 64, t: 72 },
+    xaxis: { title: 'rank', range: [1, xMax], zeroline: false },
+    yaxis: { title: 'enrichment score', range: [rugY - yRange * 0.04, yMax + yRange * 0.08], zeroline: false },
+    showlegend: false,
+    shapes: [
+      { type: 'line', xref: 'paper', x0: 0, x1: 1, y0: 0, y1: 0, line: { color: '#ef4444', width: 1 } },
+      ...(Number.isFinite(es) ? [{ type: 'line', xref: 'paper', x0: 0, x1: 1, y0: es, y1: es, line: { color: '#ef4444', dash: 'dash', width: 1 } }] : []),
+    ],
+  }, { responsive: true });
+}
+
 function volcanoDisplayCap(rows, padj) {
   const thresholdY = -Math.log10(plotPValue(padj));
   const rawMax = Math.max(...rows.map((row) => -Math.log10(plotPValue(row.padj))).filter(Number.isFinite), 0);
   const minimumCap = Math.max(10, Math.ceil(thresholdY + 1));
   if (rawMax > VOLCANO_DISPLAY_CAP) return Math.max(VOLCANO_DISPLAY_CAP, minimumCap);
   return Math.max(minimumCap, Math.ceil(rawMax + 1));
+}
+
+function clearPlot(plot, message = '') {
+  globalThis.Plotly?.purge?.(plot);
+  plot.innerHTML = message ? `<p class="note">${escapePlotText(message)}</p>` : '';
 }
 
 function volcanoPoint(row, padj, lfc, yCap) {

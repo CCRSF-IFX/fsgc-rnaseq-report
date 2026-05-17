@@ -1,8 +1,10 @@
 import { state, logAnalysis, setStatus } from './state.js';
 import { sampleIdsInCounts } from './analysis.js';
+import { gseaResultCurves } from './enrichment.js';
 
 const CACHE_KIND = 'rnaseq-report-analysis-cache';
-const CACHE_VERSION = 3;
+const CACHE_VERSION = 4;
+const CACHE_CLOSE_GUIDE = 'Unsaved DESeq2/GSEA results are stored only in this browser tab. To keep them, stay on the page, open Methods & Export, click Export cache, and save the .analysis-cache JSON file before closing.';
 
 let cacheControlsWired = false;
 let cacheDirty = false;
@@ -22,7 +24,7 @@ export function setupAnalysisCacheControls(callbacks = {}) {
 export function markAnalysisCacheDirty(reason = '') {
   cacheDirty = true;
   updateAnalysisCacheControls();
-  setAnalysisCacheStatus('Unsaved browser analysis results are available. Export a cache before closing the tab to reuse DESeq2 and all fgsea result sets later.');
+  setAnalysisCacheStatus(`${CACHE_CLOSE_GUIDE} Reopen the report later and use Load cache to restore the saved results.`);
   if (reason) logAnalysis(`Analysis cache has unsaved results: ${reason}`);
 }
 
@@ -105,7 +107,7 @@ function parseAnalysisCache(value) {
   if (!value || typeof value !== 'object') throw new Error('Cache file is not a JSON object.');
   if (value.cache_kind !== CACHE_KIND) throw new Error('Cache file is not an RNA-seq report analysis cache.');
   const version = Number(value.cache_version);
-  if (![1, 2, CACHE_VERSION].includes(version)) {
+  if (![1, 2, 3, CACHE_VERSION].includes(version)) {
     throw new Error(`Unsupported cache version: ${value.cache_version || 'unknown'}.`);
   }
   if (!Array.isArray(value.de_results) || !Array.isArray(value.gsea_results)) {
@@ -164,6 +166,7 @@ function restoreAnalysisCache(cache) {
       min_size: entry.min_size ?? '',
       max_size: entry.max_size ?? '',
       created_at: entry.created_at || '',
+      enrichment_curves: plainGseaCurves(entry.enrichment_curves || entry.curves),
       rows: plainRows(entry.rows),
     });
   });
@@ -194,12 +197,15 @@ async function refreshImportedAnalysis(cache, restored = {}) {
 function warnIfAnalysisCacheUnsaved(event) {
   if (!cacheDirty || !hasAnalysisCacheResults()) return;
   event.preventDefault();
-  event.returnValue = '';
+  event.returnValue = CACHE_CLOSE_GUIDE;
+  setAnalysisCacheStatus(CACHE_CLOSE_GUIDE);
 }
 
 function updateAnalysisCacheControls() {
   const exportButton = document.getElementById('analysis-cache-export');
   if (exportButton) exportButton.disabled = !hasAnalysisCacheResults();
+  const guide = document.getElementById('analysis-cache-guide');
+  if (guide) guide.classList.toggle('is-unsaved', cacheDirty && hasAnalysisCacheResults());
 }
 
 function hasAnalysisCacheResults() {
@@ -282,8 +288,23 @@ function gseaCacheEntry(key, value) {
     min_size: value.min_size ?? '',
     max_size: value.max_size ?? '',
     created_at: value.created_at || '',
+    enrichment_curves: plainGseaCurves(gseaResultCurves(value)),
     rows: plainRows(value.rows),
   };
+}
+
+function plainGseaCurves(curves) {
+  return (Array.isArray(curves) ? curves : []).map((curve) => ({
+    term_id: curve.term_id || '',
+    term_name: curve.term_name || curve.term_id || '',
+    enrichmentScore: curve.enrichmentScore ?? '',
+    NES: curve.NES ?? '',
+    padj: curve.padj ?? '',
+    size: curve.size ?? '',
+    totalRanks: curve.totalRanks ?? '',
+    points: plainRows(curve.points),
+    hits: plainRows(curve.hits),
+  })).filter((curve) => curve.term_id && curve.points.length);
 }
 
 function gseaCacheContrastId(key, value) {

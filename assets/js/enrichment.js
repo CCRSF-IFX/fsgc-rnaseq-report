@@ -1,6 +1,6 @@
 import { state } from './state.js';
 import { loadEnrichmentForContrast } from './dataLoader.js';
-import { renderEnrichment } from './plots.js';
+import { renderEnrichment, renderGseaRunningEnrichment } from './plots.js';
 import { renderTable } from './tables.js';
 
 export async function renderCurrentEnrichment(options = {}) {
@@ -11,6 +11,7 @@ export async function renderCurrentEnrichment(options = {}) {
   const result = selectGseaResultForContrast(contrast.id, options.resultId);
   const rows = result ? gseaResultRows(result) : [];
   renderEnrichment(rows);
+  syncGseaPathwaySelect(result, options.pathwayId);
   renderTable('enrichment-table', rows, { limit: 100, exportName: gseaExportName(contrast, result) });
 }
 
@@ -19,6 +20,7 @@ export function storeGseaResult(result) {
   const normalized = {
     ...result,
     rows: gseaResultRows(result),
+    enrichment_curves: gseaResultCurves(result),
   };
   state.enrichmentResults.set(normalized.result_id, normalized);
   syncGseaResultSelect(normalized.contrast_id, normalized.result_id);
@@ -34,6 +36,12 @@ export function gseaResultsForContrast(contrastId) {
 
 export function gseaResultRows(result) {
   return Array.isArray(result) ? result : (Array.isArray(result?.rows) ? result.rows : []);
+}
+
+export function gseaResultCurves(result) {
+  if (Array.isArray(result?.enrichment_curves)) return normalizeGseaCurves(result.enrichment_curves);
+  if (Array.isArray(result?.curves)) return normalizeGseaCurves(result.curves);
+  return [];
 }
 
 function selectGseaResultForContrast(contrastId, preferredResultId = '') {
@@ -55,6 +63,34 @@ function syncGseaResultSelect(contrastId, preferredResultId = '') {
   select.disabled = results.length === 0;
   if (results.some((result) => result.result_id === previous)) select.value = previous;
   else select.value = results[0]?.result_id || '';
+}
+
+function syncGseaPathwaySelect(result, preferredPathwayId = '') {
+  const select = document.getElementById('gsea-pathway-select');
+  const status = document.getElementById('gsea-pathway-status');
+  if (!select) return;
+  const curves = gseaResultCurves(result);
+  const previous = preferredPathwayId || select.value;
+
+  select.innerHTML = curves.length
+    ? curves.map((curve) => `<option value="${escapeHtml(curve.term_id)}">${escapeHtml(curve.term_name || curve.term_id)}</option>`).join('')
+    : '<option value="">No pathway curves available</option>';
+  select.disabled = curves.length === 0;
+
+  if (curves.some((curve) => curve.term_id === previous)) select.value = previous;
+  else select.value = curves[0]?.term_id || '';
+
+  const renderSelected = () => {
+    const selected = curves.find((curve) => curve.term_id === select.value) || curves[0] || null;
+    renderGseaRunningEnrichment(selected);
+    if (status) {
+      status.textContent = selected
+        ? `${curves.length} pathway-level enrichment plot${curves.length === 1 ? '' : 's'} retained for this result.`
+        : 'Pathway-level enrichment plots are available for browser fgsea results generated with this report version.';
+    }
+  };
+  select.onchange = renderSelected;
+  renderSelected();
 }
 
 function normalizeGseaResult(key, value) {
@@ -80,8 +116,34 @@ function normalizeGseaResult(key, value) {
     min_size: value.min_size ?? '',
     max_size: value.max_size ?? '',
     created_at: value.created_at || '',
+    enrichment_curves: gseaResultCurves(value),
     rows: gseaResultRows(value),
   };
+}
+
+function normalizeGseaCurves(curves) {
+  return curves.map((curve) => ({
+    term_id: String(curve.term_id || curve.pathway || '').trim(),
+    term_name: curve.term_name || curve.term_id || curve.pathway || '',
+    enrichmentScore: curve.enrichmentScore ?? '',
+    NES: curve.NES ?? '',
+    padj: curve.padj ?? '',
+    size: curve.size ?? '',
+    totalRanks: curve.totalRanks ?? curve.total_ranks ?? '',
+    points: Array.isArray(curve.points)
+      ? curve.points.map((point) => ({
+        rank: Number(point.rank),
+        runningScore: Number(point.runningScore ?? point.running_score),
+      })).filter((point) => Number.isFinite(point.rank) && Number.isFinite(point.runningScore))
+      : [],
+    hits: Array.isArray(curve.hits)
+      ? curve.hits.map((hit) => ({
+        rank: Number(hit.rank),
+        gene: String(hit.gene || ''),
+        stat: hit.stat ?? '',
+      })).filter((hit) => Number.isFinite(hit.rank))
+      : [],
+  })).filter((curve) => curve.term_id && curve.points.length);
 }
 
 function gseaResultLabel(result) {

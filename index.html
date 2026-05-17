@@ -87,7 +87,7 @@
             <li><strong>Explore sample structure</strong><span>Use PCA, Heatmap & Clustering, and Gene Counts to inspect grouping, batch effects, outliers, and marker-gene behavior.</span></li>
             <li><strong>Run browser DESeq2 when needed</strong><span>Choose one primary factor, set reference/numerator/denominator levels, and optionally adjust or block by batch, sex, subject, or pairing columns.</span></li>
             <li><strong>Run fgsea from a DE result</strong><span>Select the DE contrast, upload one or more GMT pathway files, set pathway size limits, and run fgsea in the browser.</span></li>
-            <li><strong>Export or reload results</strong><span>Use table CSV exports for individual result tables and Methods & Export to save or reload the DESeq2/fgsea analysis cache.</span></li>
+            <li><strong>Export or reload results</strong><span>Use table CSV exports for individual result tables. For browser-run DESeq2/GSEA results, export the Methods & Export analysis cache before closing the tab.</span></li>
           </ol>
         </article>
 
@@ -171,7 +171,7 @@
           <div class="guide-grid">
             <div>
               <h4>Analysis cache</h4>
-              <p>After browser DESeq2 or fgsea finishes, go to Methods & Export and select <code>Export cache</code>. The JSON cache restores sample metadata, DESeq2 contrasts, and fgsea result sets later without rerunning the browser analysis.</p>
+              <p>After browser DESeq2 or fgsea finishes, go to Methods & Export and select <code>Export cache</code>. If the browser shows a leave-page warning, it means browser-run results are still only in this tab. Stay on the page, export the <code>.analysis-cache</code> JSON file, then reload it later without rerunning the browser analysis.</p>
             </div>
             <div>
               <h4>Loading a saved cache</h4>
@@ -421,6 +421,13 @@
           </div>
           <p class="note" id="gsea-status">Run DESeq2 first for uploaded data, then run fgsea against one or more uploaded GMT pathway files.</p>
           <div id="enrichment-plot" class="plot tall"></div>
+          <div class="gsea-detail-panel">
+            <div class="toolbar">
+              <label>Enrichment plot pathway <select id="gsea-pathway-select"></select></label>
+            </div>
+            <p class="note" id="gsea-pathway-status">Run fgsea to generate pathway-level enrichment plots.</p>
+            <div id="gsea-running-plot" class="plot tall"></div>
+          </div>
           <div id="enrichment-table"></div>
         </article>
       </section>
@@ -433,6 +440,16 @@
             <label>Load cache <input id="analysis-cache-file" type="file" accept=".json,application/json" /></label>
           </div>
           <p class="note" id="analysis-cache-status">Export sample metadata, DESeq2 results, and all fgsea result sets together, then reload them later without rerunning browser-side analysis.</p>
+          <div id="analysis-cache-guide" class="cache-guide" role="note">
+            <strong>Before closing this tab</strong>
+            <p><span class="quoted-warning">Changes you made may not be saved</span> means DESeq2/GSEA results from this browser session have not been downloaded yet. Stay on the page, then select <strong>Export cache</strong> and save the <code>.analysis-cache.*.json</code> file.</p>
+            <ol>
+              <li>Finish any DESeq2 and GSEA analyses you want to keep.</li>
+              <li>Select <strong>Export cache</strong> and keep the downloaded JSON file with your project.</li>
+              <li>Reopen this report later and use <strong>Load cache</strong> to restore the saved DESeq2/GSEA results.</li>
+            </ol>
+            <p class="note">Keep uploaded count matrices, sample manifests, and GMT files separately because the analysis cache stores results, not input files.</p>
+          </div>
         </article>
         <article class="card">
           <h3>Methods and provenance</h3>

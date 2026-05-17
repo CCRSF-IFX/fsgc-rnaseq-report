@@ -118,6 +118,9 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .plot { width: 100%; min-height: 360px; }
 .plot.tall { min-height: 520px; }
 .plot.short { min-height: 260px; }
+.gsea-detail-panel { border-top: 1px solid var(--line); margin-top: 18px; padding-top: 14px; }
+.gsea-detail-panel .toolbar { margin-bottom: 8px; }
+#gsea-pathway-status { min-height: 1.4em; margin: 0 0 10px; }
 .pca-layout { display: grid; grid-template-columns: minmax(0, 1.75fr) minmax(300px, 0.9fr); gap: 16px; align-items: stretch; }
 .pca-layout .plot { min-width: 0; border: 1px solid var(--line); border-radius: 8px; background: white; }
 .pca-plot-main, .pca-plot-side { min-height: 520px; }
@@ -279,6 +282,13 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .status-message.ok { background: #dcfce7; color: var(--ok); }
 .status-message.warn { background: #fef3c7; color: var(--warn); }
 .status-message.fail { background: #fee2e2; color: var(--fail); }
+.cache-guide { display: grid; gap: 8px; margin-top: 12px; padding: 12px; border: 1px solid var(--line); border-left: 4px solid var(--accent); border-radius: 8px; background: #f8fafc; }
+.cache-guide.is-unsaved { border-color: #bfdbfe; border-left-color: var(--accent); background: #eff6ff; }
+.cache-guide strong { color: var(--ink); }
+.cache-guide p { margin: 0; color: var(--muted); line-height: 1.45; }
+.cache-guide ol { display: grid; gap: 6px; margin: 0; padding-left: 20px; color: var(--ink); }
+.cache-guide li { padding-left: 2px; }
+.quoted-warning { color: var(--ink); font-weight: 700; }
 .modal-backdrop { position: fixed; inset: 0; z-index: 30; display: flex; align-items: center; justify-content: center; padding: 24px; background: rgba(15, 23, 42, 0.44); }
 .modal-backdrop[hidden] { display: none; }
 .modal-dialog { width: min(680px, 100%); max-height: min(720px, calc(100vh - 48px)); overflow: auto; border: 1px solid var(--line); border-radius: 8px; background: white; box-shadow: var(--shadow); padding: 18px; }

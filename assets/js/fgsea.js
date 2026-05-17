@@ -6,6 +6,10 @@ import { evalR } from './webrManager.js';
 import { markAnalysisCacheDirty } from './analysisCache.js';
 
 let fgseaControlsWired = false;
+const FGSEA_CURVE_LIMIT = 100;
+const FGSEA_CURVE_POINT_LIMIT = 800;
+const FGSEA_CURVE_SEPARATOR = '\n__RNASEQ_REPORT_FGSEA_CURVES__\n';
+const FGSEA_HIT_SEPARATOR = '\n__RNASEQ_REPORT_FGSEA_HITS__\n';
 
 export function setupFgseaControls() {
   if (fgseaControlsWired) return;
@@ -54,7 +58,7 @@ export async function runFgseaAnalysis() {
         ? `${runMessage} (${index + 1}/${gmtSources.length}: ${source.source_label})`
         : `${runMessage} (${source.source_label})`;
       fgseaSetStatus(status, `${sourceMessage}. Keep this tab open.`);
-      const rows = await runWithProgressPulse(
+      const analysis = await runWithProgressPulse(
         progress,
         `${sourceMessage}; still working`,
         () => fgseaRunInWebR(deRows, source.gmtText, source.source_label, minSize, maxSize),
@@ -63,6 +67,7 @@ export async function runFgseaAnalysis() {
           onPulse: (message) => fgseaSetStatus(status, `${message}. Keep this tab open.`),
         },
       );
+      const rows = analysis.rows || [];
       if (!rows.length) throw new Error(`fgsea returned no pathways for ${source.source_label}. Check gene identifiers and pathway gene sets.`);
       const resultId = fgseaResultId(contrast.id, source, minSize, maxSize);
       const result = storeGseaResult({
@@ -76,6 +81,7 @@ export async function runFgseaAnalysis() {
         min_size: minSize,
         max_size: maxSize,
         created_at: new Date().toISOString(),
+        enrichment_curves: analysis.enrichment_curves || [],
         rows: rows.map((row) => ({
           ...row,
           reference: row.reference || source.source_label,
@@ -153,6 +159,8 @@ gmt_text <- ${fgseaRString(gmtText)}
 reference_name <- ${fgseaRString(reference)}
 min_size <- ${Number(minSize)}
 max_size <- ${Number(maxSize)}
+curve_limit <- ${FGSEA_CURVE_LIMIT}
+curve_point_limit <- ${FGSEA_CURVE_POINT_LIMIT}
 
 de <- read.csv(text = stats_text, check.names = FALSE, stringsAsFactors = FALSE, na.strings = c("", "NA", "NaN"))
 empty_gene <- function(value) {
@@ -195,6 +203,97 @@ parse_gmt <- function(text) {
   pathways
 }
 
+csv_text <- function(df) paste(capture.output(write.csv(df, row.names = FALSE, na = "")), collapse = "\\n")
+
+empty_curve_df <- function() data.frame(
+  term_id = character(),
+  rank = integer(),
+  runningScore = numeric(),
+  totalRanks = integer(),
+  enrichmentScore = numeric(),
+  NES = numeric(),
+  padj = numeric(),
+  size = integer(),
+  stringsAsFactors = FALSE,
+  check.names = FALSE
+)
+
+empty_hit_df <- function() data.frame(
+  term_id = character(),
+  rank = integer(),
+  gene = character(),
+  stat = numeric(),
+  stringsAsFactors = FALSE,
+  check.names = FALSE
+)
+
+running_curve <- function(pathway_genes, stats, max_points = 800L) {
+  hits <- sort(unique(which(names(stats) %in% pathway_genes)))
+  n <- length(stats)
+  nh <- length(hits)
+  if (!nh || nh >= n) return(NULL)
+
+  weights <- abs(stats[hits])
+  weight_sum <- sum(weights)
+  if (!is.finite(weight_sum) || weight_sum <= 0) {
+    weights <- rep(1 / nh, nh)
+  } else {
+    weights <- weights / weight_sum
+  }
+
+  running_steps <- rep(-1 / (n - nh), n)
+  running_steps[hits] <- weights
+  running <- cumsum(running_steps)
+  base_idx <- unique(round(seq(1, n, length.out = min(max_points, n))))
+  hit_neighbors <- unique(c(hits, pmax(1L, hits - 1L), pmin(n, hits + 1L)))
+  idx <- sort(unique(c(1L, base_idx, hit_neighbors, which.max(abs(running)), n)))
+
+  list(
+    points = data.frame(rank = idx, runningScore = running[idx]),
+    hits = data.frame(rank = hits, gene = names(stats)[hits], stat = unname(stats[hits])),
+    totalRanks = n
+  )
+}
+
+curve_tables <- function(fg, pathways, stats, limit = 100L, max_points = 800L) {
+  curve_rows <- list()
+  hit_rows <- list()
+  if (!nrow(fg)) return(list(curves = empty_curve_df(), hits = empty_hit_df()))
+
+  top_fg <- fg[seq_len(min(nrow(fg), limit)), ]
+  for (i in seq_len(nrow(top_fg))) {
+    pathway_name <- top_fg$pathway[[i]]
+    curve <- running_curve(pathways[[pathway_name]], stats, max_points)
+    if (is.null(curve)) next
+
+    curve_rows[[length(curve_rows) + 1]] <- data.frame(
+      term_id = pathway_name,
+      rank = curve$points$rank,
+      runningScore = curve$points$runningScore,
+      totalRanks = curve$totalRanks,
+      enrichmentScore = top_fg$ES[[i]],
+      NES = top_fg$NES[[i]],
+      padj = top_fg$padj[[i]],
+      size = top_fg$size[[i]],
+      stringsAsFactors = FALSE,
+      check.names = FALSE
+    )
+    hit_rows[[length(hit_rows) + 1]] <- data.frame(
+      term_id = pathway_name,
+      rank = curve$hits$rank,
+      gene = curve$hits$gene,
+      stat = curve$hits$stat,
+      stringsAsFactors = FALSE,
+      check.names = FALSE
+    )
+  }
+
+  list(
+    curves = if (length(curve_rows)) do.call(rbind, curve_rows) else empty_curve_df(),
+    hits = if (length(hit_rows)) do.call(rbind, hit_rows) else empty_hit_df()
+  )
+}
+
 pathways <- parse_gmt(gmt_text)
 if (!length(pathways)) stop("No pathways were parsed from the GMT file.")
 gmt_genes <- unique(unlist(pathways, use.names = FALSE))
@@ -222,8 +321,11 @@ if ("nproc" %in% names(formals(fgseaMultilevel))) fgsea_args$nproc <- 0L
 fg <- do.call(fgseaMultilevel, fgsea_args)
 if (nrow(fg) == 0) {
   out <- data.frame()
+  curve_out <- empty_curve_df()
+  hit_out <- empty_hit_df()
 } else {
   fg <- fg[order(fg$padj, -abs(fg$NES)), ]
+  curves <- curve_tables(fg, pathways, stats, curve_limit, curve_point_limit)
   out <- data.frame(
     term_id = fg$pathway,
     term_name = fg$pathway,
@@ -237,15 +339,87 @@ if (nrow(fg) == 0) {
     method = "fgsea webR",
     check.names = FALSE
   )
+  curve_out <- curves$curves
+  hit_out <- curves$hits
 }
-paste(capture.output(write.csv(out, row.names = FALSE, na = "")), collapse = "\\n")
+paste(
+  csv_text(out),
+  ${fgseaRString(FGSEA_CURVE_SEPARATOR.trim())},
+  csv_text(curve_out),
+  ${fgseaRString(FGSEA_HIT_SEPARATOR.trim())},
+  csv_text(hit_out),
+  sep = "\\n"
+)
 `;
   const result = await evalR(code);
-  return parseCsv(fgseaResultText(result)).map((row) => ({
+  return fgseaParseWebRResult(result);
+}
+
+function fgseaParseWebRResult(result) {
+  const text = fgseaResultText(result);
+  const [resultText, curveAndHitText = ''] = text.split(FGSEA_CURVE_SEPARATOR);
+  const [curveText = '', hitText = ''] = curveAndHitText.split(FGSEA_HIT_SEPARATOR);
+  const rows = parseCsv(resultText).map((row) => ({
     ...row,
     term_name: row.term_name || row.term_id || row.pathway,
     term_id: row.term_id || row.pathway || '',
   }));
+  return {
+    rows,
+    enrichment_curves: fgseaBuildEnrichmentCurves(parseCsv(curveText), parseCsv(hitText), rows),
+  };
+}
+
+function fgseaBuildEnrichmentCurves(curveRows, hitRows, rows) {
+  const rowByTerm = new Map(rows.map((row) => [String(row.term_id || row.pathway || ''), row]));
+  const curves = new Map();
+
+  curveRows.forEach((point) => {
+    const termId = String(point.term_id || '').trim();
+    const rank = Number(point.rank);
+    const runningScore = Number(point.runningScore);
+    if (!termId || !Number.isFinite(rank) || !Number.isFinite(runningScore)) return;
+    if (!curves.has(termId)) {
+      const row = rowByTerm.get(termId) || {};
+      curves.set(termId, {
+        term_id: termId,
+        term_name: row.term_name || termId,
+        enrichmentScore: numericOrEmpty(point.enrichmentScore),
+        NES: numericOrEmpty(point.NES),
+        padj: numericOrEmpty(point.padj),
+        size: numericOrEmpty(point.size),
+        totalRanks: numericOrEmpty(point.totalRanks),
+        points: [],
+        hits: [],
+      });
+    }
+    curves.get(termId).points.push({ rank, runningScore });
+  });
+
+  hitRows.forEach((hit) => {
+    const termId = String(hit.term_id || '').trim();
+    const rank = Number(hit.rank);
+    if (!termId || !curves.has(termId) || !Number.isFinite(rank)) return;
+    curves.get(termId).hits.push({
+      rank,
+      gene: String(hit.gene || ''),
+      stat: numericOrEmpty(hit.stat),
+    });
+  });
+
+  const order = new Map(rows.map((row, index) => [String(row.term_id || row.pathway || ''), index]));
+  return Array.from(curves.values())
+    .map((curve) => ({
+      ...curve,
+      points: curve.points.sort((a, b) => a.rank - b.rank),
+      hits: curve.hits.sort((a, b) => a.rank - b.rank),
+    }))
+    .sort((a, b) => (order.get(a.term_id) ?? Number.MAX_SAFE_INTEGER) - (order.get(b.term_id) ?? Number.MAX_SAFE_INTEGER));
+}
+
+function numericOrEmpty(value) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : '';
 }
 
 function fgseaStatsCsv(rows) {

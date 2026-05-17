@@ -449,8 +449,14 @@ DESeq2 or fgsea runs. The cache includes:
 
 - sample metadata rows when a manifest is available
 - browser-generated DESeq2 result tables
-- browser-generated fgsea result sets
+- browser-generated fgsea result sets, including top-100 pathway enrichment-curve data when available
 - contrast metadata needed to repopulate selectors
+
+If the browser shows **"Changes you made may not be saved."**, it means
+browser-run DESeq2/GSEA results are still only in the current tab. Stay on the
+page, go to **Methods & Export**, select **Export cache**, and save the
+`.analysis-cache.*.json` file. Reopen the report later and use **Load cache**
+from the same tab to restore those results.
 
 When a cache is loaded, sample metadata is restored only if its `sample_id`
 values match the current count matrix. The cache intentionally does not include
