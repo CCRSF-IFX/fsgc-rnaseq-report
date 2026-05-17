@@ -166,10 +166,11 @@ function packageRepoBundleUrl() {
 
 function packageRepoLibraryBundleConfig() {
   const cfg = state.config?.webr || {};
-  const version = cfg.packageRepoVersion || 'snapshot';
   const bundle = cfg.libraryBundle || {};
+  const version = bundle.version || 'library';
+  const artifactStem = bundle.artifactStem || 'rnaseq-report-webr-library';
   return {
-    archiveFile: bundle.archiveFile || `webr-library-${version}.zip`,
+    archiveFile: bundle.archiveFile || `${artifactStem}-${version}.zip`,
     releaseUrl: bundle.releaseUrl || '',
   };
 }

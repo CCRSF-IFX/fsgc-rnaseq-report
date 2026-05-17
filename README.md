@@ -128,7 +128,7 @@ This repository is configured to publish with GitHub Actions:
 3. The workflow builds a deployable `_site/` directory.
 4. The workflow builds the configured webR package set into `_site/webr-packages/<VERSION>/`.
 5. The workflow writes `webr-packages-<VERSION>.zip` as a GitHub Release asset instead of storing that duplicate archive on Pages.
-6. The workflow builds a browser-loadable webR library bundle and uploads it to the same GitHub Release named `webr-packages-<VERSION>`.
+6. The workflow builds a browser-loadable webR library bundle and uploads it to a separate release tag from `webr.libraryBundle.releaseTag`.
 7. The workflow uploads `_site/` to GitHub Pages.
 
 The current report config points to:
@@ -178,6 +178,10 @@ The library bundle release files are not added to GitHub Pages, so they do not
 increase the published Pages site size. They are intended for users who need to
 load a prebuilt package library from a local file instead of downloading and
 installing every `.tgz` package in the browser session.
+The package snapshot version and browser-loadable library version are decoupled:
+`webr-packages/VERSION` controls the installable package repository path, while
+`webr.libraryBundle.version` controls the local library bundle artifact name and
+release tag.
 
 ## Data Model
 
@@ -395,8 +399,11 @@ views remain usable from the standalone file.
     "packageArchiveUrl": "https://github.com/omicsreporthub/rnaseq-report/releases/download/webr-packages-v0.1.0/webr-packages-v0.1.0.zip",
     "libraryBundle": {
       "enabled": true,
-      "archiveFile": "webr-library-v0.1.0.zip",
-      "releaseUrl": "https://github.com/omicsreporthub/rnaseq-report/releases/tag/webr-packages-v0.1.0"
+      "version": "deseq2-fgsea-v1",
+      "artifactStem": "rnaseq-report-webr-library",
+      "archiveFile": "rnaseq-report-webr-library-deseq2-fgsea-v1.zip",
+      "releaseTag": "rnaseq-report-webr-library-deseq2-fgsea-v1",
+      "releaseUrl": "https://github.com/omicsreporthub/rnaseq-report/releases/tag/rnaseq-report-webr-library-deseq2-fgsea-v1"
     },
     "modules": {
       "deseq2": {
@@ -523,22 +530,23 @@ The report still installs packages through webR from `webr.packageRepo`; if you
 mirror the package repository elsewhere, update `assets/report_config.json`
 before building the standalone HTML.
 
-The workflow also publishes a prebuilt webR library bundle to the GitHub Release
-`webr-packages-<VERSION>`:
+The workflow also publishes a prebuilt webR library bundle to a separate GitHub
+Release. Its version is configured by `webr.libraryBundle.version`, not by the
+report version or package snapshot path:
 
 ```text
-webr-library-v0.1.0.zip
-webr-library-v0.1.0.data.gz
-webr-library-v0.1.0.js.metadata
+rnaseq-report-webr-library-deseq2-fgsea-v1.zip
+rnaseq-report-webr-library-deseq2-fgsea-v1.data.gz
+rnaseq-report-webr-library-deseq2-fgsea-v1.js.metadata
 ```
 
-Users can download `webr-library-v0.1.0.zip`, open the report, go to
-**Optional Analysis**, choose the bundle, and click **Mount bundle**. The report
-mounts the library image into webR and prepends it to `.libPaths()`, so DESeq2
-and fgsea can be loaded without reinstalling the whole dependency closure from
-the package repository. This is session-scoped browser state; the user should
-load the bundle again after reloading the page unless persistent browser storage
-is added later.
+Users can download `rnaseq-report-webr-library-deseq2-fgsea-v1.zip`, open the
+report, go to **Optional Analysis**, choose the bundle, and click **Mount
+bundle**. The report mounts the library image into webR and prepends it to
+`.libPaths()`, so DESeq2 and fgsea can be loaded without reinstalling the whole
+dependency closure from the package repository. This is session-scoped browser
+state; the user should load the bundle again after reloading the page unless
+persistent browser storage is added later.
 
 ## Updating The webR Snapshot
 
@@ -547,8 +555,8 @@ When the optional R package set changes:
 1. Choose a new immutable version, for example `v0.2.0`, or deliberately keep the same version and deploy manually with `force_overwrite=true`.
 2. Update `webr-packages/VERSION`.
 3. Update `webr-packages/packages`.
-4. Update `assets/report_config.json` so `packageRepo`, `packageRepoVersion`, and `packageArchiveUrl` match the new version.
-5. Update `webr.libraryBundle.archiveFile` and `webr.libraryBundle.releaseUrl` if the package snapshot version changes.
+4. Update `assets/report_config.json` so `packageRepo`, `packageRepoVersion`, and `packageArchiveUrl` match the new package snapshot version.
+5. Update `webr.libraryBundle.version`, `archiveFile`, `releaseTag`, and `releaseUrl` only when the browser-loadable library bundle itself changes.
 6. Enable or disable optional modules in `assets/report_config.json` to match the available packages.
 7. Add previously published versions that must remain available to `webr-packages/published_versions`.
 8. Run the validation checklist below.

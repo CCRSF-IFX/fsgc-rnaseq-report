@@ -27,13 +27,14 @@ The archive contains the compiled `bin/emscripten/contrib/4.5` package index and
 artifacts for users who want to mirror or inspect the wasm package snapshot.
 
 The workflow also builds a browser-loadable webR library image from the package
-snapshot and uploads these files to a GitHub Release named
-`webr-packages-<VERSION>`:
+snapshot and uploads it to the separate GitHub Release configured by
+`webr.libraryBundle.releaseTag`. The package snapshot version and library bundle
+version are intentionally decoupled:
 
 ```text
-webr-library-<VERSION>.zip
-webr-library-<VERSION>.data.gz
-webr-library-<VERSION>.js.metadata
+rnaseq-report-webr-library-<LIBRARY_VERSION>.zip
+rnaseq-report-webr-library-<LIBRARY_VERSION>.data.gz
+rnaseq-report-webr-library-<LIBRARY_VERSION>.js.metadata
 ```
 
 The report UI can mount the ZIP, or the `.data.gz` plus `.js.metadata` pair, as

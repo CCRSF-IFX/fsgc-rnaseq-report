@@ -45,6 +45,34 @@ jobs:
           fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
+      - name: Read webR library bundle settings
+        id: webr-library
+        shell: bash
+        run: |
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          import re
+
+          cfg = json.load(open("assets/report_config.json", encoding="utf-8")).get("webr", {})
+          bundle = cfg.get("libraryBundle") or {}
+          version = str(bundle.get("version") or "").strip()
+          artifact_stem = str(bundle.get("artifactStem") or "rnaseq-report-webr-library").strip()
+          release_tag = str(bundle.get("releaseTag") or f"{artifact_stem}-{version}").strip()
+
+          safe = re.compile(r"^[A-Za-z0-9._-]+$")
+          for label, value in {
+              "libraryBundle.version": version,
+              "libraryBundle.artifactStem": artifact_stem,
+              "libraryBundle.releaseTag": release_tag,
+          }.items():
+              if not value or not safe.match(value):
+                  raise SystemExit(f"Unsafe {label}: {value!r}")
+
+          print(f"version={version}")
+          print(f"artifact_stem={artifact_stem}")
+          print(f"release_tag={release_tag}")
+          PY
+
       - name: Guard existing webR package snapshot
         shell: bash
         env:
@@ -311,11 +339,15 @@ jobs:
         shell: bash
         env:
           VERSION: ${{ steps.webr-snapshot.outputs.version }}
+          LIBRARY_BUNDLE_VERSION: ${{ steps.webr-library.outputs.version }}
+          LIBRARY_ARTIFACT_STEM: ${{ steps.webr-library.outputs.artifact_stem }}
         run: |
           set -euo pipefail
           mkdir -p _release_assets
           docker run --rm \
             -e VERSION="$VERSION" \
+            -e LIBRARY_BUNDLE_VERSION="$LIBRARY_BUNDLE_VERSION" \
+            -e LIBRARY_ARTIFACT_STEM="$LIBRARY_ARTIFACT_STEM" \
             -v "$PWD:/work" \
             -w /work \
             ghcr.io/r-wasm/webr:v0.5.9 \
@@ -326,8 +358,11 @@ jobs:
               pak::pak("r-wasm/rwasm")
 
               version <- Sys.getenv("VERSION")
+              library_version <- Sys.getenv("LIBRARY_BUNDLE_VERSION")
+              artifact_stem <- Sys.getenv("LIBRARY_ARTIFACT_STEM")
+              bundle_stem <- paste0(artifact_stem, "-", library_version)
               repo_dir <- file.path("_site", "webr-packages", version, "bin", "emscripten", "contrib", "4.5")
-              out_dir <- file.path("_release_assets", paste0("webr-library-", version))
+              out_dir <- file.path("_release_assets", bundle_stem)
               dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
               rwasm::make_vfs_library(
                 out_dir = out_dir,
@@ -342,8 +377,8 @@ jobs:
               if (length(data_files) != 1 || length(metadata_files) != 1) {
                 stop("Expected one .data.gz and one .js.metadata file in ", out_dir)
               }
-              file.copy(data_files, file.path("_release_assets", paste0("webr-library-", version, ".data.gz")), overwrite = TRUE)
-              file.copy(metadata_files, file.path("_release_assets", paste0("webr-library-", version, ".js.metadata")), overwrite = TRUE)
+              file.copy(data_files, file.path("_release_assets", paste0(bundle_stem, ".data.gz")), overwrite = TRUE)
+              file.copy(metadata_files, file.path("_release_assets", paste0(bundle_stem, ".js.metadata")), overwrite = TRUE)
             '
 
           python3 - <<'PY'
@@ -351,14 +386,14 @@ jobs:
           import zipfile
           from pathlib import Path
 
-          version = os.environ["VERSION"]
+          bundle_stem = f"{os.environ['LIBRARY_ARTIFACT_STEM']}-{os.environ['LIBRARY_BUNDLE_VERSION']}"
           release_dir = Path("_release_assets")
-          archive = release_dir / f"webr-library-{version}.zip"
+          archive = release_dir / f"{bundle_stem}.zip"
           if archive.exists():
               archive.unlink()
           files = [
-              release_dir / f"webr-library-{version}.data.gz",
-              release_dir / f"webr-library-{version}.js.metadata",
+              release_dir / f"{bundle_stem}.data.gz",
+              release_dir / f"{bundle_stem}.js.metadata",
           ]
           for path in files:
               if not path.exists():
@@ -369,7 +404,7 @@ jobs:
           print(f"Wrote {archive}")
           PY
 
-      - name: Upload webR library bundle to GitHub Release
+      - name: Upload webR package snapshot archive to GitHub Release
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -381,13 +416,33 @@ jobs:
             gh release create "$tag" \
               --target "$GITHUB_SHA" \
               --title "webR package snapshot ${VERSION}" \
-              --notes "Compiled webR package repository and browser-loadable library bundle for rnaseq-report ${VERSION}."
+              --notes "Compiled webR package repository archive for rnaseq-report package snapshot ${VERSION}."
           fi
           gh release upload "$tag" \
             "_release_assets/webr-packages-${VERSION}.zip" \
-            "_release_assets/webr-library-${VERSION}.data.gz" \
-            "_release_assets/webr-library-${VERSION}.js.metadata" \
-            "_release_assets/webr-library-${VERSION}.zip" \
+            --clobber
+
+      - name: Upload webR library bundle to GitHub Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          LIBRARY_BUNDLE_VERSION: ${{ steps.webr-library.outputs.version }}
+          LIBRARY_ARTIFACT_STEM: ${{ steps.webr-library.outputs.artifact_stem }}
+          LIBRARY_RELEASE_TAG: ${{ steps.webr-library.outputs.release_tag }}
+          PACKAGE_VERSION: ${{ steps.webr-snapshot.outputs.version }}
+        run: |
+          set -euo pipefail
+          bundle_stem="${LIBRARY_ARTIFACT_STEM}-${LIBRARY_BUNDLE_VERSION}"
+          if ! gh release view "$LIBRARY_RELEASE_TAG" >/dev/null 2>&1; then
+            gh release create "$LIBRARY_RELEASE_TAG" \
+              --target "$GITHUB_SHA" \
+              --title "rnaseq-report webR library ${LIBRARY_BUNDLE_VERSION}" \
+              --notes "Browser-loadable rnaseq-report webR library bundle ${LIBRARY_BUNDLE_VERSION}, built from package snapshot ${PACKAGE_VERSION}."
+          fi
+          gh release upload "$LIBRARY_RELEASE_TAG" \
+            "_release_assets/${bundle_stem}.data.gz" \
+            "_release_assets/${bundle_stem}.js.metadata" \
+            "_release_assets/${bundle_stem}.zip" \
             --clobber
 
       - name: Configure Pages
