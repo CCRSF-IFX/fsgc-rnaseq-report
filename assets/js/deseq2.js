@@ -248,9 +248,10 @@ paste(capture.output(write.csv(out, row.names = FALSE, na = "")), collapse = "\\
 `;
   const result = await evalR(code);
   const text = deseqResultText(result);
+  const geneSymbols = deseqGeneSymbolLookup();
   return parseCsv(text).map((row) => ({
     ...row,
-    gene_symbol: state.geneAnnotation.find((gene) => gene.gene_id === row.gene_id)?.gene_symbol || row.gene_symbol || '',
+    gene_symbol: row.gene_symbol || geneSymbols.get(deseqGeneKey(row.gene_id)) || '',
     method: `DESeq2 webR ${deseqDesignLabel(column, adjustColumns)}`,
   })).sort((a, b) => Number(a.padj || 1) - Number(b.padj || 1));
 }
@@ -278,6 +279,34 @@ function deseqCsv(rows) {
 function deseqCsvEscape(value) {
   const s = value === null || value === undefined ? '' : String(value);
   return /[",\n]/.test(s) ? `"${s.replaceAll('"', '""')}"` : s;
+}
+
+function deseqGeneSymbolLookup() {
+  const lookup = new Map();
+  const addGene = (geneId, geneSymbol) => {
+    const key = deseqGeneKey(geneId);
+    const symbol = deseqGeneLabel(geneSymbol);
+    if (key && symbol && !lookup.has(key)) lookup.set(key, symbol);
+  };
+
+  (state.geneAnnotation || []).forEach((gene) => {
+    addGene(gene.gene_id, gene.gene_symbol || gene.gene_name);
+  });
+  (state.counts || []).forEach((row) => {
+    const geneId = row.gene_id || row.gene_symbol || row.gene_name;
+    addGene(geneId, row.gene_symbol || row.gene_name);
+  });
+
+  return lookup;
+}
+
+function deseqGeneKey(value) {
+  return String(value ?? '').trim();
+}
+
+function deseqGeneLabel(value) {
+  const label = String(value ?? '').trim();
+  return label && !['NA', 'N/A', 'NULL', 'NONE'].includes(label.toUpperCase()) ? label : '';
 }
 
 function deseqResultText(result) {

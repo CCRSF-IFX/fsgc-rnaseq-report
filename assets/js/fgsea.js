@@ -158,13 +158,34 @@ parse_gmt <- function(text) {
   lines <- lines[nzchar(trimws(lines))]
   pathways <- lapply(lines, function(line) {
     parts <- strsplit(line, "\\t", fixed = TRUE)[[1]]
-    unique(parts[-c(1, 2)])
+    genes <- trimws(parts[-c(1, 2)])
+    unique(genes[nzchar(genes)])
   })
   names(pathways) <- vapply(lines, function(line) strsplit(line, "\\t", fixed = TRUE)[[1]][1], character(1))
   pathways
 }
 
 pathways <- parse_gmt(gmt_text)
+if (!length(pathways)) stop("No pathways were parsed from the GMT file.")
+gmt_genes <- unique(unlist(pathways, use.names = FALSE))
+overlap_counts <- vapply(pathways, function(genes) sum(genes %in% names(stats)), integer(1))
+if (!any(overlap_counts > 0)) {
+  ranked_examples <- paste(head(names(stats), 6), collapse = ", ")
+  gmt_examples <- paste(head(gmt_genes, 6), collapse = ", ")
+  stop(paste(
+    "No GMT genes overlapped the ranked DE genes.",
+    "Ranked gene examples:", ranked_examples,
+    "GMT gene examples:", gmt_examples,
+    "Upload a GMT whose gene identifiers match the DE table gene_symbol or gene_id values."
+  ))
+}
+eligible_counts <- overlap_counts[overlap_counts >= min_size & overlap_counts <= max_size]
+if (!length(eligible_counts)) {
+  stop(sprintf(
+    "GMT genes overlapped the ranked DE genes, but no pathway met minSize=%d and maxSize=%d after overlap. Overlap range was %d-%d genes.",
+    min_size, max_size, min(overlap_counts), max(overlap_counts)
+  ))
+}
 fg <- fgseaMultilevel(pathways = pathways, stats = stats, minSize = min_size, maxSize = max_size, nproc = 1)
 if (nrow(fg) == 0) {
   out <- data.frame()
@@ -196,9 +217,43 @@ paste(capture.output(write.csv(out, row.names = FALSE, na = "")), collapse = "\\
 
 function fgseaStatsCsv(rows) {
   const columns = ['gene_id', 'gene_symbol', 'statistic', 'log2FoldChange', 'pvalue', 'padj'];
+  const geneSymbols = fgseaGeneSymbolLookup();
   return [columns.join(',')]
-    .concat(rows.map((row) => columns.map((column) => fgseaCsvEscape(row[column])).join(',')))
+    .concat(rows.map((row) => columns.map((column) => fgseaCsvEscape(fgseaStatsValue(row, column, geneSymbols))).join(',')))
     .join('\n');
+}
+
+function fgseaStatsValue(row, column, geneSymbols) {
+  if (column !== 'gene_symbol') return row[column];
+  return row.gene_symbol || geneSymbols.get(fgseaGeneKey(row.gene_id)) || '';
+}
+
+function fgseaGeneSymbolLookup() {
+  const lookup = new Map();
+  const addGene = (geneId, geneSymbol) => {
+    const key = fgseaGeneKey(geneId);
+    const symbol = fgseaGeneLabel(geneSymbol);
+    if (key && symbol && !lookup.has(key)) lookup.set(key, symbol);
+  };
+
+  (state.geneAnnotation || []).forEach((gene) => {
+    addGene(gene.gene_id, gene.gene_symbol || gene.gene_name);
+  });
+  (state.counts || []).forEach((row) => {
+    const geneId = row.gene_id || row.gene_symbol || row.gene_name;
+    addGene(geneId, row.gene_symbol || row.gene_name);
+  });
+
+  return lookup;
+}
+
+function fgseaGeneKey(value) {
+  return String(value ?? '').trim();
+}
+
+function fgseaGeneLabel(value) {
+  const label = String(value ?? '').trim();
+  return label && !['NA', 'N/A', 'NULL', 'NONE'].includes(label.toUpperCase()) ? label : '';
 }
 
 function fgseaCsvEscape(value) {
