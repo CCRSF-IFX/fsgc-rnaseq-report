@@ -4,6 +4,7 @@ let webR = null;
 let initialized = false;
 const DEFAULT_WEBR_PACKAGE_REPO = 'https://repo.r-wasm.org/';
 const JSZIP_CDN = 'https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js';
+const PAKO_CDN = 'https://cdn.jsdelivr.net/npm/pako@2.1.0/dist/pako.min.js';
 
 export async function initWebR() {
   if (initialized) return webR;
@@ -63,12 +64,13 @@ export async function loadRPackage(packageName) {
 export async function mountRLibraryBundle(files, packages = []) {
   await initWebR();
   const bundle = await readLibraryBundleFiles(files);
+  const mountable = await prepareMountableLibraryBundle(bundle);
   const mountpoint = `/rnaseq-report-library-${Date.now()}`;
   await ensureDirectory(mountpoint);
   await webR.FS.mount('WORKERFS', {
     packages: [{
-      blob: bundle.blob,
-      metadata: bundle.metadata,
+      blob: mountable.blob,
+      metadata: mountable.metadata,
     }],
   }, mountpoint);
   await evalR(`.libPaths(unique(c(${rString(mountpoint)}, .libPaths())))`);
@@ -108,9 +110,40 @@ async function readLibraryBundleFiles(files) {
   }
   return {
     blob: dataFile,
+    compressed: /\.data\.gz$/i.test(dataFile.name || ''),
     metadata: JSON.parse(await metadataFile.text()),
     label: `${dataFile.name} + ${metadataFile.name}`,
   };
+}
+
+async function prepareMountableLibraryBundle(bundle) {
+  const metadata = { ...bundle.metadata };
+  if (!metadata.gzip) return bundle;
+  delete metadata.gzip;
+  if (!bundle.compressed) {
+    return { ...bundle, metadata };
+  }
+
+  logAnalysis(`Decompressing gzip-compressed webR library bundle ${bundle.label} before mounting.`);
+  const bytes = await ungzipBlob(bundle.blob);
+  return {
+    ...bundle,
+    blob: new Blob([bytes]),
+    metadata,
+  };
+}
+
+async function ungzipBlob(blob) {
+  if (typeof DecompressionStream === 'function') {
+    const stream = blob.stream().pipeThrough(new DecompressionStream('gzip'));
+    return new Uint8Array(await new Response(stream).arrayBuffer());
+  }
+
+  await loadScript(PAKO_CDN);
+  if (!globalThis.pako?.ungzip) {
+    throw new Error('This browser cannot decompress the gzip-compressed library bundle.');
+  }
+  return globalThis.pako.ungzip(new Uint8Array(await blob.arrayBuffer()));
 }
 
 async function readZipLibraryBundle(file) {
@@ -127,6 +160,7 @@ async function readZipLibraryBundle(file) {
   const blob = await dataEntry.async('blob');
   return {
     blob,
+    compressed: /\.data\.gz$/i.test(dataEntry.name || ''),
     metadata,
     label: file.name,
   };
