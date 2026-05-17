@@ -326,16 +326,11 @@ function renderHeatmapAnnotation(sampleIds, annotationColumn) {
   const values = sampleIds.map((sampleId) => String(getSampleById(sampleId)?.[annotationColumn] ?? 'NA'));
   const levels = Array.from(new Set(values));
   const colors = Object.fromEntries(levels.map((level, index) => [level, HEATMAP_PALETTE[index % HEATMAP_PALETTE.length]]));
-  const samples = sampleIds.map((sampleId, index) => `
-    <span class="annotation-sample" title="${heatmapEscapeHtml(sampleId)}: ${heatmapEscapeHtml(values[index])}">
-      <span style="background:${colors[values[index]]}"></span>${heatmapEscapeHtml(sampleId)}
-    </span>`).join('');
   const legend = levels.map((level) => `
     <span class="annotation-legend-item"><span style="background:${colors[level]}"></span>${heatmapEscapeHtml(level)}</span>`).join('');
   container.innerHTML = `
     <div class="annotation-strip">
       <div class="annotation-label">${heatmapEscapeHtml(annotationColumn)}</div>
-      <div class="annotation-samples">${samples}</div>
       <div class="annotation-legend">${legend}</div>
     </div>`;
 }
