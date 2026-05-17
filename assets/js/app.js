@@ -31,6 +31,7 @@ async function main() {
     });
     setupFgseaControls();
     setupAnalysisCacheControls({
+      refresh: refreshReportFromState,
       populateContrastSelectors,
       renderCurrentContrast,
       renderCurrentEnrichment,
@@ -601,6 +602,7 @@ async function refreshReportFromState() {
   });
   setupFgseaControls();
   setupAnalysisCacheControls({
+    refresh: refreshReportFromState,
     populateContrastSelectors,
     renderCurrentContrast,
     renderCurrentEnrichment,

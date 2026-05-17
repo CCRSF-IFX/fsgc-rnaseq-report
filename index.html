@@ -140,11 +140,11 @@
           <div class="guide-grid">
             <div>
               <h4>Analysis cache</h4>
-              <p>After browser DESeq2 or fgsea finishes, go to Methods & Export and select <code>Export cache</code>. The JSON cache restores DESeq2 contrasts and fgsea result sets later without rerunning the browser analysis.</p>
+              <p>After browser DESeq2 or fgsea finishes, go to Methods & Export and select <code>Export cache</code>. The JSON cache restores sample metadata, DESeq2 contrasts, and fgsea result sets later without rerunning the browser analysis.</p>
             </div>
             <div>
               <h4>Loading a saved cache</h4>
-              <p>Use <code>Load cache</code> in Methods & Export to reload a previous analysis cache. The cache is tied to the report data and result schema, so use it with the same report or a compatible rebuild.</p>
+              <p>Use <code>Load cache</code> in Methods & Export to reload a previous analysis cache. Cached sample metadata is restored when its <code>sample_id</code> values match the current count matrix.</p>
             </div>
             <div>
               <h4>Package library bundle</h4>
@@ -152,7 +152,7 @@
             </div>
             <div>
               <h4>What is not cached</h4>
-              <p>The analysis cache does not include uploaded count matrices, sample manifests, GMT files, or webR packages. Keep those input files separately, and mount or install packages again after a fresh browser session if needed.</p>
+              <p>The analysis cache includes sample metadata when available, but it does not include uploaded count matrices, GMT files, or webR packages. Keep those input files separately, and mount or install packages again after a fresh browser session if needed.</p>
             </div>
           </div>
         </article>
@@ -338,7 +338,7 @@
             <button id="analysis-cache-export" class="secondary" disabled>Export cache</button>
             <label>Load cache <input id="analysis-cache-file" type="file" accept=".json,application/json" /></label>
           </div>
-          <p class="note" id="analysis-cache-status">Export DESeq2 and all fgsea result sets together, then reload them later without rerunning browser-side analysis.</p>
+          <p class="note" id="analysis-cache-status">Export sample metadata, DESeq2 results, and all fgsea result sets together, then reload them later without rerunning browser-side analysis.</p>
         </article>
         <article class="card">
           <h3>Methods and provenance</h3>

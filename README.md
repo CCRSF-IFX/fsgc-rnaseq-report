@@ -435,6 +435,22 @@ the subject or pair ID column as an adjustment/blocking column. The runner does
 not currently support arbitrary interaction terms such as
 `genotype:treatment`.
 
+### Browser Analysis Cache
+
+The **Methods & Export** tab can export a JSON analysis cache after browser-side
+DESeq2 or fgsea runs. The cache includes:
+
+- sample metadata rows when a manifest is available
+- browser-generated DESeq2 result tables
+- browser-generated fgsea result sets
+- contrast metadata needed to repopulate selectors
+
+When a cache is loaded, sample metadata is restored only if its `sample_id`
+values match the current count matrix. The cache intentionally does not include
+uploaded count matrices, GMT files, or webR packages; users should keep those
+input files separately and mount or reinstall packages in a fresh browser
+session when needed.
+
 The configured package snapshot definition includes DESeq2, fgsea, and their
 hard dependency closure. Keeping compiled dependencies such as `fastmatch`,
 `data.table`, `Rcpp`, and `Matrix` in the same report snapshot avoids mixing

@@ -1,7 +1,8 @@
 import { state, logAnalysis, setStatus } from './state.js';
+import { sampleIdsInCounts } from './analysis.js';
 
 const CACHE_KIND = 'rnaseq-report-analysis-cache';
-const CACHE_VERSION = 2;
+const CACHE_VERSION = 3;
 
 let cacheControlsWired = false;
 let cacheDirty = false;
@@ -45,7 +46,10 @@ function exportAnalysisCache() {
   a.download = analysisCacheFilename(cache);
   a.click();
   URL.revokeObjectURL(url);
-  markAnalysisCacheClean(`Exported cache with ${cache.de_results.length} DESeq2 result set(s) and ${cache.gsea_results.length} fgsea result set(s).`);
+  const metadataNote = cache.sample_metadata?.rows?.length
+    ? ` and ${cache.sample_metadata.rows.length} sample metadata row(s)`
+    : '';
+  markAnalysisCacheClean(`Exported cache with ${cache.de_results.length} DESeq2 result set(s), ${cache.gsea_results.length} fgsea result set(s)${metadataNote}.`);
   logAnalysis('Analysis cache exported.');
 }
 
@@ -55,10 +59,13 @@ async function importAnalysisCacheFromInput(event) {
 
   try {
     const cache = parseAnalysisCache(JSON.parse(await file.text()));
-    restoreAnalysisCache(cache);
-    markAnalysisCacheClean(`Loaded cache with ${cache.de_results.length} DESeq2 result set(s) and ${cache.gsea_results.length} fgsea result set(s).`);
+    const restored = restoreAnalysisCache(cache);
+    const metadataNote = restored.sampleMetadata
+      ? ` and ${restored.sampleMetadataRows} sample metadata row(s)`
+      : '';
+    markAnalysisCacheClean(`Loaded cache with ${cache.de_results.length} DESeq2 result set(s), ${cache.gsea_results.length} fgsea result set(s)${metadataNote}.`);
     logAnalysis(`Analysis cache loaded from ${file.name}.`);
-    await refreshImportedAnalysis(cache);
+    await refreshImportedAnalysis(cache, restored);
   } catch (error) {
     setAnalysisCacheStatus(`Cache load failed: ${error.message}`);
     logAnalysis(`Analysis cache load failed: ${error.message}`);
@@ -84,6 +91,7 @@ function buildAnalysisCache() {
     project_title: state.config?.projectTitle || state.config?.reportTitle || '',
     run_id: state.config?.runId || '',
     data_root: state.config?.dataRoot || 'assets/data',
+    sample_metadata: sampleMetadataCacheEntry(),
     contrasts,
     de_results: Array.from(state.deResults.entries()).map(([contrast_id, rows]) => ({
       contrast_id,
@@ -97,7 +105,7 @@ function parseAnalysisCache(value) {
   if (!value || typeof value !== 'object') throw new Error('Cache file is not a JSON object.');
   if (value.cache_kind !== CACHE_KIND) throw new Error('Cache file is not an RNA-seq report analysis cache.');
   const version = Number(value.cache_version);
-  if (![1, CACHE_VERSION].includes(version)) {
+  if (![1, 2, CACHE_VERSION].includes(version)) {
     throw new Error(`Unsupported cache version: ${value.cache_version || 'unknown'}.`);
   }
   if (!Array.isArray(value.de_results) || !Array.isArray(value.gsea_results)) {
@@ -107,10 +115,12 @@ function parseAnalysisCache(value) {
     ...value,
     cache_version: version,
     contrasts: Array.isArray(value.contrasts) ? value.contrasts : [],
+    sample_metadata: parseSampleMetadataCache(value.sample_metadata),
   };
 }
 
 function restoreAnalysisCache(cache) {
+  const restored = restoreCachedSampleMetadata(cache.sample_metadata);
   const contrastById = new Map(state.contrasts.map((contrast) => [contrast.id, contrast]));
   cache.contrasts.forEach((contrast) => {
     if (!contrast?.id) return;
@@ -159,12 +169,17 @@ function restoreAnalysisCache(cache) {
   });
 
   state.contrasts = Array.from(contrastById.values());
+  return restored;
 }
 
-async function refreshImportedAnalysis(cache) {
-  cacheCallbacks.populateContrastSelectors?.();
-  cacheCallbacks.renderOverviewMetrics?.();
-  cacheCallbacks.renderAnalysisReadiness?.();
+async function refreshImportedAnalysis(cache, restored = {}) {
+  if (restored.sampleMetadata && cacheCallbacks.refresh) {
+    await cacheCallbacks.refresh();
+  } else {
+    cacheCallbacks.populateContrastSelectors?.();
+    cacheCallbacks.renderOverviewMetrics?.();
+    cacheCallbacks.renderAnalysisReadiness?.();
+  }
   const firstContrastId = cache.de_results[0]?.contrast_id || cache.gsea_results[0]?.contrast_id || '';
   const firstGseaResultId = cache.gsea_results[0]?.result_id || (cache.gsea_results[0] ? gseaCacheResultId(cache.gsea_results[0]) : '');
   for (const id of ['contrast-select', 'enrichment-contrast-select']) {
@@ -202,6 +217,47 @@ function plainRows(rows) {
 
 function plainObject(value) {
   return Object.fromEntries(Object.entries(value || {}).map(([key, item]) => [key, item ?? '']));
+}
+
+function sampleMetadataCacheEntry() {
+  const rows = plainRows(state.samples);
+  if (!rows.length || !hasMetadataColumns(rows)) return null;
+  return {
+    source: state.provenance?.sample_manifest || state.provenance?.samples_file || 'current report sample metadata',
+    rows,
+  };
+}
+
+function hasMetadataColumns(rows) {
+  return rows.some((row) => Object.keys(row).some((key) => key !== 'sample_id' && String(row[key] ?? '').trim() !== ''));
+}
+
+function parseSampleMetadataCache(value) {
+  const rows = Array.isArray(value) ? value : value?.rows;
+  if (!Array.isArray(rows) || !rows.length) return null;
+  const normalizedRows = plainRows(rows).filter((row) => String(row.sample_id || '').trim());
+  if (!normalizedRows.length) return null;
+  return {
+    source: typeof value?.source === 'string' ? value.source : 'analysis cache',
+    rows: normalizedRows,
+  };
+}
+
+function restoreCachedSampleMetadata(sampleMetadata) {
+  if (!sampleMetadata?.rows?.length) return { sampleMetadata: false, sampleMetadataRows: 0 };
+  const matched = sampleIdsInCounts(sampleMetadata.rows, state.counts);
+  if (state.counts.length && matched.length < 2) {
+    logAnalysis('Analysis cache includes sample metadata, but fewer than two sample IDs match the current count matrix; keeping current sample metadata.');
+    return { sampleMetadata: false, sampleMetadataRows: 0 };
+  }
+  state.samples = sampleMetadata.rows;
+  state.provenance = {
+    ...(state.provenance || {}),
+    sample_manifest: sampleMetadata.source || 'analysis cache',
+    sample_metadata_source: 'analysis cache',
+  };
+  logAnalysis(`Analysis cache restored ${sampleMetadata.rows.length} sample metadata row(s).`);
+  return { sampleMetadata: true, sampleMetadataRows: sampleMetadata.rows.length };
 }
 
 function gseaCacheEntry(key, value) {
