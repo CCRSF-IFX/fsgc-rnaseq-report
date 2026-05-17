@@ -48,13 +48,34 @@ export function setupExpressionHeatmapControls() {
     document.getElementById('heatmap-top-n')?.addEventListener('change', renderExpressionHeatmap);
     document.getElementById('heatmap-gene-mode')?.addEventListener('change', () => {
       syncHeatmapGeneControls();
+      if (document.getElementById('heatmap-gene-mode')?.value === 'custom') {
+        openHeatmapGeneModal();
+        if (heatmapCustomGeneTerms().length > 0) renderExpressionHeatmap();
+      } else {
+        renderExpressionHeatmap();
+      }
+    });
+    document.getElementById('heatmap-gene-list-open')?.addEventListener('click', openHeatmapGeneModal);
+    document.getElementById('heatmap-gene-list-modal-close')?.addEventListener('click', closeHeatmapGeneModal);
+    document.getElementById('heatmap-gene-list-cancel')?.addEventListener('click', closeHeatmapGeneModal);
+    document.getElementById('heatmap-gene-list-apply')?.addEventListener('click', () => {
+      closeHeatmapGeneModal();
+      syncHeatmapGeneControls();
       renderExpressionHeatmap();
+    });
+    document.getElementById('heatmap-gene-list-modal')?.addEventListener('click', (event) => {
+      if (event.target?.id === 'heatmap-gene-list-modal') closeHeatmapGeneModal();
+    });
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && heatmapGeneModalOpen()) closeHeatmapGeneModal();
     });
     document.getElementById('heatmap-gene-list')?.addEventListener('input', () => {
       const status = document.getElementById('heatmap-gene-list-status');
       if (status) status.textContent = '';
+      const modalStatus = document.getElementById('heatmap-gene-list-modal-status');
+      if (modalStatus) modalStatus.textContent = heatmapGeneListDraftSummary();
+      syncHeatmapGeneControls();
     });
-    document.getElementById('heatmap-gene-list')?.addEventListener('change', renderExpressionHeatmap);
     document.getElementById('heatmap-annotation-column')?.addEventListener('change', renderExpressionHeatmap);
     document.getElementById('heatmap-scale')?.addEventListener('change', renderExpressionHeatmap);
     document.getElementById('heatmap-row-group-size')?.addEventListener('input', syncHeatmapControlLabels);
@@ -255,15 +276,41 @@ function heatmapRowsForGeneList(rows, terms) {
 function syncHeatmapGeneControls() {
   const mode = document.getElementById('heatmap-gene-mode')?.value || 'top';
   const topInput = document.getElementById('heatmap-top-n');
-  const geneListLabel = document.getElementById('heatmap-gene-list-label');
-  const geneList = document.getElementById('heatmap-gene-list');
+  const geneListOpen = document.getElementById('heatmap-gene-list-open');
   const status = document.getElementById('heatmap-gene-list-status');
   const isCustom = mode === 'custom';
+  const geneCount = heatmapCustomGeneTerms().length;
 
   if (topInput) topInput.disabled = isCustom;
-  if (geneListLabel) geneListLabel.hidden = !isCustom;
-  if (geneList) geneList.disabled = !isCustom;
+  if (geneListOpen) {
+    geneListOpen.hidden = !isCustom;
+    geneListOpen.textContent = geneCount ? `Edit gene list (${geneCount})` : 'Edit gene list';
+  }
   if (!isCustom && status) status.textContent = '';
+}
+
+function openHeatmapGeneModal() {
+  const modal = document.getElementById('heatmap-gene-list-modal');
+  if (!modal) return;
+  modal.hidden = false;
+  const modalStatus = document.getElementById('heatmap-gene-list-modal-status');
+  if (modalStatus) modalStatus.textContent = heatmapGeneListDraftSummary();
+  requestAnimationFrame(() => document.getElementById('heatmap-gene-list')?.focus());
+}
+
+function closeHeatmapGeneModal() {
+  const modal = document.getElementById('heatmap-gene-list-modal');
+  if (modal) modal.hidden = true;
+}
+
+function heatmapGeneModalOpen() {
+  const modal = document.getElementById('heatmap-gene-list-modal');
+  return Boolean(modal && !modal.hidden);
+}
+
+function heatmapGeneListDraftSummary() {
+  const terms = heatmapCustomGeneTerms();
+  return terms.length ? `${terms.length} gene${terms.length === 1 ? '' : 's'} entered.` : '';
 }
 
 function renderHeatmapGeneStatus(selection) {

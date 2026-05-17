@@ -81,15 +81,13 @@ textarea { min-height: 44px; resize: vertical; }
 button, .button { background: var(--accent); border-color: var(--accent); color: white; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; justify-content: center; }
 button.secondary { background: white; color: var(--accent); }
 .button.secondary { background: white; color: var(--accent); }
+.icon-button { width: 34px; height: 34px; padding: 0; font-size: 18px; line-height: 1; }
 .file-button { background: var(--accent); border: 1px solid var(--accent); border-radius: 8px; color: white; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; padding: 9px 10px; }
 .file-button.secondary { background: white; color: var(--accent); }
 .file-button input[type="file"] { position: absolute; inline-size: 1px; block-size: 1px; opacity: 0; pointer-events: none; }
 button:disabled { opacity: 0.5; cursor: not-allowed; }
 .check-label { display: inline-flex; align-items: center; gap: 6px; }
 .check-label input { width: auto; }
-.heatmap-gene-list-label { flex: 1 1 340px; align-items: flex-start; display: flex; gap: 8px; }
-.heatmap-gene-list-label[hidden] { display: none; }
-.heatmap-gene-list-label textarea { flex: 1; min-width: 240px; }
 #heatmap-gene-list-status { min-height: 1.4em; margin: -6px 0 12px; }
 .heatmap-slider-label { display: inline-flex; align-items: center; gap: 8px; }
 .heatmap-slider-label input[type="range"] { width: 120px; min-width: 90px; padding: 0; border: 0; }
@@ -131,6 +129,14 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .status-message.ok { background: #dcfce7; color: var(--ok); }
 .status-message.warn { background: #fef3c7; color: var(--warn); }
 .status-message.fail { background: #fee2e2; color: var(--fail); }
+.modal-backdrop { position: fixed; inset: 0; z-index: 30; display: flex; align-items: center; justify-content: center; padding: 24px; background: rgba(15, 23, 42, 0.44); }
+.modal-backdrop[hidden] { display: none; }
+.modal-dialog { width: min(680px, 100%); max-height: min(720px, calc(100vh - 48px)); overflow: auto; border: 1px solid var(--line); border-radius: 8px; background: white; box-shadow: var(--shadow); padding: 18px; }
+.modal-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+.modal-header h4 { margin: 0; font-size: 18px; }
+.modal-field { display: grid; gap: 8px; font-weight: 700; }
+.modal-field textarea { width: 100%; min-height: 230px; font-weight: 400; }
+.modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 16px; }
 .annotation-strip { display: grid; grid-template-columns: minmax(80px, auto) 1fr; gap: 10px 14px; align-items: center; margin: 6px 0 14px; color: var(--muted); }
 .annotation-label { font-weight: 700; color: var(--ink); }
 .annotation-legend { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -214,6 +220,9 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   #app-shell > .content { max-width: none; padding: 16px; }
   .grid.two, .grid.three { grid-template-columns: 1fr; }
   .setup-flow { grid-template-columns: 1fr; }
+  .modal-backdrop { align-items: stretch; padding: 14px; }
+  .modal-actions { justify-content: stretch; }
+  .modal-actions button { flex: 1; }
   .annotation-strip { grid-template-columns: 1fr; }
   .annotation-legend { grid-column: 1; }
 }

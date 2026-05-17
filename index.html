@@ -128,7 +128,7 @@
           <div class="toolbar">
             <label>Genes <select id="heatmap-gene-mode"><option value="top">Top variable</option><option value="custom">Custom list</option></select></label>
             <label>Top genes <input id="heatmap-top-n" type="number" min="5" max="500" step="5" value="50" /></label>
-            <label id="heatmap-gene-list-label" class="heatmap-gene-list-label" hidden>Gene list <textarea id="heatmap-gene-list" rows="2" placeholder="GeneA, GeneB, ENSG00000123456"></textarea></label>
+            <button id="heatmap-gene-list-open" class="secondary" type="button" hidden>Edit gene list</button>
             <label>Annotation <select id="heatmap-annotation-column"></select></label>
             <label>Scale <select id="heatmap-scale"><option value="row">Row z-score</option><option value="logcpm">log2(CPM + 1)</option></select></label>
             <label class="heatmap-slider-label">Row group size <input id="heatmap-row-group-size" type="range" min="1" max="10" step="1" value="5" /><output id="heatmap-row-group-value">5</output></label>
@@ -139,6 +139,22 @@
           <div id="heatmap-gene-list-status" class="note"></div>
           <div id="heatmap-annotation-strip"></div>
           <div id="expression-heatmap" class="clustergrammer-heatmap"></div>
+          <div id="heatmap-gene-list-modal" class="modal-backdrop" hidden>
+            <div class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="heatmap-gene-list-title">
+              <div class="modal-header">
+                <h4 id="heatmap-gene-list-title">Custom genes</h4>
+                <button id="heatmap-gene-list-modal-close" class="secondary icon-button" type="button" aria-label="Close custom genes">&times;</button>
+              </div>
+              <label class="modal-field">Gene list
+                <textarea id="heatmap-gene-list" rows="10" placeholder="GeneA, GeneB, ENSG00000123456"></textarea>
+              </label>
+              <p id="heatmap-gene-list-modal-status" class="note"></p>
+              <div class="modal-actions">
+                <button id="heatmap-gene-list-cancel" class="secondary" type="button">Close</button>
+                <button id="heatmap-gene-list-apply" type="button">Apply genes</button>
+              </div>
+            </div>
+          </div>
         </article>
       </section>
 
