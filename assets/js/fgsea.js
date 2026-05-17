@@ -4,6 +4,7 @@ import { ensureRPackages } from './packageManager.js';
 import { renderEnrichment } from './plots.js';
 import { renderTable } from './tables.js';
 import { evalR } from './webrManager.js';
+import { markAnalysisCacheDirty } from './analysisCache.js';
 
 let fgseaControlsWired = false;
 
@@ -61,6 +62,7 @@ export async function runFgseaAnalysis() {
 
     await progress.step('Rendering enrichment plot and table', 5);
     state.enrichmentResults.set(contrast.id, rows);
+    markAnalysisCacheDirty(`fgsea ${contrast.label || contrast.id}`);
     renderEnrichment(rows);
     renderTable('enrichment-table', rows, { pageLength: 25, exportName: `${contrast.id}.${reference}.fgsea.csv` });
     const message = `fgsea complete for ${contrast.label || contrast.id}: ${rows.length} pathways (${reference}).`;

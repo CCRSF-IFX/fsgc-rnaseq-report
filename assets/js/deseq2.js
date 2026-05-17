@@ -3,6 +3,7 @@ import { sampleIdsInCounts } from './analysis.js';
 import { parseCsv } from './dataLoader.js';
 import { ensureRPackages } from './packageManager.js';
 import { evalR } from './webrManager.js';
+import { markAnalysisCacheDirty } from './analysisCache.js';
 
 let deseqCallbacks = {};
 let deseqControlsWired = false;
@@ -159,6 +160,7 @@ export async function runDeseq2Analysis() {
     if (existingIndex >= 0) state.contrasts[existingIndex] = contrast;
     else state.contrasts.push(contrast);
     state.deResults.set(contrastId, rows);
+    markAnalysisCacheDirty(`DESeq2 ${numerator} vs ${denominator}`);
 
     deseqCallbacks.populateContrastSelectors?.();
     const contrastSelect = document.getElementById('contrast-select');

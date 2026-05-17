@@ -167,6 +167,14 @@
           </div>
           <p class="note" id="deseq-status">DESeq2 uses webR and the configured package snapshot for small exploratory runs.</p>
         </article>
+        <article class="card">
+          <h3>Analysis cache</h3>
+          <div class="toolbar">
+            <button id="analysis-cache-export" class="secondary" disabled>Export cache</button>
+            <label>Load cache <input id="analysis-cache-file" type="file" accept=".json,application/json" /></label>
+          </div>
+          <p class="note" id="analysis-cache-status">Export DESeq2 and fgsea results together, then reload them later without rerunning browser-side analysis.</p>
+        </article>
       </section>
 
       <section class="tab-panel" id="tab-gene">

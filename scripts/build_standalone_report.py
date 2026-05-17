@@ -35,6 +35,7 @@ JS_ORDER = [
     "assets/js/geneSearch.js",
     "assets/js/webrManager.js",
     "assets/js/packageManager.js",
+    "assets/js/analysisCache.js",
     "assets/js/fgsea.js",
     "assets/js/downstreamPlugins.js",
     "assets/js/packageRepository.js",

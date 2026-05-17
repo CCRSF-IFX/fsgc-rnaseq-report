@@ -12,6 +12,7 @@ import { setupDeseqControls } from './deseq2.js';
 import { setupFgseaControls } from './fgsea.js';
 import { renderExpressionHeatmap, resizeExpressionHeatmap, setupExpressionHeatmapControls } from './heatmap.js';
 import { setupUserDataControls } from './userData.js';
+import { setupAnalysisCacheControls } from './analysisCache.js';
 
 async function main() {
   wireTabs();
@@ -23,6 +24,7 @@ async function main() {
     populateContrastSelectors();
     setupDeseqControls({ populateContrastSelectors, renderCurrentContrast });
     setupFgseaControls();
+    setupAnalysisCacheControls({ populateContrastSelectors, renderCurrentContrast, renderCurrentEnrichment });
     renderDownstreamCards();
     renderPackageRepositoryPanel();
     setStatus('Report assets loaded; loading plots...');
@@ -254,6 +256,7 @@ async function refreshReportFromState() {
   populateContrastSelectors();
   setupDeseqControls({ populateContrastSelectors, renderCurrentContrast });
   setupFgseaControls();
+  setupAnalysisCacheControls({ populateContrastSelectors, renderCurrentContrast, renderCurrentEnrichment });
   renderDownstreamCards();
   renderPackageRepositoryPanel();
   renderQC();
