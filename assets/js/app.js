@@ -2,7 +2,7 @@ import { state, setStatus, metadataColumns } from './state.js';
 import { loadCoreAssets } from './dataLoader.js';
 import { adjustVisibleDataTables, renderTable } from './tables.js';
 import { summarizeQC, badge, qcRowsWithStatus } from './qc.js';
-import { renderPCA, renderDistanceHeatmap, renderQCPlots, renderGeneCounts } from './plots.js';
+import { renderPCA, renderDistanceHeatmap, renderQCPlots, renderGeneCounts } from './plots.js?v=20260517-hclust';
 import { populateContrastSelectors, renderCurrentContrast } from './de.js';
 import { renderCurrentEnrichment } from './enrichment.js';
 import { renderDownstreamCards } from './downstreamPlugins.js';

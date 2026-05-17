@@ -9,12 +9,15 @@ const PCA_COLORS = ['#2563eb', '#dc2626', '#16a34a', '#d97706', '#7c3aed', '#089
 const PCA_SYMBOLS = ['circle', 'square', 'diamond', 'cross', 'x', 'triangle-up', 'triangle-down', 'star'];
 const PCA_SYMBOLS_3D = ['circle', 'square', 'diamond', 'cross', 'x', 'circle-open', 'square-open', 'diamond-open'];
 const VOLCANO_DISPLAY_CAP = 50;
+const HCLUST_ESM_URL = 'https://esm.sh/ml-hclust@4.0.0?bundle';
 const DE_CATEGORIES = [
   { id: 'upregulated', label: 'upregulated', color: '#dc2626', opacity: 0.82 },
   { id: 'downregulated', label: 'downregulated', color: '#2563eb', opacity: 0.82 },
   { id: 'padj_only', label: 'padj only', color: '#7c3aed', opacity: 0.72 },
   { id: 'not_significant', label: 'not significant', color: '#94a3b8', opacity: 0.34 },
 ];
+let hclustModulePromise = null;
+let distanceHeatmapRenderId = 0;
 
 export function renderPCA(colorBy = 'condition', pair = 'PC1,PC2', shapeBy = 'none', projection = '2d') {
   const points = state.pca.samples || [];
@@ -119,24 +122,25 @@ export function renderScree() {
 
 export function renderDistanceHeatmap() {
   if (!state.distance) return;
+  const renderId = ++distanceHeatmapRenderId;
   const sampleIds = state.distance.sample_ids || [];
-  const layout = plotLayout('Sample distance matrix');
-  Plotly.react('distance-heatmap', [{
-    x: sampleIds,
-    y: sampleIds,
-    z: state.distance.matrix,
-    type: 'heatmap',
-    colorscale: 'Viridis',
-  }], {
-    ...layout,
-    margin: {
-      ...layout.margin,
-      l: sampleAxisMargin(sampleIds, 96, 240),
-      b: sampleAxisMargin(sampleIds, 88, 170),
-    },
-    xaxis: { automargin: true, tickangle: 45 },
-    yaxis: { automargin: true },
-  }, { responsive: true });
+  const matrix = normalizeDistanceMatrix(state.distance.matrix || [], sampleIds.length);
+  renderClusteringStatus('Loading hierarchical clustering library...');
+  loadHclustModule()
+    .then(({ agnes }) => {
+      if (renderId !== distanceHeatmapRenderId) return;
+      const clustering = clusterDistanceMatrix(agnes, sampleIds, matrix);
+      renderClusteredDistanceHeatmap(sampleIds, matrix, clustering);
+      const metric = state.distance?.metric || 'sample';
+      const transform = state.distance?.transform ? ` after ${state.distance.transform}` : '';
+      renderClusteringStatus(`AGNES average-linkage clustering from ${metric} distances${transform}. Dendrograms and heatmap share the same leaf order.`);
+    })
+    .catch((error) => {
+      console.warn('Hierarchical clustering library failed to load.', error);
+      if (renderId !== distanceHeatmapRenderId) return;
+      renderPlainDistanceHeatmap(sampleIds, matrix);
+      renderClusteringStatus(`Could not load the hierarchical clustering library (${error.message}). Showing the distance matrix in the original sample order.`);
+    });
 }
 
 export function renderQCPlots() {
@@ -569,6 +573,226 @@ function wrapPlotLabel(label, maxLineLength = 32) {
 function sampleAxisMargin(labels, min, max) {
   const maxLength = Math.max(...labels.map((label) => String(label || '').length), 0);
   return Math.min(max, Math.max(min, maxLength * 8 + 24));
+}
+
+function loadHclustModule() {
+  if (!hclustModulePromise) hclustModulePromise = import(HCLUST_ESM_URL);
+  return hclustModulePromise;
+}
+
+function normalizeDistanceMatrix(matrix, size) {
+  return Array.from({ length: size }, (_, rowIndex) => (
+    Array.from({ length: size }, (_, columnIndex) => {
+      if (rowIndex === columnIndex) return 0;
+      const value = Number(matrix[rowIndex]?.[columnIndex]);
+      const mirrored = Number(matrix[columnIndex]?.[rowIndex]);
+      if (Number.isFinite(value)) return value;
+      if (Number.isFinite(mirrored)) return mirrored;
+      return 0;
+    })
+  ));
+}
+
+function clusterDistanceMatrix(agnes, sampleIds, matrix) {
+  if (!agnes || sampleIds.length < 2) return null;
+  const tree = agnes(matrix, { method: 'average', isDistanceMatrix: true });
+  const leafOrder = [];
+  assignClusterPositions(tree, leafOrder);
+  return {
+    tree,
+    leafOrder,
+    maxHeight: Math.max(clusterHeight(tree), 1e-9),
+  };
+}
+
+function assignClusterPositions(node, leafOrder) {
+  const children = Array.isArray(node.children) ? node.children : [];
+  if (node.isLeaf || children.length === 0) {
+    node.plotPosition = leafOrder.length;
+    leafOrder.push(node.index);
+    return node.plotPosition;
+  }
+  children.forEach((child) => assignClusterPositions(child, leafOrder));
+  node.plotPosition = plotMean(children.map((child) => child.plotPosition));
+  return node.plotPosition;
+}
+
+function renderClusteredDistanceHeatmap(sampleIds, matrix, clustering) {
+  if (!clustering) {
+    renderPlainDistanceHeatmap(sampleIds, matrix);
+    renderClusteringStatus('Hierarchical clustering requires at least two samples and a valid distance matrix.');
+    return;
+  }
+  const orderedSampleIds = clustering.leafOrder.map((index) => sampleIds[index]);
+  const orderedMatrix = orderedDistanceMatrix(matrix, clustering.leafOrder);
+  const positions = orderedSampleIds.map((_, index) => index);
+  const heatmapTrace = distanceHeatmapTrace(positions, orderedSampleIds, orderedMatrix, true);
+  const topDendrogram = dendrogramTrace(clustering.tree, 'top');
+  const leftDendrogram = dendrogramTrace(clustering.tree, 'left');
+  Plotly.react('distance-heatmap', [topDendrogram, leftDendrogram, heatmapTrace], distanceHeatmapLayout(orderedSampleIds, clustering.maxHeight, true), { responsive: true });
+}
+
+function renderPlainDistanceHeatmap(sampleIds, matrix) {
+  const positions = sampleIds.map((_, index) => index);
+  Plotly.react('distance-heatmap', [distanceHeatmapTrace(positions, sampleIds, matrix, false)], distanceHeatmapLayout(sampleIds, 0, false), { responsive: true });
+}
+
+function distanceHeatmapTrace(positions, sampleIds, matrix, clustered) {
+  return {
+    x: positions,
+    y: positions,
+    z: matrix,
+    customdata: sampleIds.map((rowId) => sampleIds.map((columnId) => [rowId, columnId])),
+    type: 'heatmap',
+    colorscale: 'Viridis',
+    xaxis: clustered ? 'x' : undefined,
+    yaxis: clustered ? 'y' : undefined,
+    hovertemplate: '<b>%{customdata[0]}</b> vs <b>%{customdata[1]}</b><br>distance: %{z:.4g}<extra></extra>',
+    colorbar: {
+      title: { text: 'Distance' },
+      len: clustered ? 0.74 : 1,
+      x: clustered ? 1.02 : 1.02,
+      y: clustered ? 0.4 : 0.5,
+    },
+  };
+}
+
+function dendrogramTrace(tree, orientation) {
+  const segments = dendrogramSegments(tree, orientation);
+  return {
+    x: segments.x,
+    y: segments.y,
+    type: 'scatter',
+    mode: 'lines',
+    hoverinfo: 'skip',
+    xaxis: orientation === 'top' ? 'x2' : 'x3',
+    yaxis: orientation === 'top' ? 'y2' : 'y3',
+    line: { color: '#2563eb', width: 1.8 },
+  };
+}
+
+function dendrogramSegments(node, orientation, segments = { x: [], y: [] }) {
+  const children = Array.isArray(node?.children) ? node.children : [];
+  if (children.length === 0) return segments;
+  const first = children[0];
+  const last = children[children.length - 1];
+  const height = clusterHeight(node);
+  children.forEach((child) => {
+    if (orientation === 'top') {
+      segments.x.push(child.plotPosition, child.plotPosition, null);
+      segments.y.push(clusterHeight(child), height, null);
+    } else {
+      segments.x.push(clusterHeight(child), height, null);
+      segments.y.push(child.plotPosition, child.plotPosition, null);
+    }
+  });
+  if (orientation === 'top') {
+    segments.x.push(first.plotPosition, last.plotPosition, null);
+    segments.y.push(height, height, null);
+  } else {
+    segments.x.push(height, height, null);
+    segments.y.push(first.plotPosition, last.plotPosition, null);
+  }
+  children.forEach((child) => dendrogramSegments(child, orientation, segments));
+  return segments;
+}
+
+function orderedDistanceMatrix(matrix, order) {
+  return order.map((rowIndex) => order.map((columnIndex) => Number(matrix[rowIndex]?.[columnIndex]) || 0));
+}
+
+function distanceHeatmapLayout(sampleIds, maxHeight, clustered) {
+  const positions = sampleIds.map((_, index) => index);
+  const labelMargin = sampleAxisMargin(sampleIds, 104, 260);
+  const bottomMargin = sampleAxisMargin(sampleIds, 92, 180);
+  const heatmapX = clustered ? [0.15, 0.86] : [0, 1];
+  const heatmapY = clustered ? [0.03, 0.77] : [0, 1];
+  const leftDendrogramX = [0.025, 0.145];
+  const topDendrogramY = [0.785, 0.985];
+  const layout = {
+    ...plotLayout(clustered ? 'Sample distance matrix with hierarchical clustering' : 'Sample distance matrix'),
+    showlegend: false,
+    margin: {
+      l: clustered ? 26 : labelMargin,
+      r: clustered ? Math.max(150, labelMargin + 58) : 36,
+      b: bottomMargin,
+      t: clustered ? 30 : 60,
+    },
+    xaxis: {
+      domain: heatmapX,
+      tickmode: 'array',
+      tickvals: positions,
+      ticktext: sampleIds,
+      tickangle: 45,
+      range: [-0.5, sampleIds.length - 0.5],
+      automargin: true,
+      showgrid: false,
+      zeroline: false,
+    },
+    yaxis: {
+      domain: heatmapY,
+      tickmode: 'array',
+      tickvals: positions,
+      ticktext: sampleIds,
+      range: [sampleIds.length - 0.5, -0.5],
+      side: clustered ? 'right' : 'left',
+      automargin: true,
+      showgrid: false,
+      zeroline: false,
+    },
+  };
+  if (!clustered) return layout;
+
+  const dendrogramMax = Math.max(maxHeight * 1.05, 1e-9);
+  return {
+    ...layout,
+    xaxis2: {
+      domain: heatmapX,
+      range: [-0.5, sampleIds.length - 0.5],
+      showticklabels: false,
+      showgrid: false,
+      zeroline: false,
+      fixedrange: true,
+    },
+    yaxis2: {
+      domain: topDendrogramY,
+      range: [0, dendrogramMax],
+      showticklabels: false,
+      showgrid: false,
+      zeroline: false,
+      fixedrange: true,
+    },
+    xaxis3: {
+      domain: leftDendrogramX,
+      range: [dendrogramMax, 0],
+      showticklabels: false,
+      showgrid: false,
+      zeroline: false,
+      fixedrange: true,
+    },
+    yaxis3: {
+      domain: heatmapY,
+      range: [sampleIds.length - 0.5, -0.5],
+      showticklabels: false,
+      showgrid: false,
+      zeroline: false,
+      fixedrange: true,
+    },
+  };
+}
+
+function clusterHeight(node) {
+  const height = Number(node?.height);
+  return Number.isFinite(height) ? height : 0;
+}
+
+function plotMean(values) {
+  return values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : 0;
+}
+
+function renderClusteringStatus(message) {
+  const status = document.getElementById('sample-clustering-status');
+  if (status) status.textContent = message;
 }
 
 function enrichmentLeftMargin(labels) {
