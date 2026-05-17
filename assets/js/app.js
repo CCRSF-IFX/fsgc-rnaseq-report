@@ -367,8 +367,7 @@ function reportMetadataRows() {
     { key: 'report.author', value: cfg.reportAuthor || cfg.reportPreparedBy || '' },
     { key: 'report.organization', value: cfg.reportOrganization || '' },
     { key: 'webr.runtime', value: webRRuntimeVersion(webr) || webr.baseUrl || '' },
-    { key: 'webr.package_snapshot', value: webr.packageRepoVersion || '' },
-    { key: 'webr.library_bundle', value: webr.libraryBundle?.version || '' },
+    { key: 'webr.package_library_snapshot', value: webRPackageLibrarySnapshot(webr) },
   ];
   return rows.filter((row) => cleanHeaderText(row.value));
 }
@@ -384,7 +383,7 @@ function reportMetaText(cfg = {}) {
   const parts = [
     versionLabel(cfg.reportVersion) ? `Report ${versionLabel(cfg.reportVersion)}` : '',
     webRRuntimeVersion(cfg.webr) ? `webR ${webRRuntimeVersion(cfg.webr)}` : '',
-    cfg.webr?.libraryBundle?.version ? `library ${cfg.webr.libraryBundle.version}` : '',
+    webRPackageLibrarySnapshot(cfg.webr) ? `package/library snapshot ${webRPackageLibrarySnapshot(cfg.webr)}` : '',
   ].filter(Boolean);
   return parts.join(' · ');
 }
@@ -392,9 +391,12 @@ function reportMetaText(cfg = {}) {
 function webRVersionSummary(webr = {}) {
   return [
     webRRuntimeVersion(webr) ? `runtime ${webRRuntimeVersion(webr)}` : '',
-    webr.packageRepoVersion ? `package snapshot ${webr.packageRepoVersion}` : '',
-    webr.libraryBundle?.version ? `library ${webr.libraryBundle.version}` : '',
+    webRPackageLibrarySnapshot(webr) ? `package/library snapshot ${webRPackageLibrarySnapshot(webr)}` : '',
   ].filter(Boolean).join(' · ');
+}
+
+function webRPackageLibrarySnapshot(webr = {}) {
+  return cleanHeaderText(webr.packageRepoVersion || webr.libraryBundle?.snapshotVersion);
 }
 
 function webRRuntimeVersion(webr = {}) {

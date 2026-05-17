@@ -52,16 +52,18 @@ jobs:
           python3 - <<'PY' >> "$GITHUB_OUTPUT"
           import json
           import re
+          from pathlib import Path
 
           cfg = json.load(open("assets/report_config.json", encoding="utf-8")).get("webr", {})
           bundle = cfg.get("libraryBundle") or {}
-          version = str(bundle.get("version") or "").strip()
+          snapshot_version = Path("webr-packages/VERSION").read_text(encoding="utf-8").strip()
+          version = str(bundle.get("artifactVersion") or bundle.get("version") or snapshot_version).strip()
           artifact_stem = str(bundle.get("artifactStem") or "rnaseq-report-webr-library").strip()
           release_tag = str(bundle.get("releaseTag") or f"{artifact_stem}-{version}").strip()
 
           safe = re.compile(r"^[A-Za-z0-9._-]+$")
           for label, value in {
-              "libraryBundle.version": version,
+              "libraryBundle.artifactVersion": version,
               "libraryBundle.artifactStem": artifact_stem,
               "libraryBundle.releaseTag": release_tag,
           }.items():

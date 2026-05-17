@@ -28,13 +28,14 @@ artifacts for users who want to mirror or inspect the wasm package snapshot.
 
 The workflow also builds a browser-loadable webR library image from the package
 snapshot and uploads it to the separate GitHub Release configured by
-`webr.libraryBundle.releaseTag`. The package snapshot version and library bundle
-version are intentionally decoupled:
+`webr.libraryBundle.releaseTag`. The report UI presents the package repository
+and prebuilt library as the same package/library snapshot version. The optional
+`webr.libraryBundle.artifactVersion` is only an internal release-asset label:
 
 ```text
-rnaseq-report-webr-library-<LIBRARY_VERSION>.zip
-rnaseq-report-webr-library-<LIBRARY_VERSION>.data.gz
-rnaseq-report-webr-library-<LIBRARY_VERSION>.js.metadata
+rnaseq-report-webr-library-<ARTIFACT_VERSION>.zip
+rnaseq-report-webr-library-<ARTIFACT_VERSION>.data.gz
+rnaseq-report-webr-library-<ARTIFACT_VERSION>.js.metadata
 ```
 
 The report UI can mount the ZIP, or the `.data.gz` plus `.js.metadata` pair, as

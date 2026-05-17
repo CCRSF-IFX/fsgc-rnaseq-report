@@ -15,6 +15,7 @@ export function renderPackageRepositoryPanel() {
   const indexUrl = packageRepoIndexUrl();
   const bundleUrl = packageRepoBundleUrl();
   const libraryBundle = packageRepoLibraryBundleConfig();
+  const snapshotVersion = cfg.packageRepoVersion || 'the configured package snapshot';
   const disabled = cfg.enabled ? '' : 'disabled';
 
   container.innerHTML = `
@@ -32,7 +33,7 @@ export function renderPackageRepositoryPanel() {
       <div class="package-local-bundle">
         <div>
           <strong>Local webR library bundle</strong>
-          <p class="note">Load ${packageRepoEscapeHtml(libraryBundle.archiveFile)} to mount a prebuilt package library without reinstalling every dependency.</p>
+          <p class="note">Load ${packageRepoEscapeHtml(libraryBundle.archiveFile)} to mount a prebuilt package library for ${packageRepoEscapeHtml(snapshotVersion)} without reinstalling every dependency.</p>
         </div>
         <div class="package-actions">
           <label class="file-button secondary">Choose bundle <input id="package-library-bundle-file" type="file" accept=".zip,.data,.gz,.metadata,.json" multiple ${disabled} /></label>
@@ -167,7 +168,7 @@ function packageRepoBundleUrl() {
 function packageRepoLibraryBundleConfig() {
   const cfg = state.config?.webr || {};
   const bundle = cfg.libraryBundle || {};
-  const version = bundle.version || 'library';
+  const version = bundle.artifactVersion || bundle.version || cfg.packageRepoVersion || 'library';
   const artifactStem = bundle.artifactStem || 'rnaseq-report-webr-library';
   return {
     archiveFile: bundle.archiveFile || `${artifactStem}-${version}.zip`,
