@@ -217,7 +217,7 @@ With counts and a manifest, the report derives:
 
 - PCA coordinates from log2(CPM + 1) expression.
 - sample distances from log2(CPM + 1) expression.
-- a Clustergrammer expression heatmap with top-variable or custom gene-list selection, metadata annotation, and row/column clustering toggles.
+- a Clustergrammer expression heatmap with top-variable or custom gene-list selection, metadata annotation, and clustered rows/columns.
 - two-group differential expression from metadata-defined contrasts.
 - optional fgsea results from the selected DE contrast and a configured or uploaded GMT pathway file.
 
@@ -487,8 +487,8 @@ replace them with compact hg38/mm10 production GMT files before delivering real
 biological interpretation.
 
 The Clustering tab has a Clustergrammer-JS heatmap using the count matrix, with
-row z-score or log2(CPM + 1) scale, sample annotation, and row/column clustering
-controls. Users can show the default top variable genes or paste a custom list
+row z-score or log2(CPM + 1) scale, sample annotation, and clustered rows/columns.
+Users can show the default top variable genes or paste a custom list
 of gene IDs, symbols, or names for a focused expression heatmap. Clustergrammer-JS
 is loaded from the npm package bundle at runtime so the development app and
 generated standalone HTML can stay build-free.
