@@ -267,18 +267,43 @@
 
           <div id="canvasxpress-engine-panel" class="heatmap-engine-panel active" data-heatmap-engine-panel="canvasxpress" role="tabpanel" aria-labelledby="heatmap-engine-canvasxpress">
             <div class="toolbar canvasxpress-toolbar">
-              <label>Genes <select id="canvasxpress-gene-mode"><option value="top">Top variable</option><option value="custom">Custom list</option></select></label>
-              <label>Top genes <input id="canvasxpress-top-n" type="number" min="5" max="500" step="5" value="50" /></label>
-              <button id="canvasxpress-gene-list-open" class="secondary" type="button" hidden>Edit gene list</button>
-              <label class="canvasxpress-multiselect-label">Annotations <select id="canvasxpress-annotation-columns" class="canvasxpress-multiselect" multiple size="4"></select></label>
-              <label class="canvasxpress-multiselect-label">Exclude samples <select id="canvasxpress-exclude-samples" class="canvasxpress-multiselect" multiple size="4"></select></label>
-              <label>Scale <select id="canvasxpress-scale"><option value="row">Row z-score</option><option value="logcpm">log2(CPM + 1)</option></select></label>
-              <label>Distance <select id="canvasxpress-distance"><option value="euclidianDistance">Euclidean</option><option value="manhattanDistance">Manhattan</option><option value="maxDistance">Maximum</option></select></label>
-              <label>Linkage <select id="canvasxpress-linkage"><option value="average">Average</option><option value="complete">Complete</option><option value="single">Single</option></select></label>
-              <label class="check-label"><input id="canvasxpress-cluster-rows" type="checkbox" checked /> Cluster genes</label>
-              <label class="check-label"><input id="canvasxpress-cluster-columns" type="checkbox" checked /> Cluster samples</label>
-              <label class="check-label"><input id="canvasxpress-show-sample-names" type="checkbox" /> Show sample names</label>
-              <button id="canvasxpress-render" type="button">Update heatmap</button>
+              <div class="canvasxpress-control-group">
+                <div class="canvasxpress-group-title">Genes</div>
+                <div class="canvasxpress-inline-grid">
+                  <label class="canvasxpress-field"><span>Mode</span><select id="canvasxpress-gene-mode"><option value="top">Top variable</option><option value="custom">Custom list</option></select></label>
+                  <label class="canvasxpress-field canvasxpress-top-n-field"><span>Top genes</span><input id="canvasxpress-top-n" type="number" min="5" max="500" step="5" value="50" /></label>
+                </div>
+                <button id="canvasxpress-gene-list-open" class="secondary" type="button" hidden>Edit gene list</button>
+              </div>
+
+              <div class="canvasxpress-control-group">
+                <div class="canvasxpress-group-title">Annotations</div>
+                <label class="canvasxpress-field"><span>Metadata tracks</span><select id="canvasxpress-annotation-columns" class="canvasxpress-multiselect" multiple size="5"></select></label>
+              </div>
+
+              <div class="canvasxpress-control-group">
+                <div class="canvasxpress-group-title">Samples</div>
+                <label class="canvasxpress-field"><span>Exclude samples</span><select id="canvasxpress-exclude-samples" class="canvasxpress-multiselect" multiple size="5"></select></label>
+              </div>
+
+              <div class="canvasxpress-control-group">
+                <div class="canvasxpress-group-title">Matrix</div>
+                <label class="canvasxpress-field"><span>Scale</span><select id="canvasxpress-scale"><option value="row">Row z-score</option><option value="logcpm">log2(CPM + 1)</option></select></label>
+                <div class="canvasxpress-inline-grid canvasxpress-even-grid">
+                  <label class="canvasxpress-field"><span>Distance</span><select id="canvasxpress-distance"><option value="euclidianDistance">Euclidean</option><option value="manhattanDistance">Manhattan</option><option value="maxDistance">Maximum</option></select></label>
+                  <label class="canvasxpress-field"><span>Linkage</span><select id="canvasxpress-linkage"><option value="average">Average</option><option value="complete">Complete</option><option value="single">Single</option></select></label>
+                </div>
+              </div>
+
+              <div class="canvasxpress-control-group canvasxpress-control-group-display">
+                <div class="canvasxpress-group-title">Display</div>
+                <div class="canvasxpress-toggle-grid">
+                  <label class="check-label"><input id="canvasxpress-cluster-rows" type="checkbox" checked /> Cluster genes</label>
+                  <label class="check-label"><input id="canvasxpress-cluster-columns" type="checkbox" checked /> Cluster samples</label>
+                  <label class="check-label"><input id="canvasxpress-show-sample-names" type="checkbox" /> Show sample names</label>
+                </div>
+                <button id="canvasxpress-render" type="button">Update heatmap</button>
+              </div>
             </div>
             <div id="canvasxpress-gene-list-status" class="note"></div>
             <p id="canvasxpress-heatmap-status" class="note">CanvasXpress expression heatmap is ready.</p>

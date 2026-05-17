@@ -98,6 +98,7 @@ Useful builder options:
 ```bash
 python3 scripts/build_standalone_report.py --data-root path/to/data
 python3 scripts/build_standalone_report.py --project-title "Study 42 RNA-seq" --project-abbr S42 --run-id "batch-2026-05-16"
+python3 scripts/build_standalone_report.py --project-logo path/to/logo.svg
 python3 scripts/build_standalone_report.py --report-author "Jane Doe" --report-organization "Example Bioinformatics Core"
 python3 scripts/build_standalone_report.py --report-version "0.2.0"
 python3 scripts/build_standalone_report.py --output path/to/report.html
@@ -115,6 +116,10 @@ report's internal `assets/data/` path. If that directory contains
 `--project-title` overrides the title shown in the browser tab, sidebar, and
 report header for that generated HTML. `--project-abbr` or
 `--project-abbreviation` overrides the short label in the sidebar brand mark.
+`--project-logo`, `--report-logo`, or `--logo` embeds a local image file as a
+data URI and uses it instead of the short sidebar brand mark for that generated
+HTML. Relative logo paths resolve from the repo root; PNG, SVG, JPG, GIF, and
+WebP are supported.
 `--run-id` overrides the run label shown under the project title; by default
 that label is empty and hidden. `--report-author`, `--report-organization`, and
 `--report-version` override the attribution and report template version shown in

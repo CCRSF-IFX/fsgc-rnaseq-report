@@ -98,14 +98,24 @@ function renderHeader() {
   const cfg = state.config;
   const projectTitle = cleanHeaderText(cfg.projectTitle || cfg.reportTitle) || 'RNA-seq Report';
   const projectAbbreviation = cleanHeaderText(cfg.projectAbbreviation || cfg.projectAbbr) || abbreviationFromTitle(projectTitle) || 'OR';
+  const projectLogo = cleanHeaderText(cfg.projectLogo || cfg.projectLogoDataUrl || cfg.logoDataUrl);
   const attribution = reportAttributionText(cfg);
   const sidebarAttribution = reportSidebarAttributionText(cfg);
   const meta = reportMetaText(cfg);
   document.title = projectTitle;
   const brandMark = document.getElementById('project-abbreviation');
   if (brandMark) {
-    brandMark.textContent = projectAbbreviation;
     brandMark.title = projectTitle;
+    brandMark.classList.toggle('has-logo', Boolean(projectLogo));
+    if (projectLogo) {
+      const logo = document.createElement('img');
+      logo.src = projectLogo;
+      logo.alt = '';
+      logo.decoding = 'async';
+      brandMark.replaceChildren(logo);
+    } else {
+      brandMark.textContent = projectAbbreviation;
+    }
   }
   document.getElementById('project-title').textContent = projectTitle;
   document.getElementById('report-title').textContent = projectTitle;

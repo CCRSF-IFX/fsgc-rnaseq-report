@@ -4,7 +4,9 @@
 from __future__ import annotations
 
 import argparse
+import base64
 import json
+import mimetypes
 import re
 import subprocess
 import urllib.error
@@ -20,6 +22,14 @@ DEFAULT_OUTPUT = Path("dist/rnaseq-report.html")
 PLOTLY_CDN = "https://cdn.plot.ly/plotly-2.35.2.min.js"
 EMBEDDED_DATA_ROOT = "assets/data"
 QC_EXCEL_NAMES = {"qc_metrics.xlsx", "qc_metrics.xlsm"}
+LOGO_MIME_TYPES = {
+    ".gif": "image/gif",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".png": "image/png",
+    ".svg": "image/svg+xml",
+    ".webp": "image/webp",
+}
 
 JS_ORDER = [
     "assets/js/state.js",
@@ -86,11 +96,23 @@ def resolve_repo_path(path: Path, repo_root: Path) -> Path:
     return path if path.is_absolute() else repo_root / path
 
 
+def image_data_uri(path: Path, repo_root: Path) -> str:
+    resolved = resolve_repo_path(path, repo_root).resolve()
+    if not resolved.is_file():
+        raise FileNotFoundError(f"--project-logo does not exist or is not a file: {resolved}")
+    mime_type = mimetypes.guess_type(resolved.name)[0] or LOGO_MIME_TYPES.get(resolved.suffix.lower())
+    if not mime_type or not mime_type.startswith("image/"):
+        raise ValueError(f"--project-logo must be an image file with a known type: {resolved}")
+    encoded = base64.b64encode(resolved.read_bytes()).decode("ascii")
+    return f"data:{mime_type};base64,{encoded}"
+
+
 def embedded_assets(
     repo_root: Path,
     data_root_override: Path | None = None,
     project_title: str | None = None,
     project_abbreviation: str | None = None,
+    project_logo: Path | None = None,
     report_author: str | None = None,
     report_organization: str | None = None,
     report_version: str | None = None,
@@ -112,13 +134,16 @@ def embedded_assets(
         config["dataRoot"] = virtual_data_root
         config_modified = True
 
-    if project_title or project_abbreviation or report_author or report_organization or report_version or run_id:
+    if project_title or project_abbreviation or project_logo or report_author or report_organization or report_version or run_id:
         config = json.loads(config_text) if not config_modified else config
         if project_title:
             config["projectTitle"] = project_title
             config["reportTitle"] = project_title
         if project_abbreviation:
             config["projectAbbreviation"] = project_abbreviation
+        if project_logo:
+            config["projectLogo"] = image_data_uri(project_logo, repo_root)
+            config["projectLogoName"] = resolve_repo_path(project_logo, repo_root).name
         if report_author:
             config["reportAuthor"] = report_author
         if report_organization:
@@ -159,6 +184,7 @@ def bundled_app_script(repo_root: Path, args: argparse.Namespace) -> str:
             data_root_override=args.data_root,
             project_title=clean_optional_text(args.project_title),
             project_abbreviation=clean_optional_text(args.project_abbreviation),
+            project_logo=args.project_logo,
             report_author=clean_optional_text(args.report_author),
             report_organization=clean_optional_text(args.report_organization),
             report_version=clean_optional_text(args.report_version),
@@ -278,6 +304,14 @@ def main() -> None:
         "--project-abbriviations",
         dest="project_abbreviation",
         help="Override the short project label shown in the sidebar brand mark.",
+    )
+    parser.add_argument(
+        "--project-logo",
+        "--report-logo",
+        "--logo",
+        type=Path,
+        dest="project_logo",
+        help="Embed a local image file as the sidebar logo. Supports common image formats such as PNG, SVG, JPG, GIF, and WebP. Relative paths resolve from the repo root.",
     )
     parser.add_argument(
         "--run-id",

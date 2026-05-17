@@ -191,15 +191,19 @@ export async function renderActiveExpressionHeatmap() {
 }
 
 export async function renderCanvasXpressHeatmap() {
-  const canvas = document.getElementById('canvasxpress-heatmap-canvas');
+  let canvas = document.getElementById('canvasxpress-heatmap-canvas');
   const wrap = document.getElementById('canvasxpress-heatmap-wrap');
   const status = document.getElementById('canvasxpress-heatmap-status');
-  if (!canvas || !wrap) return;
+  if (!wrap) return;
+  if (!canvas) canvas = resetCanvasXpressCanvas(wrap, 'canvasxpress-heatmap-canvas');
+  const renderButton = document.getElementById('canvasxpress-render');
 
   const allSampleIds = sampleIdsInCounts(state.samples, state.counts);
   const sampleIds = canvasXpressIncludedSampleIds(allSampleIds);
   if (sampleIds.length < 2) {
     if (status) status.textContent = 'At least two count columns matching sample IDs are required.';
+    canvas.dataset.rendered = 'false';
+    wrap.innerHTML = '<p class="note">Select at least two samples to render the heatmap.</p>';
     return;
   }
 
@@ -223,6 +227,8 @@ export async function renderCanvasXpressHeatmap() {
     if (status) status.textContent = geneSelection.emptyMessage || 'No nonzero count rows were available for the CanvasXpress heatmap.';
     renderCanvasXpressColorScale(null);
     renderCanvasXpressAnnotationLegend([], []);
+    canvas.dataset.rendered = 'false';
+    wrap.innerHTML = `<p class="note">${heatmapEscapeHtml(geneSelection.emptyMessage || 'No nonzero count rows were available for the CanvasXpress heatmap.')}</p>`;
     return;
   }
 
@@ -239,17 +245,22 @@ export async function renderCanvasXpressHeatmap() {
       gene_id: rows.map((row) => row.id || ''),
       gene_name: rows.map((row) => row.name || ''),
     },
+    z: {
+      ...Object.fromEntries(annotationColumns.map((column) => [
+        column,
+        sampleIds.map((sampleId) => heatmapSampleMetadata(sampleId, column)),
+      ])),
+    },
   };
-  if (annotationColumns.length) {
-    data.z = Object.fromEntries(annotationColumns.map((column) => [
-      column,
-      sampleIds.map((sampleId) => heatmapSampleMetadata(sampleId, column)),
-    ]));
-  }
 
   try {
-    if (status) status.textContent = 'Loading CanvasXpress and rendering heatmap...';
+    if (status) status.textContent = `Rendering CanvasXpress heatmap for ${rows.length} gene${rows.length === 1 ? '' : 's'}...`;
+    if (renderButton) renderButton.disabled = true;
+    const canvasId = canvas.id;
+    renderCanvasXpressLoading(wrap, rows.length);
+    await heatmapNextFrame();
     await loadCanvasXpressAssets();
+    canvas = resetCanvasXpressCanvas(wrap, canvasId);
     canvas.dataset.rendered = 'true';
     const canvasSize = canvasXpressHeatmapSize(wrap, rows.length, sampleIds.length, annotationColumns.length, showSampleNames);
     canvas.width = canvasSize.width;
@@ -262,7 +273,7 @@ export async function renderCanvasXpressHeatmap() {
 
     new globalThis.CanvasXpress(canvas.id, data, {
       graphType: 'Heatmap',
-      graphOrientation: 'vertical',
+      graphOrientation: 'horizontal',
       title: '',
       showTitle: false,
       marginTop: 8,
@@ -275,6 +286,7 @@ export async function renderCanvasXpressHeatmap() {
       showSmpDendrogram: clusterRows,
       showVarDendrogram: clusterColumns,
       varOverlays: annotationColumns,
+      showSmpOverlaysLegend: false,
       showVarOverlaysLegend: false,
       varOverlayProperties: Object.fromEntries(annotationColumns.map((column) => [
         column,
@@ -302,6 +314,7 @@ export async function renderCanvasXpressHeatmap() {
       legendTextScaleFontFactor: 0.78,
       smpTitleLabelPosition: 'right',
       varTitleLabelPosition: 'bottom',
+      smpTitle: 'Genes',
       varTitle: showSampleNames ? 'Samples' : false,
     });
     const excluded = allSampleIds.length - sampleIds.length;
@@ -315,6 +328,8 @@ export async function renderCanvasXpressHeatmap() {
     renderCanvasXpressColorScale(null);
     renderCanvasXpressAnnotationLegend([], []);
     if (status) status.textContent = `CanvasXpress heatmap failed: ${error.message}`;
+  } finally {
+    if (renderButton) renderButton.disabled = false;
   }
 }
 
@@ -548,12 +563,16 @@ function syncCanvasXpressSampleOptions() {
 function syncCanvasXpressGeneControls() {
   const mode = document.getElementById('canvasxpress-gene-mode')?.value || 'top';
   const topInput = document.getElementById('canvasxpress-top-n');
+  const topField = topInput?.closest('.canvasxpress-field');
+  const geneModeGrid = topInput?.closest('.canvasxpress-inline-grid');
   const geneListOpen = document.getElementById('canvasxpress-gene-list-open');
   const status = document.getElementById('canvasxpress-gene-list-status');
   const isCustom = mode === 'custom';
   const geneCount = heatmapCustomGeneTerms().length;
 
   if (topInput) topInput.disabled = isCustom;
+  if (topField) topField.hidden = isCustom;
+  if (geneModeGrid) geneModeGrid.classList.toggle('is-custom-mode', isCustom);
   if (geneListOpen) {
     geneListOpen.hidden = !isCustom;
     geneListOpen.textContent = geneCount ? `Edit gene list (${geneCount})` : 'Edit gene list';
@@ -586,6 +605,21 @@ function canvasXpressIncludedSampleIds(allSampleIds) {
 
 function canvasXpressRendered() {
   return document.getElementById('canvasxpress-heatmap-canvas')?.dataset.rendered === 'true';
+}
+
+function resetCanvasXpressCanvas(wrap, canvasId) {
+  wrap.innerHTML = '';
+  const canvas = document.createElement('canvas');
+  canvas.id = canvasId;
+  canvas.width = 1100;
+  canvas.height = 720;
+  canvas.dataset.rendered = 'false';
+  wrap.appendChild(canvas);
+  return canvas;
+}
+
+function renderCanvasXpressLoading(wrap, geneCount) {
+  wrap.innerHTML = `<div class="canvasxpress-loading">Rendering ${geneCount} gene${geneCount === 1 ? '' : 's'}...</div>`;
 }
 
 function canvasXpressHeatmapSize(wrap, geneCount, sampleCount, annotationCount, showSampleNames) {
@@ -965,6 +999,10 @@ function heatmapLoadStylesheet(href) {
     link.onerror = () => reject(new Error(`Failed to load ${href}`));
     document.head.appendChild(link);
   });
+}
+
+function heatmapNextFrame() {
+  return new Promise((resolve) => requestAnimationFrame(() => resolve()));
 }
 
 function heatmapTileTip(tileData) {
