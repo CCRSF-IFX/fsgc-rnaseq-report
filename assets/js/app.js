@@ -379,27 +379,40 @@ async function refreshReportFromState() {
 }
 
 function wireTabs() {
+  document.querySelectorAll('[data-go-tab]').forEach((button) => {
+    button.addEventListener('click', () => activateTab(button.dataset.goTab));
+  });
   document.querySelectorAll('.tab-button').forEach((button) => {
-    button.addEventListener('click', () => {
-      document.querySelectorAll('.tab-button').forEach((b) => b.classList.remove('active'));
-      document.querySelectorAll('.tab-panel').forEach((p) => p.classList.remove('active'));
-      button.classList.add('active');
-      const panel = document.getElementById(`tab-${button.dataset.tab}`);
-      panel.classList.add('active');
-      requestAnimationFrame(adjustVisibleDataTables);
-      if (globalThis.Plotly?.Plots) {
-        requestAnimationFrame(() => {
-          panel.querySelectorAll('.js-plotly-plot').forEach((plot) => Plotly.Plots.resize(plot));
-          if (button.dataset.tab === 'clustering') {
-            renderExpressionHeatmap();
-            resizeExpressionHeatmap();
-          }
-        });
-      } else if (button.dataset.tab === 'clustering') {
-        requestAnimationFrame(() => renderExpressionHeatmap());
+    button.addEventListener('click', () => activateTab(button.dataset.tab));
+  });
+}
+
+function activateTab(tabName) {
+  const button = document.querySelector(`.tab-button[data-tab="${cssEscape(tabName)}"]`);
+  const panel = document.getElementById(`tab-${tabName}`);
+  if (!button || !panel) return;
+
+  document.querySelectorAll('.tab-button').forEach((b) => b.classList.remove('active'));
+  document.querySelectorAll('.tab-panel').forEach((p) => p.classList.remove('active'));
+  button.classList.add('active');
+  panel.classList.add('active');
+  requestAnimationFrame(adjustVisibleDataTables);
+  if (globalThis.Plotly?.Plots) {
+    requestAnimationFrame(() => {
+      panel.querySelectorAll('.js-plotly-plot').forEach((plot) => Plotly.Plots.resize(plot));
+      if (tabName === 'clustering') {
+        renderExpressionHeatmap();
+        resizeExpressionHeatmap();
       }
     });
-  });
+  } else if (tabName === 'clustering') {
+    requestAnimationFrame(() => renderExpressionHeatmap());
+  }
+}
+
+function cssEscape(value) {
+  if (globalThis.CSS?.escape) return globalThis.CSS.escape(String(value || ''));
+  return String(value || '').replace(/["\\]/g, '\\$&');
 }
 
 main();

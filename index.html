@@ -19,15 +19,20 @@
       </div>
       <nav id="tab-nav">
         <button class="tab-button active" data-tab="overview">Overview</button>
-        <button class="tab-button" data-tab="samples">Sample Metadata</button>
-        <button class="tab-button" data-tab="qc">QC Dashboard</button>
+        <span class="nav-section">Setup</span>
+        <button class="tab-button" data-tab="samples">Data Setup</button>
+        <span class="nav-section">Quality</span>
+        <button class="tab-button" data-tab="qc">QC</button>
+        <span class="nav-section">Explore</span>
         <button class="tab-button" data-tab="pca">PCA</button>
-        <button class="tab-button" data-tab="clustering">Clustering</button>
-        <button class="tab-button" data-tab="counts">Count Matrix</button>
+        <button class="tab-button" data-tab="clustering">Heatmap & Clustering</button>
+        <button class="tab-button" data-tab="counts">Gene Counts</button>
+        <span class="nav-section">Analyze</span>
         <button class="tab-button" data-tab="de">Differential Expression</button>
         <button class="tab-button" data-tab="enrichment">GSEA</button>
-        <button class="tab-button" data-tab="provenance">Methods</button>
-        <button class="tab-button" data-tab="downstream">Optional Analysis</button>
+        <span class="nav-section">Export</span>
+        <button class="tab-button" data-tab="provenance">Methods & Export</button>
+        <button class="tab-button" data-tab="downstream">Runtime & Packages</button>
       </nav>
     </aside>
 
@@ -60,7 +65,7 @@
 
       <section class="tab-panel" id="tab-samples">
         <article class="card">
-          <h3>User data</h3>
+          <h3>Data setup</h3>
           <p class="note">Upload a sample manifest for the embedded count matrix, or upload a new count matrix with its matching manifest.</p>
           <div class="toolbar upload-toolbar">
             <label>Count matrix CSV <input id="user-counts-file" type="file" accept=".csv,text/csv" /></label>
@@ -68,6 +73,19 @@
             <button id="user-data-apply">Use uploaded data</button>
           </div>
           <p class="note" id="user-data-status">Pipeline defaults are loaded. A sample manifest is required for user-driven DESeq2 and fgsea.</p>
+        </article>
+        <article class="card">
+          <h3>Analysis setup</h3>
+          <div class="setup-flow">
+            <div><strong>1. Load data</strong><p>Use the embedded count matrix or upload a replacement with a matching manifest.</p></div>
+            <div><strong>2. Check design</strong><p>Confirm sample matching, primary factor, reference level, and optional covariates before DESeq2.</p></div>
+            <div><strong>3. Run analysis</strong><p>Use DESeq2 first, then fgsea with an hg38/mm10 or uploaded GMT reference.</p></div>
+          </div>
+          <div class="toolbar">
+            <button class="secondary" data-go-tab="de">Configure DESeq2</button>
+            <button class="secondary" data-go-tab="enrichment">Configure GSEA</button>
+            <button class="secondary" data-go-tab="downstream">Check packages</button>
+          </div>
         </article>
         <article class="card">
           <h3>Sample metadata</h3>
@@ -171,14 +189,6 @@
           </div>
           <p class="note" id="deseq-status">DESeq2 uses webR and the configured package snapshot for small exploratory runs.</p>
         </article>
-        <article class="card">
-          <h3>Analysis cache</h3>
-          <div class="toolbar">
-            <button id="analysis-cache-export" class="secondary" disabled>Export cache</button>
-            <label>Load cache <input id="analysis-cache-file" type="file" accept=".json,application/json" /></label>
-          </div>
-          <p class="note" id="analysis-cache-status">Export DESeq2 and all fgsea result sets together, then reload them later without rerunning browser-side analysis.</p>
-        </article>
       </section>
 
       <section class="tab-panel" id="tab-enrichment">
@@ -201,6 +211,14 @@
 
       <section class="tab-panel" id="tab-provenance">
         <article class="card">
+          <h3>Analysis cache</h3>
+          <div class="toolbar">
+            <button id="analysis-cache-export" class="secondary" disabled>Export cache</button>
+            <label>Load cache <input id="analysis-cache-file" type="file" accept=".json,application/json" /></label>
+          </div>
+          <p class="note" id="analysis-cache-status">Export DESeq2 and all fgsea result sets together, then reload them later without rerunning browser-side analysis.</p>
+        </article>
+        <article class="card">
           <h3>Methods and provenance</h3>
           <div id="provenance-panel"></div>
         </article>
@@ -208,7 +226,7 @@
 
       <section class="tab-panel" id="tab-downstream">
         <article class="card">
-          <h3>Optional downstream analysis</h3>
+          <h3>Runtime and packages</h3>
           <p class="warning">Browser-side analysis is for small exploratory datasets. Use pipeline-generated results for production RNA-seq differential expression.</p>
           <div id="package-repository-panel"></div>
           <div id="downstream-cards" class="grid two"></div>
