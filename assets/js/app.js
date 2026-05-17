@@ -12,6 +12,8 @@ import { setupFgseaControls } from './fgsea.js';
 import { renderExpressionHeatmap, resizeExpressionHeatmap, setupExpressionHeatmapControls } from './heatmap.js';
 import { setupUserDataControls } from './userData.js';
 import { setupAnalysisCacheControls } from './analysisCache.js';
+import { sampleIdsInCounts } from './analysis.js';
+import { getPackageStatus } from './packageManager.js';
 
 async function main() {
   wireTabs();
@@ -24,6 +26,7 @@ async function main() {
     setupDeseqControls({ populateContrastSelectors, renderCurrentContrast });
     setupFgseaControls();
     setupAnalysisCacheControls({ populateContrastSelectors, renderCurrentContrast, renderCurrentEnrichment });
+    renderAnalysisReadiness();
     renderDownstreamCards();
     renderPackageRepositoryPanel();
     setStatus('Report assets loaded; loading plots...');
@@ -131,6 +134,142 @@ function renderSamples() {
   };
 }
 
+function renderAnalysisReadiness() {
+  const container = document.getElementById('analysis-readiness');
+  if (!container) return;
+  const items = analysisReadinessItems();
+  container.innerHTML = items.map((item) => `
+    <div class="readiness-item ${item.tone}">
+      <span class="readiness-dot" aria-hidden="true"></span>
+      <div><strong>${escapeHtml(item.title)}</strong><p>${escapeHtml(item.message)}</p></div>
+    </div>`).join('');
+}
+
+function analysisReadinessItems() {
+  const sampleIds = sampleIdsInCounts(state.samples, state.counts);
+  const metadata = metadataColumns();
+  const factorColumns = metadata.filter((column) => metadataLevels(column).length >= 2);
+  const primary = document.getElementById('deseq-design-column')?.value
+    || state.config?.analysis?.conditionColumn
+    || factorColumns[0]
+    || '';
+  const numerator = document.getElementById('deseq-numerator-level')?.value || '';
+  const denominator = document.getElementById('deseq-denominator-level')?.value
+    || document.getElementById('deseq-reference-level')?.value
+    || '';
+  const adjustColumns = selectedValues('deseq-adjust-columns');
+  const gseaReference = document.getElementById('gsea-reference')?.value || state.config?.analysis?.gseaReference || '';
+  const gseaReferences = state.config?.gsea?.references || {};
+  const gmtUploaded = (document.getElementById('gsea-gmt-file')?.files?.length || 0) > 0;
+  const packageStatuses = ['DESeq2', 'fgsea'].map((pkg) => `${pkg}: ${getPackageStatus(pkg)}`);
+  const packagesReady = ['DESeq2', 'fgsea'].every((pkg) => packageReadyStatus(getPackageStatus(pkg)));
+  const webREnabled = state.config?.webr?.enabled !== false;
+  const designCounts = groupCounts(sampleIds, primary, numerator, denominator);
+  const designReady = primary && numerator && denominator && numerator !== denominator
+    && designCounts.numerator >= 2 && designCounts.denominator >= 2;
+  const covariateIssues = covariateReadinessIssues(sampleIds, primary, numerator, denominator, adjustColumns);
+
+  return [
+    {
+      tone: sampleIds.length >= 2 && state.counts.length > 0 ? 'ok' : 'fail',
+      title: 'Count matrix',
+      message: state.counts.length > 0
+        ? `${state.counts.length.toLocaleString()} genes loaded; ${sampleIds.length}/${state.samples.length} samples match count columns.`
+        : 'No count matrix rows are loaded.',
+    },
+    {
+      tone: factorColumns.length ? 'ok' : 'warn',
+      title: 'Sample manifest',
+      message: factorColumns.length
+        ? `${metadata.length} metadata column(s) available; analysis factors: ${factorColumns.join(', ')}.`
+        : 'No grouping column with at least two levels is available; upload a manifest before DESeq2 or fgsea.',
+    },
+    {
+      tone: designReady ? 'ok' : 'fail',
+      title: 'DESeq2 design',
+      message: designReady
+        ? `${primary}: ${numerator} (${designCounts.numerator}) vs ${denominator} (${designCounts.denominator}).`
+        : 'Choose a primary factor with two different levels and at least two samples per group.',
+    },
+    {
+      tone: covariateIssues.length ? 'warn' : 'ok',
+      title: 'Covariates/blocking',
+      message: adjustColumns.length
+        ? (covariateIssues.length ? covariateIssues.join(' ') : `Selected: ${adjustColumns.join(', ')}.`)
+        : 'No optional covariates selected.',
+    },
+    {
+      tone: webREnabled ? (packagesReady ? 'ok' : 'warn') : 'fail',
+      title: 'webR packages',
+      message: webREnabled
+        ? `${state.config?.webr?.packageRepoVersion || 'snapshot'} configured; ${packageStatuses.join('; ')}. Install/load packages or mount the library bundle before browser analysis.`
+        : 'webR is disabled in report_config.json.',
+    },
+    {
+      tone: gmtUploaded || gseaReferences[gseaReference]?.pathwayFile ? 'ok' : 'fail',
+      title: 'GSEA reference',
+      message: gmtUploaded
+        ? 'Uploaded GMT file(s) will be used for fgsea.'
+        : (gseaReferences[gseaReference]?.pathwayFile
+          ? `${gseaReferences[gseaReference].label || gseaReference} is configured for fgsea.`
+          : 'Choose hg38/mm10 or upload a GMT file before running fgsea.'),
+    },
+  ];
+}
+
+function metadataLevels(column) {
+  return Array.from(new Set(state.samples
+    .map((sample) => sample[column])
+    .filter((value) => value !== undefined && value !== null && value !== '')
+    .map(String)));
+}
+
+function selectedValues(selectId) {
+  return Array.from(document.getElementById(selectId)?.selectedOptions || [])
+    .map((option) => option.value)
+    .filter(Boolean);
+}
+
+function groupCounts(sampleIds, column, numerator, denominator) {
+  const counts = { numerator: 0, denominator: 0 };
+  sampleIds.forEach((sampleId) => {
+    const value = sampleMetadataValue(sampleId, column);
+    if (value === numerator) counts.numerator += 1;
+    if (value === denominator) counts.denominator += 1;
+  });
+  return counts;
+}
+
+function covariateReadinessIssues(sampleIds, primary, numerator, denominator, adjustColumns) {
+  if (!adjustColumns.length) return [];
+  const selectedSampleIds = primary && numerator && denominator
+    ? sampleIds.filter((sampleId) => {
+      const value = sampleMetadataValue(sampleId, primary);
+      return value === numerator || value === denominator;
+    })
+    : sampleIds;
+  return adjustColumns.flatMap((column) => {
+    const values = selectedSampleIds.map((sampleId) => sampleMetadataValue(sampleId, column));
+    if (values.some((value) => value === '')) return [`${column} has missing values.`];
+    if (new Set(values).size < 2) return [`${column} has fewer than two levels in the selected samples.`];
+    return [];
+  });
+}
+
+function sampleMetadataValue(sampleId, column) {
+  if (!column) return '';
+  const value = state.samples.find((sample) => sample.sample_id === sampleId)?.[column];
+  return value === undefined || value === null ? '' : String(value);
+}
+
+function packageReadyStatus(status) {
+  return ['installed', 'loaded', 'mounted'].includes(status);
+}
+
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>'"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[ch]));
+}
+
 function renderQC() {
   const summary = summarizeQC();
   document.getElementById('qc-summary').innerHTML = `
@@ -200,6 +339,14 @@ function wireControls() {
   document.getElementById('contrast-select')?.addEventListener('change', renderCurrentContrast);
   document.getElementById('enrichment-contrast-select')?.addEventListener('change', renderCurrentEnrichment);
   document.getElementById('gsea-result-select')?.addEventListener('change', renderCurrentEnrichment);
+  document.getElementById('deseq-design-column')?.addEventListener('change', renderAnalysisReadiness);
+  document.getElementById('deseq-reference-level')?.addEventListener('change', renderAnalysisReadiness);
+  document.getElementById('deseq-numerator-level')?.addEventListener('change', renderAnalysisReadiness);
+  document.getElementById('deseq-denominator-level')?.addEventListener('change', renderAnalysisReadiness);
+  document.getElementById('deseq-adjust-columns')?.addEventListener('change', renderAnalysisReadiness);
+  document.getElementById('gsea-reference')?.addEventListener('change', renderAnalysisReadiness);
+  document.getElementById('gsea-gmt-file')?.addEventListener('change', renderAnalysisReadiness);
+  document.addEventListener('rnaseq-report:packages-changed', renderAnalysisReadiness);
   document.getElementById('count-gene-button')?.addEventListener('click', () => renderCountExplorerPlot());
   document.getElementById('count-gene-input')?.addEventListener('keydown', (event) => {
     if (event.key === 'Enter') renderCountExplorerPlot();
@@ -366,6 +513,7 @@ async function refreshReportFromState() {
   setupDeseqControls({ populateContrastSelectors, renderCurrentContrast });
   setupFgseaControls();
   setupAnalysisCacheControls({ populateContrastSelectors, renderCurrentContrast, renderCurrentEnrichment });
+  renderAnalysisReadiness();
   renderDownstreamCards();
   renderPackageRepositoryPanel();
   renderQC();

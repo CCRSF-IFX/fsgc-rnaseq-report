@@ -68,6 +68,14 @@ body { margin: 0; font-family: Inter, ui-sans-serif, system-ui, -apple-system, B
 .setup-flow > div { border: 1px solid var(--line); border-radius: 8px; padding: 12px; background: #f8fafc; }
 .setup-flow strong { display: block; margin-bottom: 5px; }
 .setup-flow p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.4; }
+.readiness-list { display: grid; gap: 8px; margin: 8px 0 16px; }
+.readiness-item { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px 10px; align-items: start; border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; background: white; }
+.readiness-dot { width: 10px; height: 10px; margin-top: 5px; border-radius: 999px; background: var(--muted); }
+.readiness-item.ok .readiness-dot { background: var(--ok); }
+.readiness-item.warn .readiness-dot { background: var(--warn); }
+.readiness-item.fail .readiness-dot { background: var(--fail); }
+.readiness-item strong { display: block; margin-bottom: 2px; }
+.readiness-item p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.4; }
 input, select, textarea, button, .button { font: inherit; border: 1px solid var(--line); border-radius: 8px; padding: 9px 10px; background: white; }
 textarea { min-height: 44px; resize: vertical; }
 button, .button { background: var(--accent); border-color: var(--accent); color: white; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; justify-content: center; }

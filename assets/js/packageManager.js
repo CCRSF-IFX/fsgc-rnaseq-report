@@ -9,6 +9,7 @@ export function getPackageStatus(pkg) {
 
 export function markPackagesAvailable(packages, status = 'mounted') {
   uniquePackageNames(packages).forEach((pkg) => packageStatus.set(pkg, status));
+  notifyPackageStatusChanged();
 }
 
 export async function ensureRPackages(packages, options = {}) {
@@ -38,10 +39,12 @@ export async function ensureRPackages(packages, options = {}) {
       await loadPackageWithStatus(pkg);
     }
     await progress.done(`Packages ready: ${loadTargets.join(', ')}`);
+    notifyPackageStatusChanged();
   } catch (error) {
     missing.concat(needsLoad).forEach((pkg) => packageStatus.set(pkg, 'failed'));
     await progress.fail(`package setup failed: ${error.message}`);
     logAnalysis(`Package installation failed: ${error.message}`);
+    notifyPackageStatusChanged();
     throw error;
   }
 }
@@ -62,4 +65,8 @@ async function loadPackageWithStatus(pkg) {
     packageStatus.set(pkg, 'failed');
     throw error;
   }
+}
+
+function notifyPackageStatusChanged() {
+  document.dispatchEvent(new CustomEvent('rnaseq-report:packages-changed'));
 }
