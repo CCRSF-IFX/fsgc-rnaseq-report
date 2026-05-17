@@ -1,8 +1,7 @@
 import { state, logAnalysis, createProgressReporter, runWithProgressPulse } from './state.js';
 import { loadDeForContrast, loadText, parseCsv } from './dataLoader.js';
 import { ensureRPackages } from './packageManager.js';
-import { renderEnrichment } from './plots.js';
-import { renderTable } from './tables.js';
+import { renderCurrentEnrichment, storeGseaResult } from './enrichment.js';
 import { evalR } from './webrManager.js';
 import { markAnalysisCacheDirty } from './analysisCache.js';
 
@@ -38,7 +37,7 @@ export async function runFgseaAnalysis() {
 
     fgseaSetStatus(status, 'Loading pathway GMT...');
     await progress.step(`Loading ${reference} pathway GMT`, 2);
-    const gmtText = await loadGmtForReference(reference);
+    const gmtSources = await loadGmtSources(reference);
     const minSize = fgseaPositiveInteger(document.getElementById('gsea-min-size')?.value, 1, 5);
     const maxSize = fgseaPositiveInteger(document.getElementById('gsea-max-size')?.value, minSize, 500);
 
@@ -49,25 +48,53 @@ export async function runFgseaAnalysis() {
     const runMessage = `Running fgsea in webR for ${deRows.length} ranked genes`;
     fgseaSetStatus(status, `${runMessage}. Keep this tab open.`);
     await progress.step(runMessage, 4);
-    const rows = await runWithProgressPulse(
-      progress,
-      `${runMessage}; still working`,
-      () => fgseaRunInWebR(deRows, gmtText, reference, minSize, maxSize),
-      {
-        intervalMs: 10000,
-        onPulse: (message) => fgseaSetStatus(status, `${message}. Keep this tab open.`),
-      },
-    );
-    if (!rows.length) throw new Error('fgsea returned no pathways. Check gene identifiers and pathway gene sets.');
+    const completed = [];
+    for (let index = 0; index < gmtSources.length; index += 1) {
+      const source = gmtSources[index];
+      const sourceMessage = gmtSources.length > 1
+        ? `${runMessage} (${index + 1}/${gmtSources.length}: ${source.source_label})`
+        : `${runMessage} (${source.source_label})`;
+      fgseaSetStatus(status, `${sourceMessage}. Keep this tab open.`);
+      const rows = await runWithProgressPulse(
+        progress,
+        `${sourceMessage}; still working`,
+        () => fgseaRunInWebR(deRows, source.gmtText, source.source_label, minSize, maxSize),
+        {
+          intervalMs: 10000,
+          onPulse: (message) => fgseaSetStatus(status, `${message}. Keep this tab open.`),
+        },
+      );
+      if (!rows.length) throw new Error(`fgsea returned no pathways for ${source.source_label}. Check gene identifiers and pathway gene sets.`);
+      const resultId = fgseaResultId(contrast.id, source, minSize, maxSize);
+      const result = storeGseaResult({
+        result_id: resultId,
+        contrast_id: contrast.id,
+        label: `${contrast.label || contrast.id} - ${source.source_label}`,
+        source_kind: source.source_kind,
+        source_id: source.source_id,
+        source_label: source.source_label,
+        reference,
+        min_size: minSize,
+        max_size: maxSize,
+        created_at: new Date().toISOString(),
+        rows: rows.map((row) => ({
+          ...row,
+          reference: row.reference || source.source_label,
+          pathway_source: source.source_label,
+        })),
+      });
+      completed.push(result);
+      markAnalysisCacheDirty(`fgsea ${contrast.label || contrast.id} ${source.source_label}`);
+    }
 
     await progress.step('Rendering enrichment plot and table', 5);
-    state.enrichmentResults.set(contrast.id, rows);
-    markAnalysisCacheDirty(`fgsea ${contrast.label || contrast.id}`);
-    renderEnrichment(rows);
-    renderTable('enrichment-table', rows, { pageLength: 25, exportName: `${contrast.id}.${reference}.fgsea.csv` });
-    const message = `fgsea complete for ${contrast.label || contrast.id}: ${rows.length} pathways (${reference}).`;
+    const lastResult = completed[completed.length - 1];
+    await renderCurrentEnrichment({ resultId: lastResult?.result_id });
+    const totalPathways = completed.reduce((sum, result) => sum + result.rows.length, 0);
+    const sourceLabel = completed.length === 1 ? completed[0].source_label : `${completed.length} GMT files`;
+    const message = `fgsea complete for ${contrast.label || contrast.id}: ${totalPathways} pathway rows across ${sourceLabel}.`;
     fgseaSetStatus(status, message);
-    await progress.done(`${rows.length} pathways (${reference})`);
+    await progress.done(`${totalPathways} pathway rows`);
     logAnalysis(message);
   } catch (error) {
     fgseaSetStatus(status, `fgsea failed: ${error.message}`);
@@ -104,16 +131,46 @@ function gseaReferences() {
   };
 }
 
-async function loadGmtForReference(referenceId) {
-  const uploaded = document.getElementById('gsea-gmt-file')?.files?.[0];
-  if (uploaded) return uploaded.text();
+async function loadGmtSources(referenceId) {
+  const uploaded = Array.from(document.getElementById('gsea-gmt-file')?.files || []);
+  if (uploaded.length) {
+    return Promise.all(uploaded.map(async (file) => ({
+      source_kind: 'uploaded',
+      source_id: `${file.name}-${file.size}-${file.lastModified}`,
+      source_label: file.name,
+      gmtText: await file.text(),
+    })));
+  }
 
   const reference = gseaReferences()[referenceId];
   if (!reference?.pathwayFile) throw new Error(`No pathway file is configured for ${referenceId}.`);
   const dataRoot = state.config?.dataRoot || 'assets/data';
   const text = await loadText(`${dataRoot}/${reference.pathwayFile}`, true);
   if (!text) throw new Error(`No pathway GMT was found for ${referenceId}.`);
-  return text;
+  return [{
+    source_kind: 'reference',
+    source_id: referenceId,
+    source_label: reference.label || referenceId,
+    gmtText: text,
+  }];
+}
+
+function fgseaResultId(contrastId, source, minSize, maxSize) {
+  return [
+    contrastId,
+    source.source_kind,
+    source.source_id || source.source_label,
+    `min${minSize}`,
+    `max${maxSize}`,
+  ].map(fgseaSlug).filter(Boolean).join('__');
+}
+
+function fgseaSlug(value) {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '') || 'gsea';
 }
 
 async function fgseaRunInWebR(deRows, gmtText, reference, minSize, maxSize) {

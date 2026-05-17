@@ -1,7 +1,7 @@
 import { state, logAnalysis, setStatus } from './state.js';
 
 const CACHE_KIND = 'rnaseq-report-analysis-cache';
-const CACHE_VERSION = 1;
+const CACHE_VERSION = 2;
 
 let cacheControlsWired = false;
 let cacheDirty = false;
@@ -21,7 +21,7 @@ export function setupAnalysisCacheControls(callbacks = {}) {
 export function markAnalysisCacheDirty(reason = '') {
   cacheDirty = true;
   updateAnalysisCacheControls();
-  setAnalysisCacheStatus('Unsaved browser analysis results are available. Export a cache before closing the tab to reuse DESeq2 and fgsea results later.');
+  setAnalysisCacheStatus('Unsaved browser analysis results are available. Export a cache before closing the tab to reuse DESeq2 and all fgsea result sets later.');
   if (reason) logAnalysis(`Analysis cache has unsaved results: ${reason}`);
 }
 
@@ -70,7 +70,7 @@ async function importAnalysisCacheFromInput(event) {
 function buildAnalysisCache() {
   const contrastIds = new Set([
     ...state.deResults.keys(),
-    ...state.enrichmentResults.keys(),
+    ...Array.from(state.enrichmentResults.entries()).map(([key, value]) => gseaCacheContrastId(key, value)),
   ]);
   const contrasts = Array.from(contrastIds).map((id) => {
     const contrast = state.contrasts.find((item) => item.id === id) || { id, label: id };
@@ -89,17 +89,15 @@ function buildAnalysisCache() {
       contrast_id,
       rows: plainRows(rows),
     })),
-    gsea_results: Array.from(state.enrichmentResults.entries()).map(([contrast_id, rows]) => ({
-      contrast_id,
-      rows: plainRows(rows),
-    })),
+    gsea_results: Array.from(state.enrichmentResults.entries()).map(([key, value]) => gseaCacheEntry(key, value)),
   };
 }
 
 function parseAnalysisCache(value) {
   if (!value || typeof value !== 'object') throw new Error('Cache file is not a JSON object.');
   if (value.cache_kind !== CACHE_KIND) throw new Error('Cache file is not an RNA-seq report analysis cache.');
-  if (Number(value.cache_version) !== CACHE_VERSION) {
+  const version = Number(value.cache_version);
+  if (![1, CACHE_VERSION].includes(version)) {
     throw new Error(`Unsupported cache version: ${value.cache_version || 'unknown'}.`);
   }
   if (!Array.isArray(value.de_results) || !Array.isArray(value.gsea_results)) {
@@ -107,6 +105,7 @@ function parseAnalysisCache(value) {
   }
   return {
     ...value,
+    cache_version: version,
     contrasts: Array.isArray(value.contrasts) ? value.contrasts : [],
   };
 }
@@ -143,7 +142,20 @@ function restoreAnalysisCache(cache) {
         cached: true,
       });
     }
-    state.enrichmentResults.set(entry.contrast_id, plainRows(entry.rows));
+    const resultId = entry.result_id || gseaCacheResultId(entry);
+    state.enrichmentResults.set(resultId, {
+      result_id: resultId,
+      contrast_id: entry.contrast_id,
+      label: entry.label || entry.source_label || entry.reference || entry.contrast_id,
+      source_kind: entry.source_kind || (cache.cache_version === 1 ? 'legacy-cache' : ''),
+      source_id: entry.source_id || entry.reference || resultId,
+      source_label: entry.source_label || entry.reference || 'Cached GSEA result',
+      reference: entry.reference || '',
+      min_size: entry.min_size ?? '',
+      max_size: entry.max_size ?? '',
+      created_at: entry.created_at || '',
+      rows: plainRows(entry.rows),
+    });
   });
 
   state.contrasts = Array.from(contrastById.values());
@@ -152,12 +164,13 @@ function restoreAnalysisCache(cache) {
 async function refreshImportedAnalysis(cache) {
   cacheCallbacks.populateContrastSelectors?.();
   const firstContrastId = cache.de_results[0]?.contrast_id || cache.gsea_results[0]?.contrast_id || '';
+  const firstGseaResultId = cache.gsea_results[0]?.result_id || (cache.gsea_results[0] ? gseaCacheResultId(cache.gsea_results[0]) : '');
   for (const id of ['contrast-select', 'enrichment-contrast-select']) {
     const select = document.getElementById(id);
     if (select && firstContrastId) select.value = firstContrastId;
   }
   await cacheCallbacks.renderCurrentContrast?.();
-  await cacheCallbacks.renderCurrentEnrichment?.();
+  await cacheCallbacks.renderCurrentEnrichment?.({ resultId: firstGseaResultId });
   setStatus('Analysis cache loaded');
 }
 
@@ -187,6 +200,46 @@ function plainRows(rows) {
 
 function plainObject(value) {
   return Object.fromEntries(Object.entries(value || {}).map(([key, item]) => [key, item ?? '']));
+}
+
+function gseaCacheEntry(key, value) {
+  if (Array.isArray(value)) {
+    return {
+      result_id: key,
+      contrast_id: key,
+      source_kind: 'legacy',
+      source_id: key,
+      source_label: 'Legacy GSEA result',
+      rows: plainRows(value),
+    };
+  }
+  return {
+    result_id: value.result_id || key,
+    contrast_id: value.contrast_id || key,
+    label: value.label || '',
+    source_kind: value.source_kind || '',
+    source_id: value.source_id || '',
+    source_label: value.source_label || value.reference || '',
+    reference: value.reference || '',
+    min_size: value.min_size ?? '',
+    max_size: value.max_size ?? '',
+    created_at: value.created_at || '',
+    rows: plainRows(value.rows),
+  };
+}
+
+function gseaCacheContrastId(key, value) {
+  return Array.isArray(value) ? key : (value?.contrast_id || key);
+}
+
+function gseaCacheResultId(entry) {
+  return [
+    entry.contrast_id,
+    entry.source_kind || 'gsea',
+    entry.source_id || entry.source_label || entry.reference || 'cached',
+    entry.min_size ? `min${entry.min_size}` : '',
+    entry.max_size ? `max${entry.max_size}` : '',
+  ].map(slug).filter(Boolean).join('__') || `${entry.contrast_id || 'contrast'}__gsea`;
 }
 
 function analysisCacheFilename(cache) {

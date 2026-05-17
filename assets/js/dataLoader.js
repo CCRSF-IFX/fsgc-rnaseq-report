@@ -228,12 +228,34 @@ export async function loadDeForContrast(contrast) {
 
 export async function loadEnrichmentForContrast(contrast) {
   if (!contrast) return [];
-  if (state.enrichmentResults.has(contrast.id)) return state.enrichmentResults.get(contrast.id);
+  const cached = enrichmentResultForContrast(contrast.id, 'pipeline');
+  if (cached) return enrichmentRows(cached);
   if (!contrast.enrichment_file) return [];
   const dataRoot = state.config.dataRoot || 'assets/data';
   const rows = parseCsv(await loadText(`${dataRoot}/${contrast.enrichment_file}`, false));
-  state.enrichmentResults.set(contrast.id, rows);
+  state.enrichmentResults.set(`${contrast.id}::pipeline`, {
+    result_id: `${contrast.id}::pipeline`,
+    contrast_id: contrast.id,
+    label: `${contrast.label || contrast.id} pipeline enrichment`,
+    source_kind: 'pipeline',
+    source_id: contrast.enrichment_file || 'pipeline',
+    source_label: 'Pipeline enrichment',
+    rows,
+  });
   return rows;
+}
+
+function enrichmentResultForContrast(contrastId, sourceKind = '') {
+  if (state.enrichmentResults.has(contrastId)) return state.enrichmentResults.get(contrastId);
+  return Array.from(state.enrichmentResults.values()).find((entry) => {
+    if (Array.isArray(entry)) return false;
+    if (entry?.contrast_id !== contrastId) return false;
+    return !sourceKind || entry.source_kind === sourceKind;
+  });
+}
+
+function enrichmentRows(entry) {
+  return Array.isArray(entry) ? entry : (entry?.rows || []);
 }
 
 function validateSamples(samples) {

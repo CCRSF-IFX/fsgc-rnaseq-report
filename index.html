@@ -177,7 +177,7 @@
             <button id="analysis-cache-export" class="secondary" disabled>Export cache</button>
             <label>Load cache <input id="analysis-cache-file" type="file" accept=".json,application/json" /></label>
           </div>
-          <p class="note" id="analysis-cache-status">Export DESeq2 and fgsea results together, then reload them later without rerunning browser-side analysis.</p>
+          <p class="note" id="analysis-cache-status">Export DESeq2 and all fgsea result sets together, then reload them later without rerunning browser-side analysis.</p>
         </article>
       </section>
 
@@ -186,13 +186,14 @@
           <h3>Pathway / GSEA</h3>
           <div class="toolbar">
             <label>Contrast <select id="enrichment-contrast-select"></select></label>
+            <label>Result <select id="gsea-result-select"></select></label>
             <label>Reference <select id="gsea-reference"></select></label>
-            <label>Pathway GMT <input id="gsea-gmt-file" type="file" accept=".gmt,.txt" /></label>
+            <label>Pathway GMT files <input id="gsea-gmt-file" type="file" accept=".gmt,.txt" multiple /></label>
             <label>Min size <input id="gsea-min-size" type="number" min="1" value="1" /></label>
             <label>Max size <input id="gsea-max-size" type="number" min="1" value="500" /></label>
             <button id="gsea-run">Run fgsea</button>
           </div>
-          <p class="note" id="gsea-status">Run DESeq2 first for uploaded data, then run fgsea against hg38 or mm10 pathway sets.</p>
+          <p class="note" id="gsea-status">Run DESeq2 first for uploaded data, then run fgsea against configured or uploaded GMT pathway sets.</p>
           <div id="enrichment-plot" class="plot tall"></div>
           <div id="enrichment-table"></div>
         </article>

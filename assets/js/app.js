@@ -199,6 +199,7 @@ function wireControls() {
   document.getElementById('de-apply')?.addEventListener('click', renderCurrentContrast);
   document.getElementById('contrast-select')?.addEventListener('change', renderCurrentContrast);
   document.getElementById('enrichment-contrast-select')?.addEventListener('change', renderCurrentEnrichment);
+  document.getElementById('gsea-result-select')?.addEventListener('change', renderCurrentEnrichment);
   document.getElementById('count-gene-button')?.addEventListener('click', () => renderCountExplorerPlot());
   document.getElementById('count-gene-input')?.addEventListener('keydown', (event) => {
     if (event.key === 'Enter') renderCountExplorerPlot();
