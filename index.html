@@ -20,6 +20,7 @@
       </div>
       <nav id="tab-nav">
         <button class="tab-button active" data-tab="overview">Overview</button>
+        <button class="tab-button" data-tab="guide">Guide</button>
         <span class="nav-section">Setup</span>
         <button class="tab-button" data-tab="samples">Data Setup</button>
         <span class="nav-section">Quality</span>
@@ -62,6 +63,79 @@
         <article class="card">
           <h3>Study summary</h3>
           <div id="overview-summary"></div>
+        </article>
+      </section>
+
+      <section class="tab-panel" id="tab-guide">
+        <article class="card guide-hero">
+          <h3>How to use this report</h3>
+          <p class="note">Start with the embedded pipeline results, then add sample metadata or a replacement count matrix when you need browser-side DESeq2 and fgsea.</p>
+          <div class="toolbar">
+            <button class="secondary" data-go-tab="samples">Start with data setup</button>
+            <button class="secondary" data-go-tab="de">Run DESeq2</button>
+            <button class="secondary" data-go-tab="enrichment">Run fgsea</button>
+          </div>
+        </article>
+
+        <article class="card">
+          <h3>Recommended workflow</h3>
+          <ol class="guide-steps">
+            <li><strong>Review the run</strong><span>Use Overview and QC to confirm sample count, contrasts, warnings, genome, annotation, and pipeline provenance.</span></li>
+            <li><strong>Check the data setup</strong><span>Use Data Setup to confirm count/sample matching. Upload a sample manifest for the embedded count matrix, or upload a new count matrix with its matching manifest.</span></li>
+            <li><strong>Explore sample structure</strong><span>Use PCA, Heatmap & Clustering, and Gene Counts to inspect grouping, batch effects, outliers, and marker-gene behavior.</span></li>
+            <li><strong>Run browser DESeq2 when needed</strong><span>Choose one primary factor, set reference/numerator/denominator levels, and optionally adjust or block by batch, sex, subject, or pairing columns.</span></li>
+            <li><strong>Run fgsea from a DE result</strong><span>Select the DE contrast, upload one or more GMT pathway files, set pathway size limits, and run fgsea in the browser.</span></li>
+            <li><strong>Export or reload results</strong><span>Use table CSV exports for individual results and Methods & Export to save or reload the DESeq2/fgsea analysis cache.</span></li>
+          </ol>
+        </article>
+
+        <article class="card">
+          <h3>Input files</h3>
+          <div class="guide-grid">
+            <div>
+              <h4>Count matrix CSV</h4>
+              <p>Required for a build. Include <code>gene_id</code>, <code>gene_symbol</code>, or <code>gene_name</code>, plus one numeric count column per sample.</p>
+            </div>
+            <div>
+              <h4>Sample manifest</h4>
+              <p>Required for user-driven DESeq2 and fgsea. Include <code>sample_id</code> values that match count matrix columns and at least one grouping column with two or more levels.</p>
+            </div>
+            <div>
+              <h4>Optional pipeline outputs</h4>
+              <p>PCA, sample distance, DE, enrichment, QC, provenance, and software-version files are displayed when present. Missing PCA and distances can be computed from counts.</p>
+            </div>
+            <div>
+              <h4>GMT pathway files</h4>
+              <p>Required for browser fgsea. Gene identifiers in GMT files should match <code>gene_symbol</code>, <code>gene_id</code>, or mapped gene names in the DE table.</p>
+            </div>
+          </div>
+        </article>
+
+        <article class="card">
+          <h3>Analysis notes</h3>
+          <div class="guide-grid">
+            <div>
+              <h4>PCA</h4>
+              <p>Color by one metadata factor and, when available, shape by a second factor. Use 3D projection when at least three PCs are available.</p>
+            </div>
+            <div>
+              <h4>Expression heatmap</h4>
+              <p>Show top variable genes or choose a custom gene list. The custom list accepts gene symbols, Ensembl IDs, or gene names separated by commas, spaces, semicolons, tabs, or new lines.</p>
+            </div>
+            <div>
+              <h4>DESeq2</h4>
+              <p>The browser runner supports one primary factor with optional additive covariates or blocking factors. It checks for at least two samples per group and guards against over-specified designs.</p>
+            </div>
+            <div>
+              <h4>Runtime packages</h4>
+              <p>DESeq2 and fgsea use webR. Install/load packages from the configured snapshot or mount the local webR library bundle before browser-side analysis.</p>
+            </div>
+          </div>
+        </article>
+
+        <article class="card">
+          <h3>Privacy and reuse</h3>
+          <p class="note">Uploaded count matrices, manifests, GMT files, and browser-generated results stay in the current browser session unless the user exports a CSV or analysis cache. The standalone report can be opened directly for static plots and tables; webR analysis is most reliable from an HTTP(S) page or a compatible local static server.</p>
         </article>
       </section>
 
@@ -259,6 +333,6 @@
       </section>
     </main>
   </div>
-  <script type="module" src="assets/js/app.js"></script>
+  <script type="module" src="assets/js/app.js?v=20260517-guide"></script>
 </body>
 </html>

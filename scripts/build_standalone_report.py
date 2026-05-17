@@ -222,9 +222,11 @@ def standalone_html(args: argparse.Namespace, repo_root: Path) -> str:
         "",
         html,
     )
-    html = html.replace(
-        '  <script type="module" src="assets/js/app.js"></script>',
-        f"  {plotly_tag(args, repo_root)}\n  <script>\n{script}  </script>",
+    html = re.sub(
+        r'\s*<script type="module" src="assets/js/app\.js(?:\?[^"]*)?"></script>',
+        lambda _match: f"\n  {plotly_tag(args, repo_root)}\n  <script>\n{script}  </script>",
+        html,
+        count=1,
     )
     return html
 

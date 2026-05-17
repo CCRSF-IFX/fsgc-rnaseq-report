@@ -408,10 +408,6 @@ function versionLabel(value) {
   return /^v/i.test(text) ? text : `v${text}`;
 }
 
-function escapeHtml(value) {
-  return String(value ?? '').replace(/[&<>'"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[ch]));
-}
-
 function wireControls() {
   document.getElementById('pca-color')?.addEventListener('change', () => {
     syncPcaShapeOptions();
