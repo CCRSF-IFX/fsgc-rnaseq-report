@@ -86,7 +86,10 @@ export async function mountRLibraryBundle(files, packages = []) {
   `);
   const missingValues = Array.isArray(missing?.values) ? missing.values : [];
   if (missingValues.length) {
-    throw new Error(`Mounted library bundle is missing package(s): ${missingValues.join(', ')}`);
+    const visible = await mountedLibraryPackageNames(mountpoint);
+    const visibleValues = Array.isArray(visible?.values) ? visible.values : [];
+    const visiblePreview = visibleValues.length ? visibleValues.slice(0, 12).join(', ') : 'none';
+    throw new Error(`Mounted library bundle is missing package(s): ${missingValues.join(', ')}. Package directories visible at ${mountpoint}: ${visiblePreview}.`);
   }
   logAnalysis(`Mounted webR library bundle from ${bundle.label}.`);
 }
@@ -119,16 +122,15 @@ async function readLibraryBundleFiles(files) {
 async function prepareMountableLibraryBundle(bundle) {
   const metadata = { ...bundle.metadata };
   if (!metadata.gzip) return bundle;
-  delete metadata.gzip;
   if (!bundle.compressed) {
-    return { ...bundle, metadata };
+    throw new Error('Library bundle metadata expects gzip-compressed .data.gz content.');
   }
 
-  logAnalysis(`Decompressing gzip-compressed webR library bundle ${bundle.label} before mounting.`);
-  const bytes = await ungzipBlob(bundle.blob);
+  logAnalysis(`Decompressing gzip-compressed webR library bundle ${bundle.label} into memory before mounting.`);
+  delete metadata.gzip;
   return {
     ...bundle,
-    blob: new Blob([bytes]),
+    blob: await ungzipBlob(bundle.blob),
     metadata,
   };
 }
@@ -159,11 +161,35 @@ async function readZipLibraryBundle(file) {
   const metadata = JSON.parse(await metadataEntry.async('text'));
   const blob = await dataEntry.async('blob');
   return {
-    blob,
+    blob: namedBlob(blob, dataEntry.name),
     compressed: /\.data\.gz$/i.test(dataEntry.name || ''),
     metadata,
     label: file.name,
   };
+}
+
+async function mountedLibraryPackageNames(mountpoint) {
+  return evalR(`
+    path <- ${rString(mountpoint)}
+    if (!dir.exists(path)) {
+      character()
+    } else {
+      entries <- list.files(path, all.files = FALSE, no.. = TRUE)
+      entries[file.exists(file.path(path, entries, "DESCRIPTION"))]
+    }
+  `);
+}
+
+function namedBlob(blob, name) {
+  if (typeof File === 'function') {
+    return new File([blob], name, { type: blob.type || 'application/octet-stream' });
+  }
+  try {
+    Object.defineProperty(blob, 'name', { value: name, configurable: true });
+  } catch (_) {
+    // Older browsers may expose read-only Blob objects; the metadata still carries the file map.
+  }
+  return blob;
 }
 
 async function ensureDirectory(path) {

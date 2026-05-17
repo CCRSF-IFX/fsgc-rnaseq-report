@@ -66,7 +66,7 @@ export function renderDownstreamCards() {
       : '';
     return `
       <article class="card plugin-card" data-plugin-id="${plugin.id}">
-        <h4>${plugin.name}${plugin.experimental ? ' <span class="badge warn">EXPERIMENTAL</span>' : ''}</h4>
+        <h4>${plugin.name}</h4>
         <p>${plugin.description}</p>
         <p><strong>Packages:</strong> ${visiblePackages.length ? visiblePackages.map((p) => `<code>${p}</code>`).join(' ') : 'none'}${dependencyNote}</p>
         <p><strong>Memory:</strong> ${plugin.memory}</p>
