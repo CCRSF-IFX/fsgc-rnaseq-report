@@ -12,14 +12,21 @@ export function renderTable(containerId, rows, options = {}) {
     el.innerHTML = '<p class="note">No table data available.</p>';
     return;
   }
+  const allRows = Array.isArray(rows) ? rows : [];
+  const displayLimit = tableDisplayLimit(options.limit, allRows.length);
+  const displayRows = displayLimit ? allRows.slice(0, displayLimit) : allRows;
+  const isTruncated = displayRows.length < allRows.length;
   const columns = options.columns || Object.keys(rows[0]);
   const header = columns.map((c) => `<th>${escapeHtml(c)}</th>`).join('');
-  const body = rows.map((row) => `<tr>${columns.map((c) => `<td>${formatCell(row[c])}</td>`).join('')}</tr>`).join('');
+  const body = displayRows.map((row) => `<tr>${columns.map((c) => `<td>${formatCell(row[c])}</td>`).join('')}</tr>`).join('');
   const button = options.exportName ? `<button class="secondary" data-export-table="${containerId}">Export CSV</button>` : '';
-  el.innerHTML = `${button}<div class="table-wrap data-table-wrap"><table class="report-table"><thead><tr>${header}</tr></thead><tbody>${body}</tbody></table></div>`;
+  const previewNote = isTruncated
+    ? `<p class="note table-preview-note">Showing first ${displayRows.length.toLocaleString()} of ${allRows.length.toLocaleString()} rows. Export CSV includes all rows.</p>`
+    : '';
+  el.innerHTML = `${button}${previewNote}<div class="table-wrap data-table-wrap"><table class="report-table"><thead><tr>${header}</tr></thead><tbody>${body}</tbody></table></div>`;
   const exportButton = el.querySelector('[data-export-table]');
   if (exportButton) {
-    exportButton.addEventListener('click', () => downloadCsv(options.exportName, rows, columns));
+    exportButton.addEventListener('click', () => downloadCsv(options.exportName, allRows, columns));
   }
   enhanceTablesWithin(el, options);
 }
@@ -67,6 +74,12 @@ function loadDataTablesAssets() {
       .then(() => (globalThis.DataTable ? null : loadScript(DATATABLES_JS)));
   }
   return dataTablesAssetPromise;
+}
+
+function tableDisplayLimit(limit, rowCount) {
+  const value = Number(limit);
+  if (!Number.isFinite(value) || value <= 0) return 0;
+  return Math.min(Math.floor(value), rowCount);
 }
 
 function loadStylesheet(href) {

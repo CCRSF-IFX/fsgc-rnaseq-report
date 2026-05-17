@@ -215,7 +215,7 @@ function wireControls() {
     renderCountExplorerPlot({ allowEmpty: false });
   });
   document.getElementById('count-boxplot-split')?.addEventListener('change', () => renderCountExplorerPlot({ allowEmpty: false }));
-  renderTable('counts-table', state.counts, { limit: 50, exportName: 'counts.preview.csv' });
+  renderTable('counts-table', state.counts, { limit: 50, exportName: 'counts.csv' });
 }
 
 function setupCountExplorerControls() {
@@ -372,7 +372,7 @@ async function refreshReportFromState() {
   setupPcaControls();
   setupExpressionHeatmapControls();
   setupCountExplorerControls();
-  renderTable('counts-table', state.counts, { exportName: 'counts.csv' });
+  renderTable('counts-table', state.counts, { limit: 50, exportName: 'counts.csv' });
   renderCountExplorerPlot({ allowEmpty: false });
   await renderCurrentContrast();
   await renderCurrentEnrichment();
