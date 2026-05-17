@@ -3,6 +3,9 @@
   "projectAbbreviation": "RNA",
   "reportTitle": "Demo RNA-seq Report",
   "reportSubtitle": "Static report with optional webR downstream analysis",
+  "reportVersion": "0.1.0",
+  "reportAuthor": "FSGC Bioinformatics Group",
+  "reportOrganization": "Frederick Sequencing and Genomics Core",
   "runId": "",
   "dataRoot": "assets/data",
   "analysis": {

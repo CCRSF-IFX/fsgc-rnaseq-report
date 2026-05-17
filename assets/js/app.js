@@ -96,6 +96,8 @@ function renderHeader() {
   const cfg = state.config;
   const projectTitle = cleanHeaderText(cfg.projectTitle || cfg.reportTitle) || 'RNA-seq Report';
   const projectAbbreviation = cleanHeaderText(cfg.projectAbbreviation || cfg.projectAbbr) || abbreviationFromTitle(projectTitle) || 'OR';
+  const attribution = reportAttributionText(cfg);
+  const meta = reportMetaText(cfg);
   document.title = projectTitle;
   const brandMark = document.getElementById('project-abbreviation');
   if (brandMark) {
@@ -111,10 +113,20 @@ function renderHeader() {
     runLabel.textContent = runId;
     runLabel.hidden = !runId;
   }
+  setOptionalText('report-attribution', attribution ? `Prepared by ${attribution}` : '');
+  setOptionalText('report-meta', meta);
 }
 
 function cleanHeaderText(value) {
   return String(value || '').trim();
+}
+
+function setOptionalText(id, value) {
+  const element = document.getElementById(id);
+  if (!element) return;
+  const text = cleanHeaderText(value);
+  element.textContent = text;
+  element.hidden = !text;
 }
 
 function abbreviationFromTitle(title) {
@@ -125,10 +137,16 @@ function abbreviationFromTitle(title) {
 function renderOverview() {
   renderOverviewMetrics();
   const provenance = state.provenance || {};
+  const attribution = reportAttributionText(state.config);
+  const reportVersion = versionLabel(state.config?.reportVersion);
+  const webR = webRVersionSummary(state.config?.webr);
   document.getElementById('overview-summary').innerHTML = `
-    <p><strong>Genome:</strong> ${provenance.genome_build || 'not provided'}</p>
-    <p><strong>Annotation:</strong> ${provenance.annotation_version || 'not provided'}</p>
-    <p><strong>Pipeline:</strong> ${provenance.pipeline_name || 'not provided'} ${provenance.pipeline_version || ''}</p>`;
+    <p><strong>Prepared by:</strong> ${escapeHtml(attribution || 'not provided')}</p>
+    <p><strong>Report:</strong> ${escapeHtml(reportVersion || 'not provided')}</p>
+    <p><strong>webR:</strong> ${escapeHtml(webR || 'not configured')}</p>
+    <p><strong>Genome:</strong> ${escapeHtml(provenance.genome_build || 'not provided')}</p>
+    <p><strong>Annotation:</strong> ${escapeHtml(provenance.annotation_version || 'not provided')}</p>
+    <p><strong>Pipeline:</strong> ${escapeHtml(`${provenance.pipeline_name || 'not provided'} ${provenance.pipeline_version || ''}`.trim())}</p>`;
   renderProvenance();
 }
 
@@ -334,9 +352,66 @@ function setupPcaControls() {
 
 function renderProvenance() {
   const rows = [];
+  reportMetadataRows().forEach((row) => rows.push(row));
   if (state.provenance) Object.entries(state.provenance).forEach(([key, value]) => rows.push({ key, value }));
   if (state.software) Object.entries(state.software).forEach(([key, value]) => rows.push({ key: `software.${key}`, value }));
   renderTable('provenance-panel', rows, { exportName: 'provenance.csv' });
+}
+
+function reportMetadataRows() {
+  const cfg = state.config || {};
+  const webr = cfg.webr || {};
+  const rows = [
+    { key: 'report.title', value: cfg.projectTitle || cfg.reportTitle || '' },
+    { key: 'report.version', value: versionLabel(cfg.reportVersion) },
+    { key: 'report.author', value: cfg.reportAuthor || cfg.reportPreparedBy || '' },
+    { key: 'report.organization', value: cfg.reportOrganization || '' },
+    { key: 'webr.runtime', value: webRRuntimeVersion(webr) || webr.baseUrl || '' },
+    { key: 'webr.package_snapshot', value: webr.packageRepoVersion || '' },
+    { key: 'webr.library_bundle', value: webr.libraryBundle?.version || '' },
+  ];
+  return rows.filter((row) => cleanHeaderText(row.value));
+}
+
+function reportAttributionText(cfg = {}) {
+  const author = cleanHeaderText(cfg.reportAuthor || cfg.reportPreparedBy);
+  const organization = cleanHeaderText(cfg.reportOrganization);
+  if (author && organization && author !== organization) return `${author} · ${organization}`;
+  return author || organization;
+}
+
+function reportMetaText(cfg = {}) {
+  const parts = [
+    versionLabel(cfg.reportVersion) ? `Report ${versionLabel(cfg.reportVersion)}` : '',
+    webRRuntimeVersion(cfg.webr) ? `webR ${webRRuntimeVersion(cfg.webr)}` : '',
+    cfg.webr?.libraryBundle?.version ? `library ${cfg.webr.libraryBundle.version}` : '',
+  ].filter(Boolean);
+  return parts.join(' · ');
+}
+
+function webRVersionSummary(webr = {}) {
+  return [
+    webRRuntimeVersion(webr) ? `runtime ${webRRuntimeVersion(webr)}` : '',
+    webr.packageRepoVersion ? `package snapshot ${webr.packageRepoVersion}` : '',
+    webr.libraryBundle?.version ? `library ${webr.libraryBundle.version}` : '',
+  ].filter(Boolean).join(' · ');
+}
+
+function webRRuntimeVersion(webr = {}) {
+  const configured = cleanHeaderText(webr.runtimeVersion || webr.version);
+  if (configured) return versionLabel(configured);
+  const match = cleanHeaderText(webr.baseUrl).match(/\/(v[0-9][^/]+)\/?$/i);
+  return match ? match[1] : '';
+}
+
+function versionLabel(value) {
+  const text = cleanHeaderText(value);
+  if (!text) return '';
+  return /^v/i.test(text) ? text : `v${text}`;
+}
+
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>'"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[ch]));
 }
 
 function wireControls() {

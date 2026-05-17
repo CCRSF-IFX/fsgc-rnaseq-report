@@ -91,6 +91,9 @@ def embedded_assets(
     data_root_override: Path | None = None,
     project_title: str | None = None,
     project_abbreviation: str | None = None,
+    report_author: str | None = None,
+    report_organization: str | None = None,
+    report_version: str | None = None,
     run_id: str | None = None,
 ) -> dict[str, str]:
     config_path = repo_root / "assets/report_config.json"
@@ -109,13 +112,19 @@ def embedded_assets(
         config["dataRoot"] = virtual_data_root
         config_modified = True
 
-    if project_title or project_abbreviation or run_id:
+    if project_title or project_abbreviation or report_author or report_organization or report_version or run_id:
         config = json.loads(config_text) if not config_modified else config
         if project_title:
             config["projectTitle"] = project_title
             config["reportTitle"] = project_title
         if project_abbreviation:
             config["projectAbbreviation"] = project_abbreviation
+        if report_author:
+            config["reportAuthor"] = report_author
+        if report_organization:
+            config["reportOrganization"] = report_organization
+        if report_version:
+            config["reportVersion"] = report_version
         if run_id:
             config["runId"] = run_id
         config_modified = True
@@ -150,6 +159,9 @@ def bundled_app_script(repo_root: Path, args: argparse.Namespace) -> str:
             data_root_override=args.data_root,
             project_title=clean_optional_text(args.project_title),
             project_abbreviation=clean_optional_text(args.project_abbreviation),
+            report_author=clean_optional_text(args.report_author),
+            report_organization=clean_optional_text(args.report_organization),
+            report_version=clean_optional_text(args.report_version),
             run_id=clean_optional_text(args.run_id),
         ),
         ensure_ascii=False,
@@ -270,6 +282,22 @@ def main() -> None:
         "--run-name",
         dest="run_id",
         help="Override the run identifier shown under the project title in the sidebar.",
+    )
+    parser.add_argument(
+        "--report-author",
+        "--prepared-by",
+        dest="report_author",
+        help="Override the person or group shown as the report preparer.",
+    )
+    parser.add_argument(
+        "--report-organization",
+        "--organization",
+        dest="report_organization",
+        help="Override the organization shown in the report attribution.",
+    )
+    parser.add_argument(
+        "--report-version",
+        help="Override the report template/version label shown in the header and provenance table.",
     )
     args = parser.parse_args()
 
