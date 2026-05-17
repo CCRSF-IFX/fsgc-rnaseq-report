@@ -98,6 +98,7 @@ function renderHeader() {
   const projectTitle = cleanHeaderText(cfg.projectTitle || cfg.reportTitle) || 'RNA-seq Report';
   const projectAbbreviation = cleanHeaderText(cfg.projectAbbreviation || cfg.projectAbbr) || abbreviationFromTitle(projectTitle) || 'OR';
   const attribution = reportAttributionText(cfg);
+  const sidebarAttribution = reportSidebarAttributionText(cfg);
   const meta = reportMetaText(cfg);
   document.title = projectTitle;
   const brandMark = document.getElementById('project-abbreviation');
@@ -114,7 +115,8 @@ function renderHeader() {
     runLabel.textContent = runId;
     runLabel.hidden = !runId;
   }
-  setOptionalText('report-attribution', attribution ? `Prepared by ${attribution}` : '');
+  const attributionElement = setOptionalText('report-attribution', sidebarAttribution);
+  if (attributionElement) attributionElement.title = attribution || sidebarAttribution;
   setOptionalText('report-meta', meta);
 }
 
@@ -128,6 +130,7 @@ function setOptionalText(id, value) {
   const text = cleanHeaderText(value);
   element.textContent = text;
   element.hidden = !text;
+  return element;
 }
 
 function abbreviationFromTitle(title) {
@@ -374,6 +377,10 @@ function reportAttributionText(cfg = {}) {
   const organization = cleanHeaderText(cfg.reportOrganization);
   if (author && organization && author !== organization) return `${author} · ${organization}`;
   return author || organization;
+}
+
+function reportSidebarAttributionText(cfg = {}) {
+  return cleanHeaderText(cfg.reportAuthor || cfg.reportPreparedBy) || cleanHeaderText(cfg.reportOrganization);
 }
 
 function reportMetaText(cfg = {}) {

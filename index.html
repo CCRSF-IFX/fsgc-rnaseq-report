@@ -108,7 +108,38 @@
             </div>
             <div>
               <h4>GMT pathway files</h4>
-              <p>Required for browser fgsea. Gene identifiers in GMT files should match <code>gene_symbol</code>, <code>gene_id</code>, or mapped gene names in the DE table.</p>
+              <p>Required for browser fgsea. Use pathway files that match the study species and the gene identifiers in the DE table.</p>
+            </div>
+          </div>
+        </article>
+
+        <article class="card">
+          <div class="guide-section-heading">
+            <h3>GMT files for GSEA</h3>
+            <p class="note">Choose GMT files by species, collection, and gene identifier before uploading them in the GSEA tab.</p>
+          </div>
+          <div class="guide-link-strip" aria-label="GMT file resources">
+            <span>Official resources</span>
+            <a href="https://www.gsea-msigdb.org/gsea/msigdb/collections.jsp" target="_blank" rel="noopener">Human MSigDB</a>
+            <a href="https://www.gsea-msigdb.org/gsea/msigdb/mouse/collections.jsp" target="_blank" rel="noopener">Mouse MSigDB</a>
+            <a href="https://docs.gsea-msigdb.org/GSEA/Data_Formats/#gmt-gene-matrix-transposed-file-format-gmt" target="_blank" rel="noopener">GMT format</a>
+          </div>
+          <div class="guide-grid">
+            <div>
+              <h4>Where to download</h4>
+              <p>Open the matching MSigDB collection page, choose a collection row, then use <code>Download GMT Files</code>. A free MSigDB sign-in may be required for downloads.</p>
+            </div>
+            <div>
+              <h4>What to start with</h4>
+              <p>Start with Hallmark for a broad first pass. Use curated pathway collections such as C2/CP or M2/CP for pathway-focused review, and GO collections such as C5 or M5 for ontology terms.</p>
+            </div>
+            <div>
+              <h4>Identifier choice</h4>
+              <p>Select Gene Symbols when the DE table has <code>gene_symbol</code>. Select NCBI/Entrez IDs only when the ranked gene names are Entrez IDs. Do not mix human and mouse GMT files.</p>
+            </div>
+            <div>
+              <h4>Upload in this report</h4>
+              <p>After DESeq2 finishes, go to GSEA, select one or more <code>.gmt</code> files, and run fgsea. Keep downloaded GMT files with the report because analysis caches do not embed them.</p>
             </div>
           </div>
         </article>
