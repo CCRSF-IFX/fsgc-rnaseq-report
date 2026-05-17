@@ -145,8 +145,14 @@
                 <h4 id="heatmap-gene-list-title">Custom genes</h4>
                 <button id="heatmap-gene-list-modal-close" class="secondary icon-button" type="button" aria-label="Close custom genes">&times;</button>
               </div>
-              <label class="modal-field">Gene list
-                <textarea id="heatmap-gene-list" rows="10" placeholder="GeneA, GeneB, ENSG00000123456"></textarea>
+              <label class="modal-field">
+                <span class="modal-field-label">Gene list
+                  <span class="tip-wrap">
+                    <span class="tip-icon" tabindex="0" aria-describedby="heatmap-gene-list-tip" aria-label="Gene list format help">?</span>
+                    <span id="heatmap-gene-list-tip" class="tip-bubble" role="tooltip">Accepted formats: gene symbols, Ensembl gene IDs, or gene_name values from the count matrix. Separate genes with commas, spaces, semicolons, tabs, or new lines.</span>
+                  </span>
+                </span>
+                <textarea id="heatmap-gene-list" rows="10" placeholder="TP53, EGFR, MYC, IL6&#10;BRCA1&#10;ENSG00000141510"></textarea>
               </label>
               <p id="heatmap-gene-list-modal-status" class="note"></p>
               <div class="modal-actions">
