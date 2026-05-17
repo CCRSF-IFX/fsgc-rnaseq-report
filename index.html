@@ -74,6 +74,8 @@
             <button class="secondary" data-go-tab="samples">Start with data setup</button>
             <button class="secondary" data-go-tab="de">Run DESeq2</button>
             <button class="secondary" data-go-tab="enrichment">Run fgsea</button>
+            <button class="secondary" data-go-tab="provenance">Save or load cache</button>
+            <button class="secondary" data-go-tab="downstream">Prepare packages</button>
           </div>
         </article>
 
@@ -85,7 +87,7 @@
             <li><strong>Explore sample structure</strong><span>Use PCA, Heatmap & Clustering, and Gene Counts to inspect grouping, batch effects, outliers, and marker-gene behavior.</span></li>
             <li><strong>Run browser DESeq2 when needed</strong><span>Choose one primary factor, set reference/numerator/denominator levels, and optionally adjust or block by batch, sex, subject, or pairing columns.</span></li>
             <li><strong>Run fgsea from a DE result</strong><span>Select the DE contrast, upload one or more GMT pathway files, set pathway size limits, and run fgsea in the browser.</span></li>
-            <li><strong>Export or reload results</strong><span>Use table CSV exports for individual results and Methods & Export to save or reload the DESeq2/fgsea analysis cache.</span></li>
+            <li><strong>Export or reload results</strong><span>Use table CSV exports for individual result tables and Methods & Export to save or reload the DESeq2/fgsea analysis cache.</span></li>
           </ol>
         </article>
 
@@ -134,8 +136,30 @@
         </article>
 
         <article class="card">
+          <h3>Cache and reuse</h3>
+          <div class="guide-grid">
+            <div>
+              <h4>Analysis cache</h4>
+              <p>After browser DESeq2 or fgsea finishes, go to Methods & Export and select <code>Export cache</code>. The JSON cache restores DESeq2 contrasts and fgsea result sets later without rerunning the browser analysis.</p>
+            </div>
+            <div>
+              <h4>Loading a saved cache</h4>
+              <p>Use <code>Load cache</code> in Methods & Export to reload a previous analysis cache. The cache is tied to the report data and result schema, so use it with the same report or a compatible rebuild.</p>
+            </div>
+            <div>
+              <h4>Package library bundle</h4>
+              <p>Runtime & Packages can mount the local webR library bundle for the configured package/library snapshot. This avoids reinstalling the DESeq2 and fgsea dependency closure during that browser session.</p>
+            </div>
+            <div>
+              <h4>What is not cached</h4>
+              <p>The analysis cache does not include uploaded count matrices, sample manifests, GMT files, or webR packages. Keep those input files separately, and mount or install packages again after a fresh browser session if needed.</p>
+            </div>
+          </div>
+        </article>
+
+        <article class="card">
           <h3>Privacy and reuse</h3>
-          <p class="note">Uploaded count matrices, manifests, GMT files, and browser-generated results stay in the current browser session unless the user exports a CSV or analysis cache. The standalone report can be opened directly for static plots and tables; webR analysis is most reliable from an HTTP(S) page or a compatible local static server.</p>
+          <p class="note">Uploaded count matrices, manifests, GMT files, mounted package libraries, and browser-generated results stay in the current browser session unless the user exports a CSV or analysis cache. The standalone report can be opened directly for static plots and tables; webR analysis is most reliable from an HTTP(S) page or a compatible local static server.</p>
         </article>
       </section>
 
