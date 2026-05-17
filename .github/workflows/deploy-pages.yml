@@ -363,7 +363,7 @@ jobs:
               library_version <- Sys.getenv("LIBRARY_BUNDLE_VERSION")
               artifact_stem <- Sys.getenv("LIBRARY_ARTIFACT_STEM")
               bundle_stem <- paste0(artifact_stem, "-", library_version)
-              repo_dir <- file.path("_site", "webr-packages", version, "bin", "emscripten", "contrib", "4.5")
+              repo_dir <- file.path("_site", "webr-packages", version)
               out_dir <- file.path("_release_assets", bundle_stem)
               dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
               rwasm::make_vfs_library(
