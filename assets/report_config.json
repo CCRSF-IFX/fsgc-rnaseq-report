@@ -35,7 +35,7 @@
     "baseUrl": "https://webr.r-wasm.org/v0.5.9/",
     "packageRepo": "https://omicsreporthub.github.io/rnaseq-report/webr-packages/v0.1.0/",
     "packageRepoVersion": "v0.1.0",
-    "packageArchiveUrl": "https://github.com/omicsreporthub/rnaseq-report/releases/download/webr-packages-v0.1.0/webr-packages-v0.1.0.zip",
+    "packageArchiveUrl": "https://github.com/omicsreporthub/rnaseq-report/releases/download/rnaseq-report-webr-packages-v0.1.0/rnaseq-report-webr-packages-v0.1.0.zip",
     "libraryBundle": {
       "enabled": true,
       "artifactVersion": "deseq2-fgsea-v1",

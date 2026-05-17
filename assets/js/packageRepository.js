@@ -162,7 +162,7 @@ function packageRepoBundleUrl() {
   const configured = String(state.config?.webr?.packageArchiveUrl || '').trim();
   if (configured) return configured;
   const version = state.config?.webr?.packageRepoVersion || 'snapshot';
-  return `${packageRepoBaseUrl()}webr-packages-${version}.zip`;
+  return `${packageRepoBaseUrl()}rnaseq-report-webr-packages-${version}.zip`;
 }
 
 function packageRepoLibraryBundleConfig() {

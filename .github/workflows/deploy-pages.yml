@@ -326,7 +326,7 @@ jobs:
 
           release_dir = Path("_release_assets")
           release_dir.mkdir(parents=True, exist_ok=True)
-          archive = release_dir / f"webr-packages-{version}.zip"
+          archive = release_dir / f"rnaseq-report-webr-packages-{version}.zip"
           if archive.exists():
               archive.unlink()
 
@@ -413,7 +413,7 @@ jobs:
           VERSION: ${{ steps.webr-snapshot.outputs.version }}
         run: |
           set -euo pipefail
-          tag="webr-packages-${VERSION}"
+          tag="rnaseq-report-webr-packages-${VERSION}"
           if ! gh release view "$tag" >/dev/null 2>&1; then
             gh release create "$tag" \
               --target "$GITHUB_SHA" \
@@ -421,7 +421,7 @@ jobs:
               --notes "Compiled webR package repository archive for rnaseq-report package snapshot ${VERSION}."
           fi
           gh release upload "$tag" \
-            "_release_assets/webr-packages-${VERSION}.zip" \
+            "_release_assets/rnaseq-report-webr-packages-${VERSION}.zip" \
             --clobber
 
       - name: Upload webR library bundle to GitHub Release

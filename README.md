@@ -131,7 +131,7 @@ This repository is configured to publish with GitHub Actions:
 2. In repository settings, set Pages source to **GitHub Actions**.
 3. The workflow builds a deployable `_site/` directory.
 4. The workflow builds the configured webR package set into `_site/webr-packages/<VERSION>/`.
-5. The workflow writes `webr-packages-<VERSION>.zip` as a GitHub Release asset instead of storing that duplicate archive on Pages.
+5. The workflow writes `rnaseq-report-webr-packages-<VERSION>.zip` as a GitHub Release asset instead of storing that duplicate archive on Pages.
 6. The workflow builds a browser-loadable webR library bundle and uploads it to a separate release tag from `webr.libraryBundle.releaseTag`.
 7. The workflow uploads `_site/` to GitHub Pages.
 
@@ -390,7 +390,7 @@ views remain usable from the standalone file.
     "baseUrl": "https://webr.r-wasm.org/v0.5.9/",
     "packageRepo": "https://omicsreporthub.github.io/rnaseq-report/webr-packages/v0.1.0/",
     "packageRepoVersion": "v0.1.0",
-    "packageArchiveUrl": "https://github.com/omicsreporthub/rnaseq-report/releases/download/webr-packages-v0.1.0/webr-packages-v0.1.0.zip",
+    "packageArchiveUrl": "https://github.com/omicsreporthub/rnaseq-report/releases/download/rnaseq-report-webr-packages-v0.1.0/rnaseq-report-webr-packages-v0.1.0.zip",
     "libraryBundle": {
       "enabled": true,
       "artifactVersion": "deseq2-fgsea-v1",
@@ -515,7 +515,7 @@ catches strict-linking failures before deployment.
 Each deployed snapshot also exposes a ZIP archive as a GitHub Release asset:
 
 ```text
-https://github.com/omicsreporthub/rnaseq-report/releases/download/webr-packages-v0.1.0/webr-packages-v0.1.0.zip
+https://github.com/omicsreporthub/rnaseq-report/releases/download/rnaseq-report-webr-packages-v0.1.0/rnaseq-report-webr-packages-v0.1.0.zip
 ```
 
 That archive can be downloaded and mirrored as a static wasm package repository.
