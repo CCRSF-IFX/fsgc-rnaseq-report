@@ -37,7 +37,7 @@ export async function runFgseaAnalysis() {
     const deRows = await loadDeForContrast(contrast);
     if (!deRows.length) throw new Error('No DE rows are available. Run DESeq2 first for uploaded data.');
 
-    const minSize = fgseaPositiveInteger(document.getElementById('gsea-min-size')?.value, 1, 5);
+    const minSize = fgseaPositiveInteger(document.getElementById('gsea-min-size')?.value, 1, 10);
     const maxSize = fgseaPositiveInteger(document.getElementById('gsea-max-size')?.value, minSize, 500);
 
     fgseaSetStatus(status, 'Loading fgsea package in webR. First run can take a few minutes.');
