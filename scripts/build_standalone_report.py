@@ -32,7 +32,6 @@ JS_ORDER = [
     "assets/js/heatmap.js",
     "assets/js/de.js",
     "assets/js/enrichment.js",
-    "assets/js/geneSearch.js",
     "assets/js/webrManager.js",
     "assets/js/packageManager.js",
     "assets/js/analysisCache.js",

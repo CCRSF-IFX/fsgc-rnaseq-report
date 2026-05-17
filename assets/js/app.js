@@ -5,7 +5,6 @@ import { summarizeQC, badge, qcRowsWithStatus } from './qc.js';
 import { renderPCA, renderDistanceHeatmap, renderQCPlots, renderGeneCounts } from './plots.js';
 import { populateContrastSelectors, renderCurrentContrast } from './de.js';
 import { renderCurrentEnrichment } from './enrichment.js';
-import { renderGeneSearch } from './geneSearch.js';
 import { renderDownstreamCards } from './downstreamPlugins.js';
 import { renderPackageRepositoryPanel } from './packageRepository.js';
 import { setupDeseqControls } from './deseq2.js';
@@ -199,7 +198,6 @@ function wireControls() {
   document.getElementById('de-apply')?.addEventListener('click', renderCurrentContrast);
   document.getElementById('contrast-select')?.addEventListener('change', renderCurrentContrast);
   document.getElementById('enrichment-contrast-select')?.addEventListener('change', renderCurrentEnrichment);
-  document.getElementById('gene-search-button')?.addEventListener('click', renderGeneSearch);
   document.getElementById('count-gene-button')?.addEventListener('click', () => renderGeneCounts(document.getElementById('count-gene-input').value));
   renderTable('counts-table', state.counts, { limit: 50, exportName: 'counts.preview.csv' });
 }

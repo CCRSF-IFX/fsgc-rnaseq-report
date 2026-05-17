@@ -25,7 +25,6 @@
         <button class="tab-button" data-tab="clustering">Clustering</button>
         <button class="tab-button" data-tab="counts">Count Matrix</button>
         <button class="tab-button" data-tab="de">Differential Expression</button>
-        <button class="tab-button" data-tab="gene">Gene Search</button>
         <button class="tab-button" data-tab="enrichment">GSEA</button>
         <button class="tab-button" data-tab="provenance">Methods</button>
         <button class="tab-button" data-tab="downstream">Optional Analysis</button>
@@ -172,17 +171,6 @@
             <label>Load cache <input id="analysis-cache-file" type="file" accept=".json,application/json" /></label>
           </div>
           <p class="note" id="analysis-cache-status">Export DESeq2 and fgsea results together, then reload them later without rerunning browser-side analysis.</p>
-        </article>
-      </section>
-
-      <section class="tab-panel" id="tab-gene">
-        <article class="card">
-          <h3>Gene search</h3>
-          <div class="toolbar">
-            <input id="gene-search-input" placeholder="Search gene symbol, gene_id, or description" />
-            <button id="gene-search-button">Search</button>
-          </div>
-          <div id="gene-search-results"></div>
         </article>
       </section>
 
