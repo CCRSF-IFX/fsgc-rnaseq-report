@@ -163,6 +163,8 @@ export async function runDeseq2Analysis() {
     markAnalysisCacheDirty(`DESeq2 ${numerator} vs ${denominator}`);
 
     deseqCallbacks.populateContrastSelectors?.();
+    deseqCallbacks.renderOverviewMetrics?.();
+    deseqCallbacks.renderAnalysisReadiness?.();
     const contrastSelect = document.getElementById('contrast-select');
     if (contrastSelect) contrastSelect.value = contrastId;
     await progress.step('Rendering DE table and volcano/MA plots', 6);

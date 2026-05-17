@@ -23,9 +23,20 @@ async function main() {
     renderOverview();
     renderSamples();
     populateContrastSelectors();
-    setupDeseqControls({ populateContrastSelectors, renderCurrentContrast });
+    setupDeseqControls({
+      populateContrastSelectors,
+      renderCurrentContrast,
+      renderOverviewMetrics,
+      renderAnalysisReadiness,
+    });
     setupFgseaControls();
-    setupAnalysisCacheControls({ populateContrastSelectors, renderCurrentContrast, renderCurrentEnrichment });
+    setupAnalysisCacheControls({
+      populateContrastSelectors,
+      renderCurrentContrast,
+      renderCurrentEnrichment,
+      renderOverviewMetrics,
+      renderAnalysisReadiness,
+    });
     renderAnalysisReadiness();
     renderDownstreamCards();
     renderPackageRepositoryPanel();
@@ -112,16 +123,20 @@ function abbreviationFromTitle(title) {
 }
 
 function renderOverview() {
-  const summary = summarizeQC();
-  document.getElementById('sample-count').textContent = state.samples.length;
-  document.getElementById('contrast-count').textContent = state.contrasts.length;
-  document.getElementById('qc-warning-count').textContent = summary.counts.warn + summary.counts.fail;
+  renderOverviewMetrics();
   const provenance = state.provenance || {};
   document.getElementById('overview-summary').innerHTML = `
     <p><strong>Genome:</strong> ${provenance.genome_build || 'not provided'}</p>
     <p><strong>Annotation:</strong> ${provenance.annotation_version || 'not provided'}</p>
     <p><strong>Pipeline:</strong> ${provenance.pipeline_name || 'not provided'} ${provenance.pipeline_version || ''}</p>`;
   renderProvenance();
+}
+
+function renderOverviewMetrics() {
+  const summary = summarizeQC();
+  document.getElementById('sample-count').textContent = state.samples.length;
+  document.getElementById('contrast-count').textContent = state.contrasts.length;
+  document.getElementById('qc-warning-count').textContent = summary.counts.warn + summary.counts.fail;
 }
 
 function renderSamples() {
@@ -510,9 +525,20 @@ async function refreshReportFromState() {
   renderOverview();
   renderSamples();
   populateContrastSelectors();
-  setupDeseqControls({ populateContrastSelectors, renderCurrentContrast });
+  setupDeseqControls({
+    populateContrastSelectors,
+    renderCurrentContrast,
+    renderOverviewMetrics,
+    renderAnalysisReadiness,
+  });
   setupFgseaControls();
-  setupAnalysisCacheControls({ populateContrastSelectors, renderCurrentContrast, renderCurrentEnrichment });
+  setupAnalysisCacheControls({
+    populateContrastSelectors,
+    renderCurrentContrast,
+    renderCurrentEnrichment,
+    renderOverviewMetrics,
+    renderAnalysisReadiness,
+  });
   renderAnalysisReadiness();
   renderDownstreamCards();
   renderPackageRepositoryPanel();

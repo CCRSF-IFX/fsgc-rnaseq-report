@@ -163,6 +163,8 @@ function restoreAnalysisCache(cache) {
 
 async function refreshImportedAnalysis(cache) {
   cacheCallbacks.populateContrastSelectors?.();
+  cacheCallbacks.renderOverviewMetrics?.();
+  cacheCallbacks.renderAnalysisReadiness?.();
   const firstContrastId = cache.de_results[0]?.contrast_id || cache.gsea_results[0]?.contrast_id || '';
   const firstGseaResultId = cache.gsea_results[0]?.result_id || (cache.gsea_results[0] ? gseaCacheResultId(cache.gsea_results[0]) : '');
   for (const id of ['contrast-select', 'enrichment-contrast-select']) {
