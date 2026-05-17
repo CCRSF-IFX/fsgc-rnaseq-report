@@ -209,7 +209,11 @@ function wireControls() {
       renderCountExplorerPlot({ allowEmpty: false });
     });
   });
-  document.getElementById('count-boxplot-group')?.addEventListener('change', () => renderCountExplorerPlot({ allowEmpty: false }));
+  document.getElementById('count-boxplot-group')?.addEventListener('change', () => {
+    populateCountBoxplotSplitOptions();
+    renderCountExplorerPlot({ allowEmpty: false });
+  });
+  document.getElementById('count-boxplot-split')?.addEventListener('change', () => renderCountExplorerPlot({ allowEmpty: false }));
   renderTable('counts-table', state.counts, { limit: 50, exportName: 'counts.preview.csv' });
 }
 
@@ -223,7 +227,7 @@ function populateCountBoxplotGroups() {
   if (!select) return;
 
   const previous = select.value;
-  const eligibleColumns = metadataColumns().filter((column) => countMetadataLevels(column).length > 1);
+  const eligibleColumns = eligibleCountMetadataColumns();
   select.replaceChildren(...eligibleColumns.map((column) => {
     const option = document.createElement('option');
     option.value = column;
@@ -237,7 +241,32 @@ function populateCountBoxplotGroups() {
   const boxButton = document.getElementById('count-plot-mode-box');
   if (boxButton) boxButton.disabled = eligibleColumns.length === 0;
   if (currentCountPlotMode() === 'box' && eligibleColumns.length === 0) setCountPlotMode('bar');
+  populateCountBoxplotSplitOptions(eligibleColumns);
   syncCountPlotModeControls();
+}
+
+function populateCountBoxplotSplitOptions(eligibleColumns = eligibleCountMetadataColumns()) {
+  const select = document.getElementById('count-boxplot-split');
+  if (!select) return;
+
+  const previous = select.value;
+  const groupColumn = document.getElementById('count-boxplot-group')?.value || '';
+  const splitColumns = eligibleColumns.filter((column) => column !== groupColumn);
+  const noneOption = document.createElement('option');
+  noneOption.value = '';
+  noneOption.textContent = 'None';
+  const options = splitColumns.map((column) => {
+    const option = document.createElement('option');
+    option.value = column;
+    option.textContent = column;
+    return option;
+  });
+  select.replaceChildren(noneOption, ...options);
+  select.value = splitColumns.includes(previous) ? previous : '';
+}
+
+function eligibleCountMetadataColumns() {
+  return metadataColumns().filter((column) => countMetadataLevels(column).length > 1);
 }
 
 function countMetadataLevels(column) {
@@ -256,8 +285,11 @@ function setCountPlotMode(mode) {
 }
 
 function syncCountPlotModeControls() {
+  const isBoxMode = currentCountPlotMode() === 'box';
   const groupLabel = document.getElementById('count-boxplot-group-label');
-  if (groupLabel) groupLabel.hidden = currentCountPlotMode() !== 'box';
+  const splitLabel = document.getElementById('count-boxplot-split-label');
+  if (groupLabel) groupLabel.hidden = !isBoxMode;
+  if (splitLabel) splitLabel.hidden = !isBoxMode;
 }
 
 function currentCountPlotMode() {
@@ -276,6 +308,7 @@ function renderCountExplorerPlot(options = {}) {
   renderGeneCounts(query, {
     mode: currentCountPlotMode(),
     groupBy: document.getElementById('count-boxplot-group')?.value || '',
+    splitBy: document.getElementById('count-boxplot-split')?.value || '',
   });
 }
 

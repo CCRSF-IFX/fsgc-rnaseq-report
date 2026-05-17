@@ -217,7 +217,7 @@ With counts and a manifest, the report derives:
 
 - PCA coordinates from log2(CPM + 1) expression.
 - sample distances from log2(CPM + 1) expression.
-- gene-level count plots with sample bar plots and grouped box plots when metadata has at least two levels.
+- gene-level count plots with sample bar plots and grouped box plots, including optional split-by metadata, when metadata has at least two levels.
 - a Clustergrammer expression heatmap with top-variable or custom gene-list selection, metadata annotation, and clustered rows/columns.
 - two-group differential expression from metadata-defined contrasts.
 - optional fgsea results from the selected DE contrast and a configured or uploaded GMT pathway file.

@@ -216,7 +216,7 @@ export function renderGeneCounts(geneQuery, options = {}) {
 
   const sampleIds = state.samples.map((s) => s.sample_id).filter((sampleId) => Object.prototype.hasOwnProperty.call(row, sampleId));
   if (options.mode === 'box') {
-    renderGeneCountBoxPlot(row, sampleIds, options.groupBy || '', status, plot);
+    renderGeneCountBoxPlot(row, sampleIds, options.groupBy || '', options.splitBy || '', status, plot);
   } else {
     renderGeneCountBarPlot(row, sampleIds, status);
   }
@@ -238,7 +238,7 @@ function renderGeneCountBarPlot(row, sampleIds, status) {
   }, { responsive: true });
 }
 
-function renderGeneCountBoxPlot(row, sampleIds, groupColumn, status, plot) {
+function renderGeneCountBoxPlot(row, sampleIds, groupColumn, splitColumn, status, plot) {
   if (!groupColumn) {
     clearGeneCountPlot(plot);
     if (status) status.textContent = 'No metadata column with at least two groups is available.';
@@ -249,6 +249,11 @@ function renderGeneCountBoxPlot(row, sampleIds, groupColumn, status, plot) {
   if (levels.length < 2) {
     clearGeneCountPlot(plot);
     if (status) status.textContent = `${groupColumn} has fewer than two groups.`;
+    return;
+  }
+
+  if (splitColumn && splitColumn !== groupColumn) {
+    renderGeneCountSplitBoxPlot(row, sampleIds, groupColumn, splitColumn, status, plot);
     return;
   }
 
@@ -285,6 +290,57 @@ function renderGeneCountBoxPlot(row, sampleIds, groupColumn, status, plot) {
     xaxis: { title: groupColumn },
     yaxis: { title: 'Count' },
     boxmode: 'group',
+  }, { responsive: true });
+}
+
+function renderGeneCountSplitBoxPlot(row, sampleIds, groupColumn, splitColumn, status, plot) {
+  const groupLevels = uniqueValues(sampleIds.map((sampleId) => sampleMetadata(sampleId, groupColumn)));
+  const splitLevels = uniqueValues(sampleIds.map((sampleId) => sampleMetadata(sampleId, splitColumn)));
+  if (groupLevels.length < 2 || splitLevels.length < 2) {
+    clearGeneCountPlot(plot);
+    if (status) status.textContent = `${groupColumn} and ${splitColumn} must each have at least two groups.`;
+    return;
+  }
+
+  const traces = splitLevels.map((splitLevel, index) => {
+    const points = sampleIds
+      .filter((sampleId) => sampleMetadata(sampleId, splitColumn) === splitLevel)
+      .map((sampleId) => ({
+        sampleId,
+        group: sampleMetadata(sampleId, groupColumn),
+        value: countValue(row, sampleId),
+      }))
+      .filter((point) => Number.isFinite(point.value));
+    if (!points.length) return null;
+    const color = PCA_COLORS[index % PCA_COLORS.length];
+    return {
+      x: points.map((point) => point.group),
+      y: points.map((point) => point.value),
+      text: points.map((point) => point.sampleId),
+      type: 'box',
+      name: splitLevel,
+      boxpoints: 'all',
+      jitter: 0.35,
+      pointpos: 0,
+      marker: { color, size: 8, opacity: 0.78 },
+      line: { color },
+      hovertemplate: `<b>%{text}</b><br>${escapePlotText(groupColumn)}: %{x}<br>${escapePlotText(splitColumn)}: ${escapePlotText(splitLevel)}<br>count: %{y}<extra></extra>`,
+    };
+  }).filter(Boolean);
+
+  if (traces.length < 2) {
+    clearGeneCountPlot(plot);
+    if (status) status.textContent = `${splitColumn} does not have count values in at least two groups.`;
+    return;
+  }
+
+  if (status) status.textContent = '';
+  Plotly.react('gene-count-plot', traces, {
+    ...plotLayout(`${geneCountLabel(row)} counts by ${groupColumn}, split by ${splitColumn}`),
+    xaxis: { title: groupColumn, categoryorder: 'array', categoryarray: groupLevels },
+    yaxis: { title: 'Count' },
+    boxmode: 'group',
+    legend: { title: { text: splitColumn } },
   }, { responsive: true });
 }
 
