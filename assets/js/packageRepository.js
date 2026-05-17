@@ -8,6 +8,8 @@ export function renderPackageRepositoryPanel() {
 
   const cfg = state.config?.webr || {};
   const packages = packageRepoRequiredPackages();
+  const visiblePackages = packageRepoLoadPackages();
+  const dependencyCount = Math.max(0, packages.length - visiblePackages.length);
   const repoUrl = packageRepoBaseUrl();
   const indexUrl = packageRepoIndexUrl();
   const bundleUrl = packageRepoBundleUrl();
@@ -18,13 +20,14 @@ export function renderPackageRepositoryPanel() {
       <div>
         <h4>webR package snapshot</h4>
         <p class="note">${packageRepoEscapeHtml(cfg.packageRepoVersion || 'unversioned')} · ${packageRepoEscapeHtml(repoUrl || 'not configured')}</p>
+        <p class="note">Showing top-level packages only; ${dependencyCount} dependencies are included in the snapshot.</p>
       </div>
       <div class="package-actions">
         <button class="secondary" id="package-check" ${disabled}>Check snapshot</button>
         <button id="package-install" ${disabled || (packages.length ? '' : 'disabled')}>Install/load packages</button>
         <a class="button secondary" href="${packageRepoEscapeHtml(bundleUrl)}" download>Download snapshot ZIP</a>
       </div>
-      <div class="package-chips">${packages.map((pkg) => `<span>${packageRepoEscapeHtml(pkg)} <small>${packageRepoEscapeHtml(getPackageStatus(pkg))}</small></span>`).join('')}</div>
+      <div class="package-chips">${visiblePackages.map((pkg) => `<span>${packageRepoEscapeHtml(pkg)} <small>${packageRepoEscapeHtml(getPackageStatus(pkg))}</small></span>`).join('')}</div>
       <div class="package-links">
         <a href="${packageRepoEscapeHtml(indexUrl)}" target="_blank" rel="noopener">PACKAGES index</a>
         <a href="${packageRepoEscapeHtml(repoUrl)}" target="_blank" rel="noopener">Package repository</a>
@@ -56,23 +59,28 @@ export async function checkPackageRepository() {
     const found = new Map(records.map((record) => [record.Package, record]));
     const fallbackFound = await packageRepoFallbackPackages();
     const dependencyIndex = new Map([...fallbackFound, ...found]);
+    const visiblePackages = packageRepoLoadPackages();
+    const dependencyCount = Math.max(0, packages.length - visiblePackages.length);
     const missing = packages.filter((pkg) => !found.has(pkg));
     const missingDeps = packageRepoMissingDependencies(packages, dependencyIndex);
-    const rows = packages.map((pkg) => {
+    const missingVisible = visiblePackages.filter((pkg) => !found.has(pkg));
+    const hiddenProblemCount = missing.filter((pkg) => !visiblePackages.includes(pkg)).length + missingDeps.length;
+    const rows = visiblePackages.map((pkg) => {
       const record = found.get(pkg);
       return `<tr><td>${packageRepoEscapeHtml(pkg)}</td><td>${record ? packageRepoEscapeHtml(record.Version || '') : 'missing'}</td><td>${record ? 'available' : 'missing'}</td></tr>`;
     }).join('');
-    const depRows = missingDeps.map((dep) => (
-      `<tr><td>${packageRepoEscapeHtml(dep.package)}</td><td>${packageRepoEscapeHtml(dep.requiredBy)}</td><td>missing dependency</td></tr>`
-    )).join('');
-    const depTable = depRows
-      ? `<div class="table-wrap compact"><table><thead><tr><th>Dependency</th><th>Required by</th><th>Status</th></tr></thead><tbody>${depRows}</tbody></table></div>`
-      : '';
-    const problemCount = missing.length + missingDeps.length;
+    const problemCount = missingVisible.length + hiddenProblemCount;
+    const problemDetails = [
+      missingVisible.length ? `Missing top-level packages: ${missingVisible.map(packageRepoEscapeHtml).join(', ')}.` : '',
+      hiddenProblemCount ? `${hiddenProblemCount} dependency issue${hiddenProblemCount === 1 ? '' : 's'} detected inside the snapshot.` : '',
+    ].filter(Boolean).join(' ');
+    const summary = problemCount
+      ? `Snapshot check found package issues. ${problemDetails}`
+      : `Snapshot contains the top-level analysis packages; ${dependencyCount} dependencies are included.`;
     packageRepoSetStatus(`
-      <div class="${problemCount ? 'status-message warn' : 'status-message ok'}">${problemCount ? 'Snapshot is missing configured packages or hard dependencies.' : 'Snapshot contains configured packages and their indexed hard dependencies.'}</div>
+      <div class="${problemCount ? 'status-message warn' : 'status-message ok'}">${summary}</div>
       <div class="table-wrap compact"><table><thead><tr><th>Package</th><th>Version</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table></div>
-      ${depTable}`, problemCount ? 'warn' : 'ok', true);
+      `, problemCount ? 'warn' : 'ok', true);
   } catch (error) {
     packageRepoSetStatus(`Snapshot check failed: ${error.message}`, 'fail');
   }

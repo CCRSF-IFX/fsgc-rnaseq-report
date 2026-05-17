@@ -55,14 +55,19 @@ export function pluginDefinitions() {
 export function renderDownstreamCards() {
   const container = document.getElementById('downstream-cards');
   if (!container) return;
-  const cards = pluginDefinitions().map((plugin) => `
-    <article class="card plugin-card" data-plugin-id="${plugin.id}">
-      <h4>${plugin.name}${plugin.experimental ? ' <span class="badge warn">EXPERIMENTAL</span>' : ''}</h4>
-      <p>${plugin.description}</p>
-      <p><strong>Packages:</strong> ${plugin.packages.length ? plugin.packages.map((p) => `<code>${p}</code>`).join(' ') : 'none'}</p>
-      <p><strong>Memory:</strong> ${plugin.memory}</p>
-      <div><button data-action="install" ${plugin.packages.length ? '' : 'disabled'}>Install/load packages</button> <button data-action="run">Run</button></div>
-    </article>`).join('');
+  const cards = pluginDefinitions().map((plugin) => {
+    const visiblePackages = pluginVisiblePackages(plugin);
+    const dependencyCount = Math.max(0, plugin.packages.length - visiblePackages.length);
+    const dependencyNote = dependencyCount ? `; ${dependencyCount} dependencies included in snapshot` : '';
+    return `
+      <article class="card plugin-card" data-plugin-id="${plugin.id}">
+        <h4>${plugin.name}${plugin.experimental ? ' <span class="badge warn">EXPERIMENTAL</span>' : ''}</h4>
+        <p>${plugin.description}</p>
+        <p><strong>Packages:</strong> ${visiblePackages.length ? visiblePackages.map((p) => `<code>${p}</code>`).join(' ') : 'none'}${dependencyNote}</p>
+        <p><strong>Memory:</strong> ${plugin.memory}</p>
+        <div><button data-action="install" ${plugin.packages.length ? '' : 'disabled'}>Install/load packages</button> <button data-action="run">Run</button></div>
+      </article>`;
+  }).join('');
   container.innerHTML = cards;
   container.querySelectorAll('[data-plugin-id]').forEach((card) => {
     const plugin = pluginDefinitions().find((p) => p.id === card.dataset.pluginId);
@@ -81,4 +86,8 @@ export function renderDownstreamCards() {
       } catch (error) { logAnalysis(`${plugin.name} failed: ${error.message}`); }
     });
   });
+}
+
+function pluginVisiblePackages(plugin) {
+  return plugin.loadPackages || plugin.packages || [];
 }
