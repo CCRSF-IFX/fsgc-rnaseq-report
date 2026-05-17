@@ -12,8 +12,11 @@ import { setupFgseaControls } from './fgsea.js';
 import { renderActiveExpressionHeatmap, resizeExpressionHeatmap, setupCanvasXpressHeatmapControls, setupExpressionHeatmapControls } from './heatmap.js?v=20260517-canvasxpress-production';
 import { setupUserDataControls } from './userData.js';
 import { setupAnalysisCacheControls } from './analysisCache.js';
+import { setupPackageFallbackModal } from './packageFallbackModal.js';
 import { sampleIdsInCounts } from './analysis.js';
 import { getPackageStatus } from './packageManager.js';
+
+let packageSnapshotEventsWired = false;
 
 async function main() {
   wireTabs();
@@ -38,6 +41,8 @@ async function main() {
       renderOverviewMetrics,
       renderAnalysisReadiness,
     });
+    wirePackageEvents();
+    setupPackageFallbackModal({ refresh: refreshPackageUi });
     renderAnalysisReadiness();
     renderDownstreamCards();
     renderPackageRepositoryPanel();
@@ -448,7 +453,7 @@ function wireControls() {
   document.getElementById('deseq-denominator-level')?.addEventListener('change', renderAnalysisReadiness);
   document.getElementById('deseq-adjust-columns')?.addEventListener('change', renderAnalysisReadiness);
   document.getElementById('gsea-gmt-file')?.addEventListener('change', renderAnalysisReadiness);
-  document.addEventListener('rnaseq-report:packages-changed', renderAnalysisReadiness);
+  wirePackageEvents();
   document.getElementById('count-gene-button')?.addEventListener('click', () => renderCountExplorerPlot());
   document.getElementById('count-gene-input')?.addEventListener('keydown', (event) => {
     if (event.key === 'Enter') renderCountExplorerPlot();
@@ -465,6 +470,19 @@ function wireControls() {
   });
   document.getElementById('count-boxplot-split')?.addEventListener('change', () => renderCountExplorerPlot({ allowEmpty: false }));
   renderTable('counts-table', state.counts, { limit: 50, exportName: 'counts.csv' });
+}
+
+function wirePackageEvents() {
+  if (packageSnapshotEventsWired) return;
+  packageSnapshotEventsWired = true;
+  document.addEventListener('rnaseq-report:packages-changed', refreshPackageUi);
+  document.addEventListener('rnaseq-report:package-snapshot-changed', refreshPackageUi);
+}
+
+function refreshPackageUi() {
+  renderAnalysisReadiness();
+  renderDownstreamCards();
+  renderPackageRepositoryPanel();
 }
 
 function setupCountExplorerControls() {

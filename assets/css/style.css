@@ -288,6 +288,10 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .modal-field-label { display: inline-flex; align-items: center; gap: 7px; }
 .modal-field textarea { width: 100%; min-height: 230px; font-weight: 400; }
 .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 16px; }
+.package-fallback-actions { justify-content: flex-start; flex-wrap: wrap; }
+.package-fallback-bundle-name { margin: 10px 0 0; color: var(--ink); font-weight: 700; }
+.package-fallback-dismiss { margin-top: 14px; align-items: flex-start; color: var(--muted); font-size: 13px; font-weight: 600; }
+.package-fallback-dismiss input { margin-top: 2px; }
 .tip-wrap { position: relative; display: inline-flex; align-items: center; }
 .tip-icon { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border: 1px solid #bfdbfe; border-radius: 999px; background: var(--accent-soft); color: var(--accent); font-size: 12px; font-weight: 800; line-height: 1; cursor: help; }
 .tip-icon:focus { outline: 2px solid #93c5fd; outline-offset: 2px; }

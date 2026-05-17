@@ -535,6 +535,16 @@ generated wasm `PACKAGES` index before publishing the snapshot. It also checks
 the built `fastmatch.so` wasm imports against the pinned webR runtime ABI, which
 catches strict-linking failures before deployment.
 
+At runtime, the report automatically checks the configured `PACKAGES` index
+before enabling Install/load packages. If the snapshot cannot be reached, the
+report shows the failure in Runtime & Packages and keeps package installation
+disabled until the snapshot is available or a local webR library bundle is
+mounted. The first snapshot failure also opens a recovery modal with actions to
+download `rnaseq-report-webr-library-deseq2-fgsea-v1.zip`, choose the downloaded
+bundle, continue in report-only mode, or retry the online snapshot. If the user
+selects "don't show again", that choice is stored in browser `localStorage` for
+that report and package/library snapshot version.
+
 Each deployed snapshot also exposes a ZIP archive as a GitHub Release asset:
 
 ```text

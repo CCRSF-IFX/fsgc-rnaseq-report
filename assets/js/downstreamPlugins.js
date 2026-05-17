@@ -1,5 +1,6 @@
 import { state, logAnalysis } from './state.js';
-import { ensureRPackages } from './packageManager.js';
+import { ensureRPackages, getPackageStatus } from './packageManager.js';
+import { getPackageSnapshotStatus, packageSnapshotCanInstall } from './packageSnapshot.js';
 import { renderPCA } from './plots.js';
 
 export function pluginDefinitions() {
@@ -59,13 +60,18 @@ export function renderDownstreamCards() {
     const visiblePackages = pluginVisiblePackages(plugin);
     const dependencyCount = Math.max(0, plugin.packages.length - visiblePackages.length);
     const dependencyNote = dependencyCount ? `; ${dependencyCount} dependencies included in snapshot` : '';
+    const packageBlocked = pluginPackageActionBlocked(plugin);
+    const packageNote = packageBlocked
+      ? '<p class="note">Package snapshot is not available yet. Check Runtime & Packages or mount a local webR library bundle.</p>'
+      : '';
     return `
       <article class="card plugin-card" data-plugin-id="${plugin.id}">
         <h4>${plugin.name}${plugin.experimental ? ' <span class="badge warn">EXPERIMENTAL</span>' : ''}</h4>
         <p>${plugin.description}</p>
         <p><strong>Packages:</strong> ${visiblePackages.length ? visiblePackages.map((p) => `<code>${p}</code>`).join(' ') : 'none'}${dependencyNote}</p>
         <p><strong>Memory:</strong> ${plugin.memory}</p>
-        <div><button data-action="install" ${plugin.packages.length ? '' : 'disabled'}>Install/load packages</button> <button data-action="run">Run</button></div>
+        ${packageNote}
+        <div><button data-action="install" ${plugin.packages.length && !packageBlocked ? '' : 'disabled'}>Install/load packages</button> <button data-action="run" ${packageBlocked ? 'disabled' : ''}>Run</button></div>
       </article>`;
   }).join('');
   container.innerHTML = cards;
@@ -90,4 +96,11 @@ export function renderDownstreamCards() {
 
 function pluginVisiblePackages(plugin) {
   return plugin.loadPackages || plugin.packages || [];
+}
+
+function pluginPackageActionBlocked(plugin) {
+  if (!plugin.packages?.length) return false;
+  if (plugin.packages.every((pkg) => ['installed', 'loaded', 'mounted'].includes(getPackageStatus(pkg)))) return false;
+  getPackageSnapshotStatus();
+  return !packageSnapshotCanInstall();
 }

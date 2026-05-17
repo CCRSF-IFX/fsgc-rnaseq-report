@@ -43,11 +43,13 @@ JS_ORDER = [
     "assets/js/de.js",
     "assets/js/enrichment.js",
     "assets/js/webrManager.js",
+    "assets/js/packageSnapshot.js",
     "assets/js/packageManager.js",
     "assets/js/analysisCache.js",
     "assets/js/fgsea.js",
     "assets/js/downstreamPlugins.js",
     "assets/js/packageRepository.js",
+    "assets/js/packageFallbackModal.js",
     "assets/js/deseq2.js",
     "assets/js/app.js",
 ]

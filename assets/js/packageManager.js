@@ -1,4 +1,5 @@
 import { installRPackages, loadRPackage } from './webrManager.js';
+import { ensurePackageSnapshotAvailable } from './packageSnapshot.js';
 import { createProgressReporter, logAnalysis, runWithProgressPulse } from './state.js';
 
 const packageStatus = new Map();
@@ -19,13 +20,21 @@ export async function ensureRPackages(packages, options = {}) {
   const needsLoad = loadTargets.filter((pkg) => getPackageStatus(pkg) !== 'loaded');
   if (missing.length === 0 && needsLoad.length === 0) return;
 
-  const progress = createProgressReporter('R package setup', Math.max(3, missing.length + needsLoad.length + 2));
+  const progress = createProgressReporter('R package setup', Math.max(3, missing.length + needsLoad.length + (missing.length ? 3 : 2)));
+  let step = 1;
   const preparing = missing.length ? missing : needsLoad;
-  await progress.step(`Preparing ${preparing.join(', ')}`, 1);
+  if (missing.length) {
+    await progress.step('Checking webR package snapshot availability', step);
+    await ensurePackageSnapshotAvailable();
+    step += 1;
+  }
+  await progress.step(`Preparing ${preparing.join(', ')}`, step);
+  step += 1;
   missing.forEach((pkg) => packageStatus.set(pkg, 'installing'));
   try {
     if (missing.length) {
-      await progress.step('Initializing webR and installing missing packages', 2);
+      await progress.step('Initializing webR and installing missing packages', step);
+      step += 1;
       await runWithProgressPulse(
         progress,
         `Installing missing package snapshot: ${missing.join(', ')}`,
@@ -35,7 +44,7 @@ export async function ensureRPackages(packages, options = {}) {
       missing.forEach((pkg) => packageStatus.set(pkg, 'installed'));
     }
     for (const [index, pkg] of needsLoad.entries()) {
-      await progress.step(`Loading ${pkg}`, missing.length + index + 3);
+      await progress.step(`Loading ${pkg}`, step + index);
       await loadPackageWithStatus(pkg);
     }
     await progress.done(`Packages ready: ${loadTargets.join(', ')}`);

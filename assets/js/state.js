@@ -12,6 +12,7 @@ export const state = {
   enrichmentResults: new Map(),
   provenance: null,
   software: null,
+  packageSnapshot: null,
   loadedTabs: new Set(),
 };
 

@@ -1,6 +1,7 @@
 import { state, logAnalysis } from './state.js';
 import { ensureRPackages, getPackageStatus, markPackagesAvailable } from './packageManager.js';
 import { mountRLibraryBundle } from './webrManager.js';
+import { checkPackageSnapshot, getPackageSnapshotStatus, packageSnapshotBaseUrl, packageSnapshotCanInstall, packageSnapshotIndexUrl } from './packageSnapshot.js';
 import { enhanceTablesWithin } from './tables.js';
 
 export function renderPackageRepositoryPanel() {
@@ -15,8 +16,11 @@ export function renderPackageRepositoryPanel() {
   const indexUrl = packageRepoIndexUrl();
   const bundleUrl = packageRepoBundleUrl();
   const libraryBundle = packageRepoLibraryBundleConfig();
+  const libraryBundleDownloadUrl = packageRepositoryLibraryBundleDownloadUrl();
   const snapshotVersion = cfg.packageRepoVersion || 'the configured package snapshot';
   const disabled = cfg.enabled ? '' : 'disabled';
+  const snapshotStatus = getPackageSnapshotStatus();
+  const installDisabled = disabled || !packages.length || !packageSnapshotCanInstall() ? 'disabled' : '';
 
   container.innerHTML = `
     <section class="package-panel">
@@ -24,10 +28,11 @@ export function renderPackageRepositoryPanel() {
         <h4>webR package snapshot</h4>
         <p class="note">${packageRepoEscapeHtml(cfg.packageRepoVersion || 'unversioned')} · ${packageRepoEscapeHtml(repoUrl || 'not configured')}</p>
         <p class="note">Showing top-level packages only; ${dependencyCount} dependencies are included in the snapshot.</p>
+        <div id="package-snapshot-availability" class="status-message ${packageRepoSnapshotTone(snapshotStatus)}">${packageRepoEscapeHtml(packageRepoSnapshotMessage(snapshotStatus))}</div>
       </div>
       <div class="package-actions">
-        <button class="secondary" id="package-check" ${disabled}>Check snapshot</button>
-        <button id="package-install" ${disabled || (packages.length ? '' : 'disabled')}>Install/load packages</button>
+        <button class="secondary" id="package-check" ${disabled}>${snapshotStatus.state === 'checking' ? 'Checking snapshot...' : 'Check snapshot'}</button>
+        <button id="package-install" ${installDisabled}>Install/load packages</button>
         <a class="button secondary" href="${packageRepoEscapeHtml(bundleUrl)}" download>Download snapshot ZIP</a>
       </div>
       <div class="package-local-bundle">
@@ -36,8 +41,8 @@ export function renderPackageRepositoryPanel() {
           <p class="note">Load ${packageRepoEscapeHtml(libraryBundle.archiveFile)} to mount a prebuilt package library for ${packageRepoEscapeHtml(snapshotVersion)} without reinstalling every dependency.</p>
         </div>
         <div class="package-actions">
-          <label class="file-button secondary">Choose bundle <input id="package-library-bundle-file" type="file" accept=".zip,.data,.gz,.metadata,.json" multiple ${disabled} /></label>
-          <button class="secondary" id="package-library-bundle-load" ${disabled}>Mount bundle</button>
+          ${libraryBundleDownloadUrl ? `<a class="button" href="${packageRepoEscapeHtml(libraryBundleDownloadUrl)}" download="${packageRepoEscapeHtml(libraryBundle.archiveFile || '')}">Download webR library bundle</a>` : ''}
+          <label class="file-button secondary">Mount bundle <input id="package-library-bundle-file" type="file" accept=".zip,.data,.gz,.metadata,.json" multiple ${disabled} /></label>
           ${libraryBundle.releaseUrl ? `<a class="button secondary" href="${packageRepoEscapeHtml(libraryBundle.releaseUrl)}" target="_blank" rel="noopener">Release bundle</a>` : ''}
         </div>
       </div>
@@ -49,24 +54,31 @@ export function renderPackageRepositoryPanel() {
       <div id="package-repository-status" class="package-status"></div>
     </section>`;
 
-  document.getElementById('package-check')?.addEventListener('click', checkPackageRepository);
-  document.getElementById('package-library-bundle-load')?.addEventListener('click', async () => {
-    const files = document.getElementById('package-library-bundle-file')?.files;
+  if (cfg.enabled !== false && snapshotStatus.state === 'unchecked') {
+    checkPackageSnapshot().finally(renderPackageRepositoryPanel);
+  }
+
+  document.getElementById('package-check')?.addEventListener('click', () => checkPackageRepository({ force: true }));
+  document.getElementById('package-library-bundle-file')?.addEventListener('change', async (event) => {
+    const input = event.currentTarget;
+    const files = input?.files;
     try {
       packageRepoSetStatus('Mounting local webR library bundle...', 'info');
-      await mountRLibraryBundle(files, packages);
-      markPackagesAvailable(packages, 'mounted');
-      logAnalysis('webR library bundle mounted; package downloads are not needed for this session.');
+      await mountPackageRepositoryLibraryBundle(files, { packages });
       renderPackageRepositoryPanel();
       packageRepoSetStatus('Local webR library bundle mounted; top-level analysis packages are ready to load.', 'ok');
     } catch (error) {
       packageRepoSetStatus(`Library bundle mount failed: ${error.message}`, 'fail');
       logAnalysis(`webR library bundle mount failed: ${error.message}`);
+    } finally {
+      if (input) input.value = '';
     }
   });
   document.getElementById('package-install')?.addEventListener('click', async () => {
     try {
       packageRepoSetStatus('Installing packages in webR...', 'info');
+      await checkPackageSnapshot();
+      if (!packageSnapshotCanInstall()) throw new Error(`${getPackageSnapshotStatus().message} Mount a local webR library bundle or recheck after the snapshot is available.`);
       const loadPackages = packageRepoLoadPackages();
       await ensureRPackages(packages, { load: loadPackages });
       logAnalysis(`webR packages installed; loaded top-level packages: ${loadPackages.join(', ') || 'none'}`);
@@ -78,8 +90,53 @@ export function renderPackageRepositoryPanel() {
   });
 }
 
-export async function checkPackageRepository() {
+export function packageRepositoryRequiredPackages() {
+  return packageRepoRequiredPackages();
+}
+
+export function packageRepositoryLoadPackages() {
+  return packageRepoLoadPackages();
+}
+
+export function packageRepositoryLibraryBundleConfig() {
+  return packageRepoLibraryBundleConfig();
+}
+
+export function packageRepositoryLibraryBundleDownloadUrl() {
+  const cfg = state.config?.webr || {};
+  const bundle = cfg.libraryBundle || {};
+  const configured = String(bundle.downloadUrl || bundle.archiveUrl || '').trim();
+  if (configured) return configured;
+  const archiveFile = packageRepoLibraryBundleConfig().archiveFile;
+  const releaseTag = String(bundle.releaseTag || '').trim();
+  if (releaseTag && archiveFile) {
+    return `https://github.com/omicsreporthub/rnaseq-report/releases/download/${encodeURIComponent(releaseTag)}/${encodeURIComponent(archiveFile)}`;
+  }
+  const releaseUrl = String(bundle.releaseUrl || '').trim();
+  const match = releaseUrl.match(/\/releases\/tag\/([^/?#]+)/);
+  if (match && archiveFile) {
+    const base = releaseUrl.replace(/\/releases\/tag\/[^/?#]+.*/, '');
+    return `${base}/releases/download/${encodeURIComponent(decodeURIComponent(match[1]))}/${encodeURIComponent(archiveFile)}`;
+  }
+  return '';
+}
+
+export async function mountPackageRepositoryLibraryBundle(files, options = {}) {
+  const packages = options.packages || packageRepoRequiredPackages();
+  await mountRLibraryBundle(files, packages);
+  markPackagesAvailable(packages, options.status || 'mounted');
+  logAnalysis('webR library bundle mounted; package downloads are not needed for this session.');
+  return packages;
+}
+
+export async function checkPackageRepository(options = {}) {
   try {
+    const snapshotStatus = await checkPackageSnapshot({ force: Boolean(options.force) });
+    renderPackageRepositoryPanel();
+    if (snapshotStatus.available !== true) {
+      packageRepoSetStatus(`${snapshotStatus.message} Install/load packages is disabled until the snapshot is available, but you can still mount a local webR library bundle.`, 'fail');
+      return;
+    }
     const packages = packageRepoRequiredPackages();
     const response = await fetch(packageRepoIndexUrl(), { cache: 'no-store' });
     if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
@@ -150,12 +207,11 @@ function packageRepoLoadPackages() {
 }
 
 function packageRepoBaseUrl() {
-  const raw = String(state.config?.webr?.packageRepo || '').trim();
-  return raw ? raw.replace(/\/?$/, '/') : '';
+  return packageSnapshotBaseUrl();
 }
 
 function packageRepoIndexUrl() {
-  return `${packageRepoBaseUrl()}bin/emscripten/contrib/4.5/PACKAGES`;
+  return packageSnapshotIndexUrl();
 }
 
 function packageRepoBundleUrl() {
@@ -246,6 +302,19 @@ function packageRepoSetStatus(message, tone = 'info', html = false) {
   } else {
     status.textContent = message;
   }
+}
+
+function packageRepoSnapshotTone(status) {
+  if (status.available === true) return 'ok';
+  if (status.state === 'checking' || status.state === 'unchecked') return 'warn';
+  return 'fail';
+}
+
+function packageRepoSnapshotMessage(status) {
+  if (status.available === true) return 'Snapshot available. Install/load packages is enabled.';
+  if (status.state === 'checking') return 'Checking whether the configured webR package snapshot is available...';
+  if (status.state === 'unchecked') return 'Snapshot availability will be checked automatically.';
+  return `${status.message || 'Snapshot is not available.'} Install/load packages is disabled until it is available.`;
 }
 
 function packageRepoEscapeHtml(value) {
