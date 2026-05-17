@@ -6,6 +6,7 @@ export const state = {
   distance: null,
   counts: [],
   geneAnnotation: [],
+  geneAnnotationLoaded: false,
   contrasts: [],
   deResults: new Map(),
   enrichmentResults: new Map(),

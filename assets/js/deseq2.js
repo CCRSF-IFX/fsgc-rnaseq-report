@@ -1,6 +1,6 @@
 import { state, logAnalysis, metadataColumns, createProgressReporter, runWithProgressPulse } from './state.js';
 import { sampleIdsInCounts } from './analysis.js';
-import { parseCsv } from './dataLoader.js';
+import { loadGeneAnnotation, parseCsv } from './dataLoader.js';
 import { ensureRPackages } from './packageManager.js';
 import { evalR } from './webrManager.js';
 import { markAnalysisCacheDirty } from './analysisCache.js';
@@ -250,6 +250,7 @@ paste(capture.output(write.csv(out, row.names = FALSE, na = "")), collapse = "\\
 `;
   const result = await evalR(code);
   const text = deseqResultText(result);
+  await loadGeneAnnotation(false);
   const geneSymbols = deseqGeneSymbolLookup();
   return parseCsv(text).map((row) => ({
     ...row,

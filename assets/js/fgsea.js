@@ -1,5 +1,5 @@
 import { state, logAnalysis, createProgressReporter, runWithProgressPulse } from './state.js';
-import { loadDeForContrast, loadText, parseCsv } from './dataLoader.js';
+import { loadDeForContrast, loadGeneAnnotation, loadText, parseCsv } from './dataLoader.js';
 import { ensureRPackages } from './packageManager.js';
 import { renderCurrentEnrichment, storeGseaResult } from './enrichment.js';
 import { evalR } from './webrManager.js';
@@ -174,6 +174,7 @@ function fgseaSlug(value) {
 }
 
 async function fgseaRunInWebR(deRows, gmtText, reference, minSize, maxSize) {
+  await loadGeneAnnotation(false);
   const statsCsv = fgseaStatsCsv(deRows);
   const code = `
 suppressPackageStartupMessages(library(fgsea))

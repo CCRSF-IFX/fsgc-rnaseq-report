@@ -97,7 +97,8 @@ export async function loadCoreAssets() {
   state.qc = await loadQcMetrics(dataRoot);
   state.pca = await loadJson(`${dataRoot}/pca.json`, false);
   state.distance = await loadJson(`${dataRoot}/sample_distance_matrix.json`, false);
-  state.geneAnnotation = await loadJson(`${dataRoot}/gene_annotation.json`, false) || [];
+  state.geneAnnotation = [];
+  state.geneAnnotationLoaded = false;
   state.contrasts = await loadJson(`${dataRoot}/contrast_list.json`, false) || [];
   state.provenance = await loadJson(`${dataRoot}/logs/pipeline_provenance.json`, false);
   state.software = await loadJson(`${dataRoot}/logs/software_versions.json`, false);
@@ -109,6 +110,14 @@ export async function loadCoreAssets() {
   if (state.contrasts.length === 0) state.contrasts = inferContrastsFromSamples(state.samples, state.config);
   validatePca(state.pca);
   if (state.distance) validateDistance(state.distance);
+}
+
+export async function loadGeneAnnotation(required = false) {
+  if (state.geneAnnotationLoaded) return state.geneAnnotation;
+  const dataRoot = state.config?.dataRoot || 'assets/data';
+  state.geneAnnotation = await loadJson(`${dataRoot}/gene_annotation.json`, required) || [];
+  state.geneAnnotationLoaded = true;
+  return state.geneAnnotation;
 }
 
 async function loadSampleMetadata(dataRoot, counts) {

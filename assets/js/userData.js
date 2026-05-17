@@ -37,6 +37,7 @@ async function applyUploadedUserData() {
         gene_id: row.gene_id || row.gene_symbol || row.gene_name || `gene_${index + 1}`,
         gene_symbol: row.gene_symbol || row.gene_name || row.gene_id || '',
       }));
+      state.geneAnnotationLoaded = true;
       state.qc = [];
     }
     state.pca = computePcaFromCounts(state.counts, state.samples, state.config);
