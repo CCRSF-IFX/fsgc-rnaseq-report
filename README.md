@@ -481,7 +481,7 @@ cran::withr
 
 DESeq2 and fgsea are enabled in the optional-analysis UI. The
 Differential Expression tab has a browser DESeq2 runner for two-group contrasts,
-and the Enrichment tab can run fgsea from the selected DE contrast. The demo
+and the GSEA tab can run fgsea from the selected DE contrast. The demo
 GMT files under `assets/data/gsea/` are placeholders for testing the mechanics;
 replace them with compact hg38/mm10 production GMT files before delivering real
 biological interpretation.

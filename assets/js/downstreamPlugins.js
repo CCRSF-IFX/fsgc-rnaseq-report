@@ -45,7 +45,7 @@ export function pluginDefinitions() {
       loadPackages: modules.fgsea?.loadPackages || ['fgsea'],
       memory: modules.fgsea?.memoryWarning || 'medium',
       experimental: true,
-      run: async () => { logAnalysis('fgsea module loaded. Run fgsea from the Enrichment tab.'); },
+      run: async () => { logAnalysis('fgsea module loaded. Run fgsea from the GSEA tab.'); },
     });
   }
 

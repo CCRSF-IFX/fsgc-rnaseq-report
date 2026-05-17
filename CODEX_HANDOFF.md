@@ -129,7 +129,7 @@ https://omicsreporthub.github.io/rnaseq-report/webr-packages/v0.1.0/
 - The Sample Metadata tab lets users upload a manifest for the embedded count
   matrix, or a replacement count matrix plus matching manifest. Uploaded count
   matrices are refused without matching sample metadata.
-- The Enrichment tab can run browser-side fgsea from the current DE contrast
+- The GSEA tab can run browser-side fgsea from the current DE contrast
   using hg38/mm10 GMT pathway references or a user-uploaded GMT file.
 - The Optional Analysis tab shows the configured package repository, can check
   the remote `PACKAGES` index, can install/load configured webR packages, and
