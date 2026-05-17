@@ -2,8 +2,11 @@ import { state, getSampleById, metadataColumns } from './state.js';
 import { sampleIdsInCounts } from './analysis.js';
 
 const HEATMAP_PALETTE = ['#2563eb', '#dc2626', '#16a34a', '#d97706', '#7c3aed', '#0891b2', '#be123c', '#475569'];
+const CANVASXPRESS_ANNOTATION_COLORS = ['#0ab0db', '#fe6969', '#fed385', '#47db0a', '#9e0adb', '#ff7d00', '#ffa2c0', '#a0d7e7'];
 const HEATMAP_CUSTOM_GENE_LIMIT = 500;
 const CLUSTERGRAMMER_VERSION = '1.19.5';
+const CANVASXPRESS_JS = 'https://www.canvasxpress.org/dist/canvasXpress.min.js';
+const CANVASXPRESS_CSS = 'https://www.canvasxpress.org/dist/canvasXpress.css';
 const CLUSTERGRAMMER_ASSETS = [
   {
     src: 'https://cdn.jsdelivr.net/npm/d3@3.5.17/d3.min.js',
@@ -28,11 +31,48 @@ const CLUSTERGRAMMER_ASSETS = [
 ];
 
 let clustergrammerAssetPromise = null;
+let canvasXpressAssetPromise = null;
 let clustergrammerInstance = null;
 let heatmapControlsWired = false;
+let canvasXpressControlsWired = false;
+let heatmapEngineControlsWired = false;
 let heatmapOpacityValue = 1;
 
+function setupHeatmapEngineControls() {
+  if (heatmapEngineControlsWired) return;
+  heatmapEngineControlsWired = true;
+  document.querySelectorAll('[data-heatmap-engine]').forEach((button) => {
+    button.addEventListener('click', () => {
+      setActiveHeatmapEngine(button.dataset.heatmapEngine || 'canvasxpress');
+      renderActiveExpressionHeatmap();
+    });
+  });
+  setActiveHeatmapEngine(activeHeatmapEngine());
+}
+
+function activeHeatmapEngine() {
+  return document.querySelector('[data-heatmap-engine].active')?.dataset.heatmapEngine === 'clustergrammer'
+    ? 'clustergrammer'
+    : 'canvasxpress';
+}
+
+function setActiveHeatmapEngine(engine) {
+  const nextEngine = engine === 'clustergrammer' ? 'clustergrammer' : 'canvasxpress';
+  document.querySelectorAll('[data-heatmap-engine]').forEach((button) => {
+    const isActive = button.dataset.heatmapEngine === nextEngine;
+    button.classList.toggle('active', isActive);
+    button.setAttribute('aria-selected', String(isActive));
+  });
+  document.querySelectorAll('[data-heatmap-engine-panel]').forEach((panel) => {
+    const isActive = panel.dataset.heatmapEnginePanel === nextEngine;
+    panel.hidden = !isActive;
+    panel.classList.toggle('active', isActive);
+  });
+}
+
 export function setupExpressionHeatmapControls() {
+  setupHeatmapEngineControls();
+
   const annotationSelect = document.getElementById('heatmap-annotation-column');
   if (annotationSelect) {
     const columns = metadataColumns();
@@ -61,7 +101,8 @@ export function setupExpressionHeatmapControls() {
     document.getElementById('heatmap-gene-list-apply')?.addEventListener('click', () => {
       closeHeatmapGeneModal();
       syncHeatmapGeneControls();
-      renderExpressionHeatmap();
+      syncCanvasXpressGeneControls();
+      renderActiveExpressionHeatmap();
     });
     document.getElementById('heatmap-gene-list-modal')?.addEventListener('click', (event) => {
       if (event.target?.id === 'heatmap-gene-list-modal') closeHeatmapGeneModal();
@@ -75,6 +116,7 @@ export function setupExpressionHeatmapControls() {
       const modalStatus = document.getElementById('heatmap-gene-list-modal-status');
       if (modalStatus) modalStatus.textContent = heatmapGeneListDraftSummary();
       syncHeatmapGeneControls();
+      syncCanvasXpressGeneControls();
     });
     document.getElementById('heatmap-annotation-column')?.addEventListener('change', renderExpressionHeatmap);
     document.getElementById('heatmap-scale')?.addEventListener('change', renderExpressionHeatmap);
@@ -92,8 +134,188 @@ export function setupExpressionHeatmapControls() {
   syncHeatmapGeneControls();
   syncHeatmapControlLabels();
   const container = document.getElementById('expression-heatmap');
-  if (container) container.innerHTML = '<p class="note">Open the clustering tab to render the Clustergrammer heatmap.</p>';
-  if (document.getElementById('tab-clustering')?.classList.contains('active')) renderExpressionHeatmap();
+  if (container) container.innerHTML = '<p class="note">Switch to Clustergrammer to render this heatmap.</p>';
+  if (document.getElementById('tab-clustering')?.classList.contains('active') && activeHeatmapEngine() === 'clustergrammer') renderExpressionHeatmap();
+}
+
+export function setupCanvasXpressHeatmapControls() {
+  setupHeatmapEngineControls();
+  syncCanvasXpressAnnotationOptions();
+  syncCanvasXpressSampleOptions();
+  syncCanvasXpressClusteringControls();
+
+  if (!canvasXpressControlsWired) {
+    canvasXpressControlsWired = true;
+    document.getElementById('canvasxpress-render')?.addEventListener('click', renderCanvasXpressHeatmap);
+    document.getElementById('canvasxpress-gene-mode')?.addEventListener('change', () => {
+      syncCanvasXpressGeneControls();
+      if (document.getElementById('canvasxpress-gene-mode')?.value === 'custom') {
+        openHeatmapGeneModal();
+        if (heatmapCustomGeneTerms().length > 0 && canvasXpressRendered()) renderCanvasXpressHeatmap();
+      } else if (canvasXpressRendered()) {
+        renderCanvasXpressHeatmap();
+      }
+    });
+    document.getElementById('canvasxpress-gene-list-open')?.addEventListener('click', openHeatmapGeneModal);
+    [
+      'canvasxpress-top-n',
+      'canvasxpress-annotation-columns',
+      'canvasxpress-exclude-samples',
+      'canvasxpress-scale',
+      'canvasxpress-distance',
+      'canvasxpress-linkage',
+      'canvasxpress-cluster-rows',
+      'canvasxpress-cluster-columns',
+      'canvasxpress-show-sample-names',
+    ]
+      .forEach((id) => document.getElementById(id)?.addEventListener('change', () => {
+        syncCanvasXpressClusteringControls();
+        if (canvasXpressRendered()) renderCanvasXpressHeatmap();
+      }));
+  }
+  syncCanvasXpressGeneControls();
+  syncCanvasXpressClusteringControls();
+
+  const canvas = document.getElementById('canvasxpress-heatmap-canvas');
+  if (canvas) {
+    canvas.dataset.rendered = 'false';
+    const status = document.getElementById('canvasxpress-heatmap-status');
+    if (status) status.textContent = 'CanvasXpress expression heatmap is ready.';
+  }
+}
+
+export async function renderActiveExpressionHeatmap() {
+  return activeHeatmapEngine() === 'clustergrammer'
+    ? renderExpressionHeatmap()
+    : renderCanvasXpressHeatmap();
+}
+
+export async function renderCanvasXpressHeatmap() {
+  const canvas = document.getElementById('canvasxpress-heatmap-canvas');
+  const wrap = document.getElementById('canvasxpress-heatmap-wrap');
+  const status = document.getElementById('canvasxpress-heatmap-status');
+  if (!canvas || !wrap) return;
+
+  const allSampleIds = sampleIdsInCounts(state.samples, state.counts);
+  const sampleIds = canvasXpressIncludedSampleIds(allSampleIds);
+  if (sampleIds.length < 2) {
+    if (status) status.textContent = 'At least two count columns matching sample IDs are required.';
+    return;
+  }
+
+  const topN = heatmapClampedInteger(document.getElementById('canvasxpress-top-n')?.value, 5, 500, 50);
+  const scale = document.getElementById('canvasxpress-scale')?.value || 'row';
+  const geneMode = document.getElementById('canvasxpress-gene-mode')?.value || 'top';
+  const annotationColumns = canvasXpressSelectedValues('canvasxpress-annotation-columns');
+  const linkage = document.getElementById('canvasxpress-linkage')?.value || 'average';
+  const clusteringDistance = document.getElementById('canvasxpress-distance')?.value || 'euclidianDistance';
+  const clusterRows = heatmapCheckboxChecked('canvasxpress-cluster-rows', true);
+  const clusterColumns = heatmapCheckboxChecked('canvasxpress-cluster-columns', true);
+  const showSampleNames = heatmapCheckboxChecked('canvasxpress-show-sample-names', false);
+
+  const expressionRows = heatmapExpressionRows(sampleIds)
+    .filter((row) => row.values.some((value) => value > 0))
+    .sort((a, b) => b.variance - a.variance);
+  const geneSelection = heatmapSelectedRows(expressionRows, topN, geneMode);
+  const rows = geneSelection.rows;
+  renderHeatmapGeneStatus(geneSelection, 'canvasxpress-gene-list-status');
+  if (rows.length === 0) {
+    if (status) status.textContent = geneSelection.emptyMessage || 'No nonzero count rows were available for the CanvasXpress heatmap.';
+    renderCanvasXpressColorScale(null);
+    renderCanvasXpressAnnotationLegend([], []);
+    return;
+  }
+
+  const rowLabels = heatmapUniqueLabels(rows.map((row) => row.label || row.id || 'gene'));
+  const geneBySampleMatrix = rows.map((row) => (scale === 'row' ? heatmapRowZScore(row.values) : row.values));
+  const sampleByGeneMatrix = heatmapTransposeMatrix(geneBySampleMatrix);
+  const data = {
+    y: {
+      vars: sampleIds,
+      smps: rowLabels,
+      data: sampleByGeneMatrix,
+    },
+    x: {
+      gene_id: rows.map((row) => row.id || ''),
+      gene_name: rows.map((row) => row.name || ''),
+    },
+  };
+  if (annotationColumns.length) {
+    data.z = Object.fromEntries(annotationColumns.map((column) => [
+      column,
+      sampleIds.map((sampleId) => heatmapSampleMetadata(sampleId, column)),
+    ]));
+  }
+
+  try {
+    if (status) status.textContent = 'Loading CanvasXpress and rendering heatmap...';
+    await loadCanvasXpressAssets();
+    canvas.dataset.rendered = 'true';
+    const canvasSize = canvasXpressHeatmapSize(wrap, rows.length, sampleIds.length, annotationColumns.length, showSampleNames);
+    canvas.width = canvasSize.width;
+    canvas.height = canvasSize.height;
+    canvas.style.width = `${canvas.width}px`;
+    canvas.style.height = `${canvas.height}px`;
+    const colorSpectrum = canvasXpressColorSpectrum(scale);
+    renderCanvasXpressColorScale(scale, colorSpectrum);
+    renderCanvasXpressAnnotationLegend(sampleIds, annotationColumns);
+
+    new globalThis.CanvasXpress(canvas.id, data, {
+      graphType: 'Heatmap',
+      graphOrientation: 'vertical',
+      title: '',
+      showTitle: false,
+      marginTop: 8,
+      marginBottom: 16,
+      samplesClustered: clusterRows,
+      variablesClustered: clusterColumns,
+      clusteringDistance,
+      linkage,
+      dendrogramHeight: clusterColumns ? 56 : 18,
+      showSmpDendrogram: clusterRows,
+      showVarDendrogram: clusterColumns,
+      varOverlays: annotationColumns,
+      showVarOverlaysLegend: false,
+      varOverlayProperties: Object.fromEntries(annotationColumns.map((column) => [
+        column,
+        { showLegend: false, showName: true, position: 'top', thickness: 18 },
+      ])),
+      colors: CANVASXPRESS_ANNOTATION_COLORS,
+      colorSpectrum,
+      heatmapCellBox: false,
+      showHeatmapIndicator: false,
+      showColorLegend: false,
+      showSampleNames: true,
+      showVariableNames: showSampleNames,
+      maxSmpStringLen: 18,
+      maxVarStringLen: 12,
+      maxOverlayStringLen: 22,
+      smpTextScaleFontFactor: 0.72,
+      varTextScaleFontFactor: 0.64,
+      varTextRotate: 45,
+      varTextAlign: 'right',
+      varTextBaseline: 'middle',
+      varTextMargin: 8,
+      overlayTextScaleFontFactor: 0.85,
+      showNameOverlays: true,
+      showValueOverlays: false,
+      legendTextScaleFontFactor: 0.78,
+      smpTitleLabelPosition: 'right',
+      varTitleLabelPosition: 'bottom',
+      varTitle: showSampleNames ? 'Samples' : false,
+    });
+    const excluded = allSampleIds.length - sampleIds.length;
+    const annotationText = annotationColumns.length ? `; annotations: ${annotationColumns.length}` : '';
+    const excludedText = excluded ? `; excluded samples: ${excluded}` : '';
+    const clusteringText = canvasXpressClusteringSummary(clusterRows, clusterColumns, linkage, clusteringDistance);
+    const labelText = showSampleNames ? '; sample names shown' : '; sample names hidden';
+    if (status) status.textContent = `CanvasXpress rendered ${rows.length} gene rows x ${sampleIds.length} sample columns${annotationText}; clustering: ${clusteringText}${excludedText}${labelText}.`;
+  } catch (error) {
+    canvas.dataset.rendered = 'false';
+    renderCanvasXpressColorScale(null);
+    renderCanvasXpressAnnotationLegend([], []);
+    if (status) status.textContent = `CanvasXpress heatmap failed: ${error.message}`;
+  }
 }
 
 export async function renderExpressionHeatmap() {
@@ -189,6 +411,7 @@ function heatmapExpressionRows(sampleIds) {
     return {
       key: `row_${index}`,
       id: row.gene_id || fallbackId,
+      name: row.gene_name || '',
       label: row.gene_symbol || row.gene_name || row.gene_id || fallbackId,
       aliases,
       values,
@@ -197,8 +420,7 @@ function heatmapExpressionRows(sampleIds) {
   });
 }
 
-function heatmapSelectedRows(expressionRows, topN) {
-  const mode = document.getElementById('heatmap-gene-mode')?.value || 'top';
+function heatmapSelectedRows(expressionRows, topN, mode = document.getElementById('heatmap-gene-mode')?.value || 'top') {
   if (mode !== 'custom') {
     const rows = expressionRows.slice(0, topN);
     return {
@@ -289,6 +511,152 @@ function syncHeatmapGeneControls() {
   if (!isCustom && status) status.textContent = '';
 }
 
+function syncCanvasXpressAnnotationOptions() {
+  const select = document.getElementById('canvasxpress-annotation-columns');
+  if (!select) return;
+  const columns = metadataColumns();
+  const selected = new Set(canvasXpressSelectedValues('canvasxpress-annotation-columns'));
+  if (selected.size === 0) {
+    if (columns.includes('condition')) selected.add('condition');
+    if (columns.includes('tissue')) selected.add('tissue');
+  }
+  const orderedColumns = columns.slice().sort((a, b) => {
+    const aSelected = selected.has(a) ? 0 : 1;
+    const bSelected = selected.has(b) ? 0 : 1;
+    return (aSelected - bSelected) || a.localeCompare(b);
+  });
+  select.innerHTML = orderedColumns
+    .map((column) => `<option value="${heatmapEscapeHtml(column)}"${selected.has(column) ? ' selected' : ''}>${heatmapEscapeHtml(column)}</option>`)
+    .join('');
+}
+
+function syncCanvasXpressSampleOptions() {
+  const select = document.getElementById('canvasxpress-exclude-samples');
+  if (!select) return;
+  const sampleIds = sampleIdsInCounts(state.samples, state.counts);
+  const selected = new Set(canvasXpressSelectedValues('canvasxpress-exclude-samples'));
+  select.innerHTML = sampleIds
+    .map((sampleId) => {
+      const sample = getSampleById(sampleId);
+      const title = String(sample?.title || '').trim();
+      const titleAttr = title && title !== sampleId ? ` title="${heatmapEscapeHtml(title)}"` : '';
+      return `<option value="${heatmapEscapeHtml(sampleId)}"${titleAttr}${selected.has(sampleId) ? ' selected' : ''}>${heatmapEscapeHtml(sampleId)}</option>`;
+    })
+    .join('');
+}
+
+function syncCanvasXpressGeneControls() {
+  const mode = document.getElementById('canvasxpress-gene-mode')?.value || 'top';
+  const topInput = document.getElementById('canvasxpress-top-n');
+  const geneListOpen = document.getElementById('canvasxpress-gene-list-open');
+  const status = document.getElementById('canvasxpress-gene-list-status');
+  const isCustom = mode === 'custom';
+  const geneCount = heatmapCustomGeneTerms().length;
+
+  if (topInput) topInput.disabled = isCustom;
+  if (geneListOpen) {
+    geneListOpen.hidden = !isCustom;
+    geneListOpen.textContent = geneCount ? `Edit gene list (${geneCount})` : 'Edit gene list';
+  }
+  if (!isCustom && status) status.textContent = '';
+}
+
+function syncCanvasXpressClusteringControls() {
+  const clusterRows = heatmapCheckboxChecked('canvasxpress-cluster-rows', true);
+  const clusterColumns = heatmapCheckboxChecked('canvasxpress-cluster-columns', true);
+  const enabled = clusterRows || clusterColumns;
+  ['canvasxpress-distance', 'canvasxpress-linkage'].forEach((id) => {
+    const control = document.getElementById(id);
+    if (control) control.disabled = !enabled;
+  });
+}
+
+function canvasXpressSelectedValues(selectId) {
+  const select = document.getElementById(selectId);
+  if (!select) return [];
+  return Array.from(select.selectedOptions || [])
+    .map((option) => option.value)
+    .filter(Boolean);
+}
+
+function canvasXpressIncludedSampleIds(allSampleIds) {
+  const excluded = new Set(canvasXpressSelectedValues('canvasxpress-exclude-samples'));
+  return allSampleIds.filter((sampleId) => !excluded.has(sampleId));
+}
+
+function canvasXpressRendered() {
+  return document.getElementById('canvasxpress-heatmap-canvas')?.dataset.rendered === 'true';
+}
+
+function canvasXpressHeatmapSize(wrap, geneCount, sampleCount, annotationCount, showSampleNames) {
+  const availableWidth = Math.floor(wrap.getBoundingClientRect().width || wrap.clientWidth || 960) - 24;
+  const width = Math.max(680, Math.min(1200, Math.max(availableWidth, sampleCount * 22 + annotationCount * 12 + 300)));
+  const labelSpace = showSampleNames ? 420 : 330;
+  const height = Math.max(620, Math.min(1120, geneCount * 10 + labelSpace));
+  return { width, height };
+}
+
+function canvasXpressClusteringSummary(clusterRows, clusterColumns, linkage, clusteringDistance) {
+  const method = ` (${linkage} linkage, ${canvasXpressDistanceLabel(clusteringDistance)})`;
+  if (clusterRows && clusterColumns) return `genes and samples${method}`;
+  if (clusterRows) return `genes${method}`;
+  if (clusterColumns) return `samples${method}`;
+  return 'off';
+}
+
+function canvasXpressColorSpectrum(scale) {
+  return scale === 'row'
+    ? ['#2563eb', '#f8fafc', '#dc2626']
+    : ['#eff6ff', '#22c55e', '#7f1d1d'];
+}
+
+function renderCanvasXpressColorScale(scale, colorSpectrum = canvasXpressColorSpectrum(scale)) {
+  const container = document.getElementById('canvasxpress-color-scale');
+  if (!container) return;
+  if (!scale) {
+    container.hidden = true;
+    container.innerHTML = '';
+    return;
+  }
+
+  const label = scale === 'row' ? 'Row z-score' : 'log2(CPM + 1)';
+  const ticks = scale === 'row' ? ['-3', '0', '3'] : ['Low', 'Mid', 'High'];
+  container.hidden = false;
+  container.innerHTML = `
+    <strong>${heatmapEscapeHtml(label)}</strong>
+    <span class="canvasxpress-scale-ramp">
+      <span class="canvasxpress-scale-gradient" style="background: linear-gradient(90deg, ${colorSpectrum.join(', ')});"></span>
+      <span class="canvasxpress-scale-ticks">${ticks.map((tick) => `<span>${heatmapEscapeHtml(tick)}</span>`).join('')}</span>
+    </span>`;
+}
+
+function renderCanvasXpressAnnotationLegend(sampleIds, annotationColumns) {
+  const container = document.getElementById('canvasxpress-annotation-legend');
+  if (!container) return;
+  if (!sampleIds.length || !annotationColumns.length) {
+    container.hidden = true;
+    container.innerHTML = '';
+    return;
+  }
+
+  const sections = annotationColumns.map((column) => {
+    const levels = Array.from(new Set(sampleIds.map((sampleId) => heatmapSampleMetadata(sampleId, column))));
+    const items = levels.map((level, index) => `
+      <span class="canvasxpress-legend-item">
+        <span class="canvasxpress-legend-swatch" style="background:${CANVASXPRESS_ANNOTATION_COLORS[index % CANVASXPRESS_ANNOTATION_COLORS.length]}"></span>
+        <span>${heatmapEscapeHtml(level)}</span>
+      </span>`).join('');
+    return `
+      <section class="canvasxpress-legend-section">
+        <h4>${heatmapEscapeHtml(column)}</h4>
+        <div class="canvasxpress-legend-items">${items}</div>
+      </section>`;
+  }).join('');
+
+  container.hidden = false;
+  container.innerHTML = sections;
+}
+
 function openHeatmapGeneModal() {
   const modal = document.getElementById('heatmap-gene-list-modal');
   if (!modal) return;
@@ -313,8 +681,8 @@ function heatmapGeneListDraftSummary() {
   return terms.length ? `${terms.length} gene${terms.length === 1 ? '' : 's'} entered.` : '';
 }
 
-function renderHeatmapGeneStatus(selection) {
-  const status = document.getElementById('heatmap-gene-list-status');
+function renderHeatmapGeneStatus(selection, statusId = 'heatmap-gene-list-status') {
+  const status = document.getElementById(statusId);
   if (!status) return;
   if (selection.mode !== 'custom') {
     status.textContent = '';
@@ -508,7 +876,7 @@ function syncHeatmapControlLabels() {
 function heatmapAnnotationInfo(sampleIds, annotationColumn) {
   if (annotationColumn === 'none') return { nodeFields: [], catColors: { col: {}, row: {} } };
 
-  const values = sampleIds.map((sampleId) => String(getSampleById(sampleId)?.[annotationColumn] ?? 'NA'));
+  const values = sampleIds.map((sampleId) => heatmapSampleMetadata(sampleId, annotationColumn));
   const levels = Array.from(new Set(values));
   const colors = Object.fromEntries(levels.map((level, index) => [
     `${annotationColumn}: ${level}`,
@@ -524,6 +892,15 @@ function heatmapAnnotationInfo(sampleIds, annotationColumn) {
       row: {},
     },
   };
+}
+
+function heatmapSampleMetadata(sampleId, column) {
+  return String(getSampleById(sampleId)?.[column] ?? 'NA');
+}
+
+function heatmapTransposeMatrix(matrix) {
+  if (!matrix.length) return [];
+  return matrix[0].map((_, columnIndex) => matrix.map((row) => row[columnIndex]));
 }
 
 function heatmapOrderRanks(order) {
@@ -543,6 +920,15 @@ async function loadClustergrammerAssets() {
   if (!globalThis.Clustergrammer) throw new Error('Clustergrammer failed to load.');
 }
 
+async function loadCanvasXpressAssets() {
+  if (!canvasXpressAssetPromise) {
+    canvasXpressAssetPromise = heatmapLoadStylesheet(CANVASXPRESS_CSS)
+      .then(() => (typeof globalThis.CanvasXpress === 'function' ? null : heatmapLoadScript(CANVASXPRESS_JS)));
+  }
+  await canvasXpressAssetPromise;
+  if (typeof globalThis.CanvasXpress !== 'function') throw new Error('CanvasXpress failed to load.');
+}
+
 function heatmapLoadScript(src) {
   return new Promise((resolve, reject) => {
     const existing = document.querySelector(`script[src="${src}"]`);
@@ -559,6 +945,25 @@ function heatmapLoadScript(src) {
     script.onload = () => { script.dataset.loaded = 'true'; resolve(); };
     script.onerror = () => reject(new Error(`Failed to load ${src}`));
     document.head.appendChild(script);
+  });
+}
+
+function heatmapLoadStylesheet(href) {
+  return new Promise((resolve, reject) => {
+    const existing = document.querySelector(`link[href="${href}"]`);
+    if (existing) {
+      existing.addEventListener('load', resolve, { once: true });
+      existing.addEventListener('error', () => reject(new Error(`Failed to load ${href}`)), { once: true });
+      if (existing.dataset.loaded === 'true' || existing.sheet) resolve();
+      return;
+    }
+
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = href;
+    link.onload = () => { link.dataset.loaded = 'true'; resolve(); };
+    link.onerror = () => reject(new Error(`Failed to load ${href}`));
+    document.head.appendChild(link);
   });
 }
 
@@ -656,6 +1061,11 @@ function heatmapFloatControl(id, min, max, fallback) {
   return Math.min(max, Math.max(min, n));
 }
 
+function heatmapCheckboxChecked(id, fallback) {
+  const element = document.getElementById(id);
+  return element ? Boolean(element.checked) : fallback;
+}
+
 function heatmapFormatNumber(value) {
   const n = Number(value);
   return Number.isFinite(n) ? n.toPrecision(4) : 'NA';
@@ -671,6 +1081,14 @@ function heatmapUniqueLabels(labels) {
     seen.set(label, next);
     return `${label}_${next}`;
   });
+}
+
+function canvasXpressDistanceLabel(value) {
+  return {
+    euclidianDistance: 'Euclidean distance',
+    manhattanDistance: 'Manhattan distance',
+    maxDistance: 'maximum distance',
+  }[value] || value;
 }
 
 function heatmapEscapeHtml(value) {

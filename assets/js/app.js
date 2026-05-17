@@ -9,7 +9,7 @@ import { renderDownstreamCards } from './downstreamPlugins.js';
 import { renderPackageRepositoryPanel } from './packageRepository.js';
 import { setupDeseqControls } from './deseq2.js';
 import { setupFgseaControls } from './fgsea.js';
-import { renderExpressionHeatmap, resizeExpressionHeatmap, setupExpressionHeatmapControls } from './heatmap.js';
+import { renderActiveExpressionHeatmap, resizeExpressionHeatmap, setupCanvasXpressHeatmapControls, setupExpressionHeatmapControls } from './heatmap.js?v=20260517-canvasxpress-production';
 import { setupUserDataControls } from './userData.js';
 import { setupAnalysisCacheControls } from './analysisCache.js';
 import { sampleIdsInCounts } from './analysis.js';
@@ -46,6 +46,7 @@ async function main() {
     renderQC();
     setupPcaControls();
     setupExpressionHeatmapControls();
+    setupCanvasXpressHeatmapControls();
     await renderCurrentContrast();
     await renderCurrentEnrichment();
     setupUserDataControls({ refresh: refreshReportFromState });
@@ -622,6 +623,7 @@ async function refreshReportFromState() {
   renderQC();
   setupPcaControls();
   setupExpressionHeatmapControls();
+  setupCanvasXpressHeatmapControls();
   setupCountExplorerControls();
   renderTable('counts-table', state.counts, { limit: 50, exportName: 'counts.csv' });
   renderCountExplorerPlot({ allowEmpty: false });
@@ -652,12 +654,12 @@ function activateTab(tabName) {
     requestAnimationFrame(() => {
       panel.querySelectorAll('.js-plotly-plot').forEach((plot) => Plotly.Plots.resize(plot));
       if (tabName === 'clustering') {
-        renderExpressionHeatmap();
+        renderActiveExpressionHeatmap();
         resizeExpressionHeatmap();
       }
     });
   } else if (tabName === 'clustering') {
-    requestAnimationFrame(() => renderExpressionHeatmap());
+    requestAnimationFrame(() => renderActiveExpressionHeatmap());
   }
 }
 

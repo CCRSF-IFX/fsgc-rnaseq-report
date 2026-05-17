@@ -256,22 +256,58 @@
           <div id="distance-heatmap" class="plot tall"></div>
           <p class="note" id="sample-clustering-status">Hierarchical clustering is calculated from the sample distance matrix.</p>
         </article>
-        <article class="card">
-          <h3>Clustergrammer expression heatmap</h3>
-          <div class="toolbar">
-            <label>Genes <select id="heatmap-gene-mode"><option value="top">Top variable</option><option value="custom">Custom list</option></select></label>
-            <label>Top genes <input id="heatmap-top-n" type="number" min="5" max="500" step="5" value="50" /></label>
-            <button id="heatmap-gene-list-open" class="secondary" type="button" hidden>Edit gene list</button>
-            <label>Annotation <select id="heatmap-annotation-column"></select></label>
-            <label>Scale <select id="heatmap-scale"><option value="row">Row z-score</option><option value="logcpm">log2(CPM + 1)</option></select></label>
-            <label class="heatmap-slider-label">Row group size <input id="heatmap-row-group-size" type="range" min="1" max="10" step="1" value="5" /><output id="heatmap-row-group-value">5</output></label>
-            <label class="heatmap-slider-label">Column group size <input id="heatmap-column-group-size" type="range" min="1" max="10" step="1" value="5" /><output id="heatmap-column-group-value">5</output></label>
-            <label class="heatmap-slider-label">Opacity <input id="heatmap-opacity" type="range" min="0.1" max="1.9" step="0.1" value="1" /><output id="heatmap-opacity-value">1.0</output></label>
-            <button id="heatmap-render">Update</button>
+        <article class="card" id="expression-heatmap-card">
+          <div class="heatmap-engine-header">
+            <h3>Expression heatmap</h3>
+            <div class="subtabs heatmap-engine-tabs" role="tablist" aria-label="Expression heatmap engine">
+              <button id="heatmap-engine-canvasxpress" class="subtab active" type="button" role="tab" aria-selected="true" data-heatmap-engine="canvasxpress">CanvasXpress</button>
+              <button id="heatmap-engine-clustergrammer" class="subtab" type="button" role="tab" aria-selected="false" data-heatmap-engine="clustergrammer">Clustergrammer</button>
+            </div>
           </div>
-          <div id="heatmap-gene-list-status" class="note"></div>
-          <div id="heatmap-annotation-strip"></div>
-          <div id="expression-heatmap" class="clustergrammer-heatmap"></div>
+
+          <div id="canvasxpress-engine-panel" class="heatmap-engine-panel active" data-heatmap-engine-panel="canvasxpress" role="tabpanel" aria-labelledby="heatmap-engine-canvasxpress">
+            <div class="toolbar canvasxpress-toolbar">
+              <label>Genes <select id="canvasxpress-gene-mode"><option value="top">Top variable</option><option value="custom">Custom list</option></select></label>
+              <label>Top genes <input id="canvasxpress-top-n" type="number" min="5" max="500" step="5" value="50" /></label>
+              <button id="canvasxpress-gene-list-open" class="secondary" type="button" hidden>Edit gene list</button>
+              <label class="canvasxpress-multiselect-label">Annotations <select id="canvasxpress-annotation-columns" class="canvasxpress-multiselect" multiple size="4"></select></label>
+              <label class="canvasxpress-multiselect-label">Exclude samples <select id="canvasxpress-exclude-samples" class="canvasxpress-multiselect" multiple size="4"></select></label>
+              <label>Scale <select id="canvasxpress-scale"><option value="row">Row z-score</option><option value="logcpm">log2(CPM + 1)</option></select></label>
+              <label>Distance <select id="canvasxpress-distance"><option value="euclidianDistance">Euclidean</option><option value="manhattanDistance">Manhattan</option><option value="maxDistance">Maximum</option></select></label>
+              <label>Linkage <select id="canvasxpress-linkage"><option value="average">Average</option><option value="complete">Complete</option><option value="single">Single</option></select></label>
+              <label class="check-label"><input id="canvasxpress-cluster-rows" type="checkbox" checked /> Cluster genes</label>
+              <label class="check-label"><input id="canvasxpress-cluster-columns" type="checkbox" checked /> Cluster samples</label>
+              <label class="check-label"><input id="canvasxpress-show-sample-names" type="checkbox" /> Show sample names</label>
+              <button id="canvasxpress-render" type="button">Update heatmap</button>
+            </div>
+            <div id="canvasxpress-gene-list-status" class="note"></div>
+            <p id="canvasxpress-heatmap-status" class="note">CanvasXpress expression heatmap is ready.</p>
+            <div id="canvasxpress-color-scale" class="canvasxpress-color-scale" hidden></div>
+            <div class="canvasxpress-heatmap-layout">
+              <div id="canvasxpress-heatmap-wrap" class="canvasxpress-heatmap-shell">
+                <canvas id="canvasxpress-heatmap-canvas" width="1100" height="720"></canvas>
+              </div>
+              <aside id="canvasxpress-annotation-legend" class="canvasxpress-annotation-legend" hidden></aside>
+            </div>
+          </div>
+
+          <div id="clustergrammer-engine-panel" class="heatmap-engine-panel" data-heatmap-engine-panel="clustergrammer" role="tabpanel" aria-labelledby="heatmap-engine-clustergrammer" hidden>
+            <div class="toolbar">
+              <label>Genes <select id="heatmap-gene-mode"><option value="top">Top variable</option><option value="custom">Custom list</option></select></label>
+              <label>Top genes <input id="heatmap-top-n" type="number" min="5" max="500" step="5" value="50" /></label>
+              <button id="heatmap-gene-list-open" class="secondary" type="button" hidden>Edit gene list</button>
+              <label>Annotation <select id="heatmap-annotation-column"></select></label>
+              <label>Scale <select id="heatmap-scale"><option value="row">Row z-score</option><option value="logcpm">log2(CPM + 1)</option></select></label>
+              <label class="heatmap-slider-label">Row group size <input id="heatmap-row-group-size" type="range" min="1" max="10" step="1" value="5" /><output id="heatmap-row-group-value">5</output></label>
+              <label class="heatmap-slider-label">Column group size <input id="heatmap-column-group-size" type="range" min="1" max="10" step="1" value="5" /><output id="heatmap-column-group-value">5</output></label>
+              <label class="heatmap-slider-label">Opacity <input id="heatmap-opacity" type="range" min="0.1" max="1.9" step="0.1" value="1" /><output id="heatmap-opacity-value">1.0</output></label>
+              <button id="heatmap-render" type="button">Update heatmap</button>
+            </div>
+            <div id="heatmap-gene-list-status" class="note"></div>
+            <div id="heatmap-annotation-strip"></div>
+            <div id="expression-heatmap" class="clustergrammer-heatmap"></div>
+          </div>
+
           <div id="heatmap-gene-list-modal" class="modal-backdrop" hidden>
             <div class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="heatmap-gene-list-title">
               <div class="modal-header">
@@ -390,6 +426,6 @@
       </section>
     </main>
   </div>
-  <script type="module" src="assets/js/app.js?v=20260517-hclust"></script>
+  <script type="module" src="assets/js/app.js?v=20260517-canvasxpress-production"></script>
 </body>
 </html>
