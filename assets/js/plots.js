@@ -101,7 +101,20 @@ export function renderPCA(colorBy = 'condition', pair = 'PC1,PC2', shapeBy = 'no
 export function renderScree() {
   const variance = state.pca.variance_explained || {};
   const pcs = Object.keys(variance);
-  Plotly.react('scree-plot', [{ x: pcs, y: pcs.map((pc) => variance[pc] * 100), type: 'bar' }], { ...plotLayout('Variance explained'), yaxis: { title: '%' } }, { responsive: true });
+  Plotly.react('scree-plot', [{
+    x: pcs,
+    y: pcs.map((pc) => variance[pc] * 100),
+    type: 'bar',
+    marker: { color: '#2563eb', opacity: 0.82 },
+    hovertemplate: '%{x}<br>%{y:.1f}%<extra></extra>',
+  }], {
+    ...plotLayout('Variance explained'),
+    margin: { l: 58, r: 20, b: 56, t: 60 },
+    xaxis: { title: 'Principal component', automargin: true },
+    yaxis: { title: '% variance', rangemode: 'tozero', gridcolor: '#e5e7eb' },
+    bargap: 0.28,
+    showlegend: false,
+  }, { responsive: true });
 }
 
 export function renderDistanceHeatmap() {

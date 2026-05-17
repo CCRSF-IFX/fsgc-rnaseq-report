@@ -115,6 +115,9 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .plot { width: 100%; min-height: 360px; }
 .plot.tall { min-height: 520px; }
 .plot.short { min-height: 260px; }
+.pca-layout { display: grid; grid-template-columns: minmax(0, 1.75fr) minmax(300px, 0.9fr); gap: 16px; align-items: stretch; }
+.pca-layout .plot { min-width: 0; border: 1px solid var(--line); border-radius: 8px; background: white; }
+.pca-plot-main, .pca-plot-side { min-height: 520px; }
 .table-wrap { overflow: auto; border: 1px solid var(--line); border-radius: 8px; }
 .table-wrap.compact table { min-width: 0; }
 .table-wrap table { border-collapse: collapse; width: 100%; min-width: 720px; background: white; }
@@ -244,6 +247,8 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   #app-shell > .sidebar { position: relative; width: 100%; height: auto; }
   #app-shell > .content { max-width: none; padding: 16px; }
   .grid.two, .grid.three { grid-template-columns: 1fr; }
+  .pca-layout { grid-template-columns: 1fr; }
+  .pca-plot-main, .pca-plot-side { min-height: 420px; }
   .guide-grid { grid-template-columns: 1fr; }
   .setup-flow { grid-template-columns: 1fr; }
   .modal-backdrop { align-items: stretch; padding: 14px; }

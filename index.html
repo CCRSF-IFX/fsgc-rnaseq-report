@@ -243,8 +243,10 @@
             <label>Projection <select id="pca-projection"><option value="2d">2D scatter</option><option value="3d">3D scatter</option></select></label>
             <label id="pca-pair-label">X/Y PCs <select id="pca-pair"><option value="PC1,PC2">PC1 vs PC2</option><option value="PC2,PC3">PC2 vs PC3</option></select></label>
           </div>
-          <div id="pca-plot" class="plot tall"></div>
-          <div id="scree-plot" class="plot short"></div>
+          <div class="pca-layout">
+            <div id="pca-plot" class="plot pca-plot-main"></div>
+            <div id="scree-plot" class="plot pca-plot-side"></div>
+          </div>
         </article>
       </section>
 
