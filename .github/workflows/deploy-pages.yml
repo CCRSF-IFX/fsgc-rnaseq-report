@@ -15,7 +15,7 @@ on:
           - "true"
 
 permissions:
-  contents: read
+  contents: write
   pages: write
   id-token: write
   repository-projects: read
@@ -294,7 +294,9 @@ jobs:
           if not package_dir.exists():
               raise SystemExit(f"Package directory was not built: {package_dir}")
 
-          archive = snapshot_dir / f"webr-packages-{version}.zip"
+          release_dir = Path("_release_assets")
+          release_dir.mkdir(parents=True, exist_ok=True)
+          archive = release_dir / f"webr-packages-{version}.zip"
           if archive.exists():
               archive.unlink()
 
@@ -304,6 +306,89 @@ jobs:
                       zf.write(path, path.relative_to(snapshot_dir))
           print(f"Wrote {archive}")
           PY
+
+      - name: Build webR library bundle release files
+        shell: bash
+        env:
+          VERSION: ${{ steps.webr-snapshot.outputs.version }}
+        run: |
+          set -euo pipefail
+          mkdir -p _release_assets
+          docker run --rm \
+            -e VERSION="$VERSION" \
+            -v "$PWD:/work" \
+            -w /work \
+            ghcr.io/r-wasm/webr:v0.5.9 \
+            Rscript -e '
+              if (!requireNamespace("pak", quietly = TRUE)) {
+                install.packages("pak", repos = "https://cloud.r-project.org")
+              }
+              pak::pak("r-wasm/rwasm")
+
+              version <- Sys.getenv("VERSION")
+              repo_dir <- file.path("_site", "webr-packages", version, "bin", "emscripten", "contrib", "4.5")
+              out_dir <- file.path("_release_assets", paste0("webr-library-", version))
+              dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
+              rwasm::make_vfs_library(
+                out_dir = out_dir,
+                out_name = "library.data",
+                repo_dir = repo_dir,
+                compress = TRUE,
+                strip = c("doc", "html", "help", "demo", "tests", "testthat", "vignettes")
+              )
+
+              data_files <- list.files(out_dir, pattern = "\\.data\\.gz$", full.names = TRUE)
+              metadata_files <- list.files(out_dir, pattern = "\\.js\\.metadata$", full.names = TRUE)
+              if (length(data_files) != 1 || length(metadata_files) != 1) {
+                stop("Expected one .data.gz and one .js.metadata file in ", out_dir)
+              }
+              file.copy(data_files, file.path("_release_assets", paste0("webr-library-", version, ".data.gz")), overwrite = TRUE)
+              file.copy(metadata_files, file.path("_release_assets", paste0("webr-library-", version, ".js.metadata")), overwrite = TRUE)
+            '
+
+          python3 - <<'PY'
+          import os
+          import zipfile
+          from pathlib import Path
+
+          version = os.environ["VERSION"]
+          release_dir = Path("_release_assets")
+          archive = release_dir / f"webr-library-{version}.zip"
+          if archive.exists():
+              archive.unlink()
+          files = [
+              release_dir / f"webr-library-{version}.data.gz",
+              release_dir / f"webr-library-{version}.js.metadata",
+          ]
+          for path in files:
+              if not path.exists():
+                  raise SystemExit(f"Missing library bundle file: {path}")
+          with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+              for path in files:
+                  zf.write(path, path.name)
+          print(f"Wrote {archive}")
+          PY
+
+      - name: Upload webR library bundle to GitHub Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.webr-snapshot.outputs.version }}
+        run: |
+          set -euo pipefail
+          tag="webr-packages-${VERSION}"
+          if ! gh release view "$tag" >/dev/null 2>&1; then
+            gh release create "$tag" \
+              --target "$GITHUB_SHA" \
+              --title "webR package snapshot ${VERSION}" \
+              --notes "Compiled webR package repository and browser-loadable library bundle for rnaseq-report ${VERSION}."
+          fi
+          gh release upload "$tag" \
+            "_release_assets/webr-packages-${VERSION}.zip" \
+            "_release_assets/webr-library-${VERSION}.data.gz" \
+            "_release_assets/webr-library-${VERSION}.js.metadata" \
+            "_release_assets/webr-library-${VERSION}.zip" \
+            --clobber
 
       - name: Configure Pages
         uses: actions/configure-pages@v5

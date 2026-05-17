@@ -3,6 +3,7 @@ import { state, logAnalysis } from './state.js';
 let webR = null;
 let initialized = false;
 const DEFAULT_WEBR_PACKAGE_REPO = 'https://repo.r-wasm.org/';
+const JSZIP_CDN = 'https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js';
 
 export async function initWebR() {
   if (initialized) return webR;
@@ -59,10 +60,109 @@ export async function loadRPackage(packageName) {
   await evalR(`library(${JSON.stringify(packageName)}, character.only = TRUE)`);
 }
 
+export async function mountRLibraryBundle(files, packages = []) {
+  await initWebR();
+  const bundle = await readLibraryBundleFiles(files);
+  const mountpoint = `/rnaseq-report-library-${Date.now()}`;
+  await ensureDirectory(mountpoint);
+  await webR.FS.mount('WORKERFS', {
+    packages: [{
+      blob: bundle.blob,
+      metadata: bundle.metadata,
+    }],
+  }, mountpoint);
+  await evalR(`.libPaths(unique(c(${rString(mountpoint)}, .libPaths())))`);
+
+  const packageVector = rCharacterVector(packages);
+  const missing = await evalR(`
+    requested <- ${packageVector}
+    if (!length(requested)) {
+      character()
+    } else {
+      requested[!vapply(requested, function(pkg) length(find.package(pkg, quiet = TRUE)) > 0, logical(1))]
+    }
+  `);
+  const missingValues = Array.isArray(missing?.values) ? missing.values : [];
+  if (missingValues.length) {
+    throw new Error(`Mounted library bundle is missing package(s): ${missingValues.join(', ')}`);
+  }
+  logAnalysis(`Mounted webR library bundle from ${bundle.label}.`);
+}
+
 export async function runSmallSummary() {
   await initWebR();
   const out = await evalR('capture.output(sessionInfo())');
   logAnalysis(Array.isArray(out?.values) ? out.values.join('\n') : 'sessionInfo() complete.');
+}
+
+async function readLibraryBundleFiles(files) {
+  const selected = Array.from(files || []).filter(Boolean);
+  if (!selected.length) throw new Error('Choose a webR library bundle file.');
+  const zipFile = selected.find((file) => /\.zip$/i.test(file.name || ''));
+  if (zipFile) return readZipLibraryBundle(zipFile);
+
+  const metadataFile = selected.find((file) => /\.(js\.metadata|metadata|json)$/i.test(file.name || ''));
+  const dataFile = selected.find((file) => /\.(data|data\.gz)$/i.test(file.name || ''));
+  if (!metadataFile || !dataFile) {
+    throw new Error('Choose either a bundle ZIP, or both .data/.data.gz and .js.metadata files.');
+  }
+  return {
+    blob: dataFile,
+    metadata: JSON.parse(await metadataFile.text()),
+    label: `${dataFile.name} + ${metadataFile.name}`,
+  };
+}
+
+async function readZipLibraryBundle(file) {
+  await loadScript(JSZIP_CDN);
+  if (!globalThis.JSZip) throw new Error('JSZip did not load.');
+  const zip = await globalThis.JSZip.loadAsync(file);
+  const entries = Object.values(zip.files).filter((entry) => !entry.dir);
+  const metadataEntry = entries.find((entry) => /\.(js\.metadata|metadata|json)$/i.test(entry.name));
+  const dataEntry = entries.find((entry) => /\.(data|data\.gz)$/i.test(entry.name));
+  if (!metadataEntry || !dataEntry) {
+    throw new Error('Bundle ZIP must contain one .data/.data.gz file and one .js.metadata file.');
+  }
+  const metadata = JSON.parse(await metadataEntry.async('text'));
+  const blob = await dataEntry.async('blob');
+  return {
+    blob,
+    metadata,
+    label: file.name,
+  };
+}
+
+async function ensureDirectory(path) {
+  try {
+    await webR.FS.mkdir(path);
+  } catch (error) {
+    if (!/file exists|exists/i.test(error?.message || String(error))) throw error;
+  }
+}
+
+function loadScript(src) {
+  const existing = document.querySelector(`script[src="${src}"]`);
+  if (existing) {
+    return new Promise((resolve, reject) => {
+      if (existing.dataset.loaded === 'true') {
+        resolve();
+        return;
+      }
+      existing.addEventListener('load', resolve, { once: true });
+      existing.addEventListener('error', () => reject(new Error(`Failed to load ${src}`)), { once: true });
+    });
+  }
+  return new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = src;
+    script.async = true;
+    script.onload = () => {
+      script.dataset.loaded = 'true';
+      resolve();
+    };
+    script.onerror = () => reject(new Error(`Failed to load ${src}`));
+    document.head.appendChild(script);
+  });
 }
 
 function packageRepoEntries() {

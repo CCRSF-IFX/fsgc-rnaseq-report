@@ -7,6 +7,10 @@ export function getPackageStatus(pkg) {
   return packageStatus.get(pkg) || 'not-installed';
 }
 
+export function markPackagesAvailable(packages, status = 'mounted') {
+  uniquePackageNames(packages).forEach((pkg) => packageStatus.set(pkg, status));
+}
+
 export async function ensureRPackages(packages, options = {}) {
   const installTargets = uniquePackageNames(packages);
   const loadTargets = uniquePackageNames(options.load || packages);
@@ -47,7 +51,7 @@ function uniquePackageNames(packages) {
 }
 
 function isPackageAvailable(pkg) {
-  return ['installed', 'loaded'].includes(getPackageStatus(pkg));
+  return ['installed', 'loaded', 'mounted'].includes(getPackageStatus(pkg));
 }
 
 async function loadPackageWithStatus(pkg) {

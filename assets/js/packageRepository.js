@@ -1,5 +1,6 @@
 import { state, logAnalysis } from './state.js';
-import { ensureRPackages, getPackageStatus } from './packageManager.js';
+import { ensureRPackages, getPackageStatus, markPackagesAvailable } from './packageManager.js';
+import { mountRLibraryBundle } from './webrManager.js';
 import { enhanceTablesWithin } from './tables.js';
 
 export function renderPackageRepositoryPanel() {
@@ -13,6 +14,7 @@ export function renderPackageRepositoryPanel() {
   const repoUrl = packageRepoBaseUrl();
   const indexUrl = packageRepoIndexUrl();
   const bundleUrl = packageRepoBundleUrl();
+  const libraryBundle = packageRepoLibraryBundleConfig();
   const disabled = cfg.enabled ? '' : 'disabled';
 
   container.innerHTML = `
@@ -27,6 +29,17 @@ export function renderPackageRepositoryPanel() {
         <button id="package-install" ${disabled || (packages.length ? '' : 'disabled')}>Install/load packages</button>
         <a class="button secondary" href="${packageRepoEscapeHtml(bundleUrl)}" download>Download snapshot ZIP</a>
       </div>
+      <div class="package-local-bundle">
+        <div>
+          <strong>Local webR library bundle</strong>
+          <p class="note">Load ${packageRepoEscapeHtml(libraryBundle.archiveFile)} to mount a prebuilt package library without reinstalling every dependency.</p>
+        </div>
+        <div class="package-actions">
+          <label class="file-button secondary">Choose bundle <input id="package-library-bundle-file" type="file" accept=".zip,.data,.gz,.metadata,.json" multiple ${disabled} /></label>
+          <button class="secondary" id="package-library-bundle-load" ${disabled}>Mount bundle</button>
+          ${libraryBundle.releaseUrl ? `<a class="button secondary" href="${packageRepoEscapeHtml(libraryBundle.releaseUrl)}" target="_blank" rel="noopener">Release bundle</a>` : ''}
+        </div>
+      </div>
       <div class="package-chips">${visiblePackages.map((pkg) => `<span>${packageRepoEscapeHtml(pkg)} <small>${packageRepoEscapeHtml(getPackageStatus(pkg))}</small></span>`).join('')}</div>
       <div class="package-links">
         <a href="${packageRepoEscapeHtml(indexUrl)}" target="_blank" rel="noopener">PACKAGES index</a>
@@ -36,6 +49,20 @@ export function renderPackageRepositoryPanel() {
     </section>`;
 
   document.getElementById('package-check')?.addEventListener('click', checkPackageRepository);
+  document.getElementById('package-library-bundle-load')?.addEventListener('click', async () => {
+    const files = document.getElementById('package-library-bundle-file')?.files;
+    try {
+      packageRepoSetStatus('Mounting local webR library bundle...', 'info');
+      await mountRLibraryBundle(files, packages);
+      markPackagesAvailable(packages, 'mounted');
+      logAnalysis('webR library bundle mounted; package downloads are not needed for this session.');
+      renderPackageRepositoryPanel();
+      packageRepoSetStatus('Local webR library bundle mounted; top-level analysis packages are ready to load.', 'ok');
+    } catch (error) {
+      packageRepoSetStatus(`Library bundle mount failed: ${error.message}`, 'fail');
+      logAnalysis(`webR library bundle mount failed: ${error.message}`);
+    }
+  });
   document.getElementById('package-install')?.addEventListener('click', async () => {
     try {
       packageRepoSetStatus('Installing packages in webR...', 'info');
@@ -131,8 +158,20 @@ function packageRepoIndexUrl() {
 }
 
 function packageRepoBundleUrl() {
+  const configured = String(state.config?.webr?.packageArchiveUrl || '').trim();
+  if (configured) return configured;
   const version = state.config?.webr?.packageRepoVersion || 'snapshot';
   return `${packageRepoBaseUrl()}webr-packages-${version}.zip`;
+}
+
+function packageRepoLibraryBundleConfig() {
+  const cfg = state.config?.webr || {};
+  const version = cfg.packageRepoVersion || 'snapshot';
+  const bundle = cfg.libraryBundle || {};
+  return {
+    archiveFile: bundle.archiveFile || `webr-library-${version}.zip`,
+    releaseUrl: bundle.releaseUrl || '',
+  };
 }
 
 function packageRepoParsePackages(text) {

@@ -68,6 +68,9 @@ textarea { min-height: 44px; resize: vertical; }
 button, .button { background: var(--accent); border-color: var(--accent); color: white; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; justify-content: center; }
 button.secondary { background: white; color: var(--accent); }
 .button.secondary { background: white; color: var(--accent); }
+.file-button { background: var(--accent); border: 1px solid var(--accent); border-radius: 8px; color: white; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; padding: 9px 10px; }
+.file-button.secondary { background: white; color: var(--accent); }
+.file-button input[type="file"] { position: absolute; inline-size: 1px; block-size: 1px; opacity: 0; pointer-events: none; }
 button:disabled { opacity: 0.5; cursor: not-allowed; }
 .check-label { display: inline-flex; align-items: center; gap: 6px; }
 .check-label input { width: auto; }
@@ -110,6 +113,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .package-chips span { display: inline-flex; gap: 6px; align-items: center; background: white; border: 1px solid var(--line); border-radius: 999px; padding: 5px 9px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; }
 .package-chips small { color: var(--muted); font-family: inherit; }
 .package-status { margin-top: 12px; color: var(--muted); }
+.package-local-bundle { border-top: 1px solid var(--line); margin-top: 14px; padding-top: 14px; }
 .status-message { border-radius: 8px; padding: 10px 12px; margin-bottom: 10px; }
 .status-message.ok { background: #dcfce7; color: var(--ok); }
 .status-message.warn { background: #fef3c7; color: var(--warn); }
