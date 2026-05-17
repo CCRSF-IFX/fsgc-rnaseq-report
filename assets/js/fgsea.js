@@ -118,6 +118,8 @@ async function fgseaRunInWebR(deRows, gmtText, reference, minSize, maxSize) {
   const statsCsv = fgseaStatsCsv(deRows);
   const code = `
 suppressPackageStartupMessages(library(fgsea))
+fgsea_param <- BiocParallel::SerialParam(progressbar = FALSE)
+BiocParallel::register(fgsea_param, default = TRUE)
 stats_text <- ${fgseaRString(statsCsv)}
 gmt_text <- ${fgseaRString(gmtText)}
 reference_name <- ${fgseaRString(reference)}
@@ -186,7 +188,10 @@ if (!length(eligible_counts)) {
     min_size, max_size, min(overlap_counts), max(overlap_counts)
   ))
 }
-fg <- fgseaMultilevel(pathways = pathways, stats = stats, minSize = min_size, maxSize = max_size, nproc = 1)
+fgsea_args <- list(pathways = pathways, stats = stats, minSize = min_size, maxSize = max_size)
+if ("BPPARAM" %in% names(formals(fgseaMultilevel))) fgsea_args$BPPARAM <- fgsea_param
+if ("nproc" %in% names(formals(fgseaMultilevel))) fgsea_args$nproc <- 0L
+fg <- do.call(fgseaMultilevel, fgsea_args)
 if (nrow(fg) == 0) {
   out <- data.frame()
 } else {
