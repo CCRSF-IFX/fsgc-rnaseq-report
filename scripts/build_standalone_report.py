@@ -107,6 +107,13 @@ def image_data_uri(path: Path, repo_root: Path) -> str:
     return f"data:{mime_type};base64,{encoded}"
 
 
+def local_logo_path(value: object) -> Path | None:
+    logo = str(value or "").strip()
+    if not logo or logo.startswith("//") or re.match(r"^[a-zA-Z][a-zA-Z0-9+.-]*:", logo):
+        return None
+    return Path(logo)
+
+
 def embedded_assets(
     repo_root: Path,
     data_root_override: Path | None = None,
@@ -122,6 +129,7 @@ def embedded_assets(
     config_text = read_text(config_path)
     virtual_data_root = data_root_from_config(config_text)
     data_dir = repo_root / virtual_data_root
+    config = json.loads(config_text)
     config_modified = False
 
     if data_root_override:
@@ -129,21 +137,32 @@ def embedded_assets(
         if not data_dir.is_dir():
             raise FileNotFoundError(f"--data-root does not exist or is not a directory: {data_dir}")
 
-        config = json.loads(config_text)
         virtual_data_root = EMBEDDED_DATA_ROOT
         config["dataRoot"] = virtual_data_root
         config_modified = True
 
-    if project_title or project_abbreviation or project_logo or report_author or report_organization or report_version or run_id:
-        config = json.loads(config_text) if not config_modified else config
+    configured_logo = config.get("projectLogo") or config.get("projectLogoDataUrl") or config.get("logoDataUrl")
+    configured_logo_path = None if project_logo else local_logo_path(configured_logo)
+
+    if (
+        project_title
+        or project_abbreviation
+        or project_logo
+        or configured_logo_path
+        or report_author
+        or report_organization
+        or report_version
+        or run_id
+    ):
         if project_title:
             config["projectTitle"] = project_title
             config["reportTitle"] = project_title
         if project_abbreviation:
             config["projectAbbreviation"] = project_abbreviation
-        if project_logo:
-            config["projectLogo"] = image_data_uri(project_logo, repo_root)
-            config["projectLogoName"] = resolve_repo_path(project_logo, repo_root).name
+        logo_path = project_logo or configured_logo_path
+        if logo_path:
+            config["projectLogo"] = image_data_uri(logo_path, repo_root)
+            config["projectLogoName"] = resolve_repo_path(logo_path, repo_root).name
         if report_author:
             config["reportAuthor"] = report_author
         if report_organization:

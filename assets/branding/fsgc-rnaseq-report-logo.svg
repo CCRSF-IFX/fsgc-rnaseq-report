@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">FSGC RNA-seq report logo</title>
+  <desc id="desc">Compact original logo mark for Frederick Sequencing and Genomics Core RNA-seq reports, combining sequencing reads, a DNA strand, expression blocks, and the FSGC initials.</desc>
+  <defs>
+    <linearGradient id="bg" x1="64" y1="48" x2="448" y2="464" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#041F27"/>
+      <stop offset="0.56" stop-color="#245B6B"/>
+      <stop offset="1" stop-color="#00314C"/>
+    </linearGradient>
+    <linearGradient id="cyanGreen" x1="112" y1="106" x2="384" y2="318" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#62D0DD"/>
+      <stop offset="1" stop-color="#2DC799"/>
+    </linearGradient>
+    <linearGradient id="magentaPurple" x1="118" y1="308" x2="380" y2="106" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#BB0E3D"/>
+      <stop offset="1" stop-color="#82368C"/>
+    </linearGradient>
+    <filter id="softShadow" x="-18%" y="-18%" width="136%" height="136%">
+      <feDropShadow dx="0" dy="12" stdDeviation="14" flood-color="#000000" flood-opacity="0.3"/>
+    </filter>
+  </defs>
+
+  <rect width="512" height="512" rx="92" fill="url(#bg)"/>
+  <path d="M54 116c84-45 186-58 280-31 50 15 91 39 124 72V94c0-25-21-46-46-46H102c-21 0-39 14-45 34Z" fill="#62D0DD" opacity="0.15"/>
+  <path d="M58 392c75 48 190 64 292 30 46-16 82-40 104-69v64c0 26-21 47-47 47H105c-23 0-42-16-47-38Z" fill="#2DC799" opacity="0.12"/>
+
+  <g filter="url(#softShadow)">
+    <path d="M112 306c72-23 98-68 128-116 30-49 65-96 160-116" fill="none" stroke="url(#cyanGreen)" stroke-width="34" stroke-linecap="round"/>
+    <path d="M112 116c72 23 98 68 128 116 30 49 65 96 160 116" fill="none" stroke="url(#magentaPurple)" stroke-width="34" stroke-linecap="round"/>
+
+    <g stroke="#B0CFD8" stroke-width="14" stroke-linecap="round" opacity="0.78">
+      <path d="M146 156h68"/>
+      <path d="M181 207h94"/>
+      <path d="M232 258h89"/>
+      <path d="M286 309h72"/>
+    </g>
+
+    <g transform="translate(314 158)">
+      <rect x="0" y="0" width="42" height="42" rx="10" fill="#62D0DD"/>
+      <rect x="52" y="0" width="42" height="42" rx="10" fill="#FF5F00"/>
+      <rect x="0" y="52" width="42" height="42" rx="10" fill="#6254A3"/>
+      <rect x="52" y="52" width="42" height="42" rx="10" fill="#BB0E3D"/>
+      <rect x="0" y="104" width="42" height="42" rx="10" fill="#2DC799"/>
+      <rect x="52" y="104" width="42" height="42" rx="10" fill="#82368C"/>
+    </g>
+  </g>
+
+  <g fill="#FFFFFF">
+    <text x="256" y="428" text-anchor="middle" font-family="Inter, Avenir Next, Helvetica, Arial, sans-serif" font-size="112" font-weight="850" letter-spacing="1">FSGC</text>
+  </g>
+  <path d="M132 451h248" fill="none" stroke="#62D0DD" stroke-width="10" stroke-linecap="round" opacity="0.9"/>
+</svg>

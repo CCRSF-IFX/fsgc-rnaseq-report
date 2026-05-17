@@ -1,6 +1,7 @@
 {
   "projectTitle": "Demo RNA-seq Report",
   "projectAbbreviation": "RNA",
+  "projectLogo": "assets/branding/fsgc-rnaseq-report-logo.svg",
   "reportTitle": "Demo RNA-seq Report",
   "reportSubtitle": "Static report with optional webR downstream analysis",
   "reportVersion": "0.1.0",
