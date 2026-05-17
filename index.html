@@ -129,7 +129,13 @@
           <div class="toolbar">
             <input id="count-gene-input" placeholder="Gene symbol or ID, e.g. GeneA" />
             <button id="count-gene-button">Plot gene</button>
+            <div class="subtabs count-plot-tabs" role="tablist" aria-label="Gene count plot type">
+              <button id="count-plot-mode-bar" class="subtab active" type="button" role="tab" aria-selected="true" data-count-plot-mode="bar">Bar plot</button>
+              <button id="count-plot-mode-box" class="subtab" type="button" role="tab" aria-selected="false" data-count-plot-mode="box">Box plot</button>
+            </div>
+            <label id="count-boxplot-group-label" class="count-boxplot-group-label" hidden>Group by <select id="count-boxplot-group"></select></label>
           </div>
+          <p id="count-plot-status" class="note"></p>
           <div id="gene-count-plot" class="plot tall"></div>
           <div id="counts-table"></div>
         </article>

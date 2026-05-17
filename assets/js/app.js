@@ -34,6 +34,7 @@ async function main() {
     await renderCurrentContrast();
     await renderCurrentEnrichment();
     setupUserDataControls({ refresh: refreshReportFromState });
+    setupCountExplorerControls();
     wireControls();
     setStatus('Report assets loaded');
   } catch (error) {
@@ -198,8 +199,84 @@ function wireControls() {
   document.getElementById('de-apply')?.addEventListener('click', renderCurrentContrast);
   document.getElementById('contrast-select')?.addEventListener('change', renderCurrentContrast);
   document.getElementById('enrichment-contrast-select')?.addEventListener('change', renderCurrentEnrichment);
-  document.getElementById('count-gene-button')?.addEventListener('click', () => renderGeneCounts(document.getElementById('count-gene-input').value));
+  document.getElementById('count-gene-button')?.addEventListener('click', () => renderCountExplorerPlot());
+  document.getElementById('count-gene-input')?.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') renderCountExplorerPlot();
+  });
+  document.querySelectorAll('[data-count-plot-mode]').forEach((button) => {
+    button.addEventListener('click', () => {
+      setCountPlotMode(button.dataset.countPlotMode);
+      renderCountExplorerPlot({ allowEmpty: false });
+    });
+  });
+  document.getElementById('count-boxplot-group')?.addEventListener('change', () => renderCountExplorerPlot({ allowEmpty: false }));
   renderTable('counts-table', state.counts, { limit: 50, exportName: 'counts.preview.csv' });
+}
+
+function setupCountExplorerControls() {
+  populateCountBoxplotGroups();
+  syncCountPlotModeControls();
+}
+
+function populateCountBoxplotGroups() {
+  const select = document.getElementById('count-boxplot-group');
+  if (!select) return;
+
+  const previous = select.value;
+  const eligibleColumns = metadataColumns().filter((column) => countMetadataLevels(column).length > 1);
+  select.replaceChildren(...eligibleColumns.map((column) => {
+    const option = document.createElement('option');
+    option.value = column;
+    option.textContent = column;
+    return option;
+  }));
+  if (eligibleColumns.includes(previous)) select.value = previous;
+  else if (eligibleColumns.includes('condition')) select.value = 'condition';
+  else select.value = eligibleColumns[0] || '';
+
+  const boxButton = document.getElementById('count-plot-mode-box');
+  if (boxButton) boxButton.disabled = eligibleColumns.length === 0;
+  if (currentCountPlotMode() === 'box' && eligibleColumns.length === 0) setCountPlotMode('bar');
+  syncCountPlotModeControls();
+}
+
+function countMetadataLevels(column) {
+  return Array.from(new Set(state.samples.map((sample) => String(sample[column] ?? 'NA'))));
+}
+
+function setCountPlotMode(mode) {
+  const boxButton = document.getElementById('count-plot-mode-box');
+  const nextMode = mode === 'box' && !boxButton?.disabled ? 'box' : 'bar';
+  document.querySelectorAll('[data-count-plot-mode]').forEach((button) => {
+    const active = button.dataset.countPlotMode === nextMode;
+    button.classList.toggle('active', active);
+    button.setAttribute('aria-selected', active ? 'true' : 'false');
+  });
+  syncCountPlotModeControls();
+}
+
+function syncCountPlotModeControls() {
+  const groupLabel = document.getElementById('count-boxplot-group-label');
+  if (groupLabel) groupLabel.hidden = currentCountPlotMode() !== 'box';
+}
+
+function currentCountPlotMode() {
+  return document.querySelector('[data-count-plot-mode].active')?.dataset.countPlotMode || 'bar';
+}
+
+function renderCountExplorerPlot(options = {}) {
+  const allowEmpty = options.allowEmpty !== false;
+  const input = document.getElementById('count-gene-input');
+  const query = input?.value?.trim() || '';
+  const status = document.getElementById('count-plot-status');
+  if (!query && !allowEmpty) {
+    if (status) status.textContent = '';
+    return;
+  }
+  renderGeneCounts(query, {
+    mode: currentCountPlotMode(),
+    groupBy: document.getElementById('count-boxplot-group')?.value || '',
+  });
 }
 
 function syncPcaShapeOptions() {
@@ -260,7 +337,9 @@ async function refreshReportFromState() {
   renderQC();
   setupPcaControls();
   setupExpressionHeatmapControls();
+  setupCountExplorerControls();
   renderTable('counts-table', state.counts, { exportName: 'counts.csv' });
+  renderCountExplorerPlot({ allowEmpty: false });
   await renderCurrentContrast();
   await renderCurrentEnrichment();
 }

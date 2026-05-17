@@ -195,14 +195,97 @@ export function renderMA(rows, padj = 0.05, lfc = 1) {
   }, { responsive: true });
 }
 
-export function renderGeneCounts(geneQuery) {
-  const row = state.counts.find((r) => String(r.gene_symbol).toLowerCase() === geneQuery.toLowerCase() || String(r.gene_id).toLowerCase() === geneQuery.toLowerCase());
-  if (!row) {
-    document.getElementById('gene-count-plot').innerHTML = `<p class="note">No counts found for ${geneQuery}.</p>`;
+export function renderGeneCounts(geneQuery, options = {}) {
+  const query = String(geneQuery || '').trim();
+  const plot = document.getElementById('gene-count-plot');
+  const status = document.getElementById('count-plot-status');
+  if (!plot) return;
+  if (!query) {
+    clearGeneCountPlot(plot);
+    if (status) status.textContent = 'Enter a gene symbol or ID.';
     return;
   }
-  const sampleIds = state.samples.map((s) => s.sample_id);
-  Plotly.react('gene-count-plot', [{ x: sampleIds, y: sampleIds.map((id) => Number(row[id])), type: 'bar', text: sampleIds.map((id) => getSampleById(id)?.condition || '') }], plotLayout(`${row.gene_symbol || row.gene_id} normalized counts`), { responsive: true });
+
+  const row = state.counts.find((r) => geneCountMatchesQuery(r, query));
+  if (!row) {
+    clearGeneCountPlot(plot);
+    plot.innerHTML = `<p class="note">No counts found for ${escapePlotText(query)}.</p>`;
+    if (status) status.textContent = '';
+    return;
+  }
+
+  const sampleIds = state.samples.map((s) => s.sample_id).filter((sampleId) => Object.prototype.hasOwnProperty.call(row, sampleId));
+  if (options.mode === 'box') {
+    renderGeneCountBoxPlot(row, sampleIds, options.groupBy || '', status, plot);
+  } else {
+    renderGeneCountBarPlot(row, sampleIds, status);
+  }
+}
+
+function renderGeneCountBarPlot(row, sampleIds, status) {
+  if (status) status.textContent = '';
+  Plotly.react('gene-count-plot', [{
+    x: sampleIds,
+    y: sampleIds.map((id) => countValue(row, id)),
+    type: 'bar',
+    marker: { color: '#2563eb' },
+    customdata: sampleIds.map((id) => [sampleMetadata(id, 'condition')]),
+    hovertemplate: '<b>%{x}</b><br>count: %{y}<br>condition: %{customdata[0]}<extra></extra>',
+  }], {
+    ...plotLayout(`${geneCountLabel(row)} counts`),
+    xaxis: { title: 'Sample' },
+    yaxis: { title: 'Count' },
+  }, { responsive: true });
+}
+
+function renderGeneCountBoxPlot(row, sampleIds, groupColumn, status, plot) {
+  if (!groupColumn) {
+    clearGeneCountPlot(plot);
+    if (status) status.textContent = 'No metadata column with at least two groups is available.';
+    return;
+  }
+
+  const levels = uniqueValues(sampleIds.map((sampleId) => sampleMetadata(sampleId, groupColumn)));
+  if (levels.length < 2) {
+    clearGeneCountPlot(plot);
+    if (status) status.textContent = `${groupColumn} has fewer than two groups.`;
+    return;
+  }
+
+  const traces = levels.map((level, index) => {
+    const points = sampleIds
+      .filter((sampleId) => sampleMetadata(sampleId, groupColumn) === level)
+      .map((sampleId) => ({ sampleId, value: countValue(row, sampleId) }))
+      .filter((point) => Number.isFinite(point.value));
+    if (!points.length) return null;
+    const color = PCA_COLORS[index % PCA_COLORS.length];
+    return {
+      y: points.map((point) => point.value),
+      text: points.map((point) => point.sampleId),
+      type: 'box',
+      name: level,
+      boxpoints: 'all',
+      jitter: 0.35,
+      pointpos: 0,
+      marker: { color, size: 8, opacity: 0.78 },
+      line: { color },
+      hovertemplate: `<b>%{text}</b><br>${escapePlotText(groupColumn)}: ${escapePlotText(level)}<br>count: %{y}<extra></extra>`,
+    };
+  }).filter(Boolean);
+
+  if (traces.length < 2) {
+    clearGeneCountPlot(plot);
+    if (status) status.textContent = `${groupColumn} does not have count values in at least two groups.`;
+    return;
+  }
+
+  if (status) status.textContent = '';
+  Plotly.react('gene-count-plot', traces, {
+    ...plotLayout(`${geneCountLabel(row)} counts by ${groupColumn}`),
+    xaxis: { title: groupColumn },
+    yaxis: { title: 'Count' },
+    boxmode: 'group',
+  }, { responsive: true });
 }
 
 export function renderEnrichment(rows) {
@@ -329,6 +412,30 @@ function pct(value) {
 
 function sampleMetadata(sampleId, column) {
   return String(getSampleById(sampleId)?.[column] ?? 'NA');
+}
+
+function geneCountMatchesQuery(row, query) {
+  const normalized = query.toLowerCase();
+  return [row.gene_symbol, row.gene_id, row.gene_name]
+    .some((value) => String(value ?? '').toLowerCase() === normalized);
+}
+
+function geneCountLabel(row) {
+  return row.gene_symbol || row.gene_id || row.gene_name || 'Gene';
+}
+
+function countValue(row, sampleId) {
+  const value = Number(row[sampleId]);
+  return Number.isFinite(value) ? value : null;
+}
+
+function clearGeneCountPlot(plot) {
+  try {
+    globalThis.Plotly?.purge?.(plot);
+  } catch (_) {
+    // Plotly may not have initialized this container yet.
+  }
+  plot.innerHTML = '';
 }
 
 function pcaGroupValue(sampleId, column) {
