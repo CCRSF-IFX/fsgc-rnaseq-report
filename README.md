@@ -234,7 +234,7 @@ With counts and a manifest, the report derives:
 - gene-level count plots with sample bar plots and grouped box plots, including optional split-by metadata, when metadata has at least two levels.
 - a Clustergrammer expression heatmap with top-variable or custom gene-list selection, metadata annotation, and clustered rows/columns.
 - two-group differential expression from metadata-defined contrasts.
-- optional fgsea results from the selected DE contrast and configured or uploaded GMT pathway files.
+- optional fgsea results from the selected DE contrast and uploaded GMT pathway files.
 
 The PCA view supports one metadata column as color and, when more than one
 metadata factor is available, a second metadata column as marker shape. The
@@ -383,20 +383,7 @@ views remain usable from the standalone file.
   "reportOrganization": "Frederick Sequencing and Genomics Core",
   "analysis": {
     "conditionColumn": "condition",
-    "referenceLevel": "control",
-    "gseaReference": "hg38"
-  },
-  "gsea": {
-    "references": {
-      "hg38": {
-        "label": "hg38",
-        "pathwayFile": "gsea/hg38_demo.gmt"
-      },
-      "mm10": {
-        "label": "mm10",
-        "pathwayFile": "gsea/mm10_demo.gmt"
-      }
-    }
+    "referenceLevel": "control"
   },
   "webr": {
     "enabled": true,
@@ -510,9 +497,8 @@ DESeq2 and fgsea are enabled in the optional-analysis UI. The
 Differential Expression tab has a browser DESeq2 runner for two-group contrasts,
 and the GSEA tab can run one or more fgsea analyses from the selected DE contrast.
 Users can upload multiple GMT files and switch between the resulting GSEA result
-sets in the GSEA tab. The demo GMT files under `assets/data/gsea/` are placeholders for testing the mechanics;
-replace them with compact hg38/mm10 production GMT files before delivering real
-biological interpretation.
+sets in the GSEA tab. Uploaded GMT gene identifiers should match the DE table
+`gene_symbol` or `gene_id` values.
 
 The Clustering tab has a Clustergrammer-JS heatmap using the count matrix, with
 row z-score or log2(CPM + 1) scale, sample annotation, and clustered rows/columns.

@@ -1,5 +1,5 @@
 import { state, logAnalysis, createProgressReporter, runWithProgressPulse } from './state.js';
-import { loadDeForContrast, loadGeneAnnotation, loadText, parseCsv } from './dataLoader.js';
+import { loadDeForContrast, loadGeneAnnotation, parseCsv } from './dataLoader.js';
 import { ensureRPackages } from './packageManager.js';
 import { renderCurrentEnrichment, storeGseaResult } from './enrichment.js';
 import { evalR } from './webrManager.js';
@@ -8,7 +8,6 @@ import { markAnalysisCacheDirty } from './analysisCache.js';
 let fgseaControlsWired = false;
 
 export function setupFgseaControls() {
-  populateGseaReferences();
   if (fgseaControlsWired) return;
   fgseaControlsWired = true;
   document.getElementById('gsea-run')?.addEventListener('click', runFgseaAnalysis);
@@ -16,12 +15,11 @@ export function setupFgseaControls() {
 
 export async function runFgseaAnalysis() {
   const contrastSelect = document.getElementById('enrichment-contrast-select');
-  const reference = document.getElementById('gsea-reference')?.value || state.config?.analysis?.gseaReference || 'hg38';
   const contrast = state.contrasts.find((item) => item.id === contrastSelect?.value) || state.contrasts[0];
   const status = document.getElementById('gsea-status');
   const runButton = document.getElementById('gsea-run');
   const runButtonLabel = runButton?.textContent || 'Run fgsea';
-  const progress = createProgressReporter('fgsea', 6);
+  const progress = createProgressReporter('fgsea', 5);
   if (runButton) {
     runButton.disabled = true;
     runButton.textContent = 'Running fgsea...';
@@ -30,14 +28,15 @@ export async function runFgseaAnalysis() {
 
   try {
     if (!contrast) throw new Error('Run or select a DE contrast before fgsea.');
+    fgseaSetStatus(status, 'Loading uploaded GMT pathway files...');
+    await progress.step('Loading uploaded GMT pathway files', 1);
+    const gmtSources = await loadGmtSources();
+
     fgseaSetStatus(status, 'Loading ranked DE result...');
-    await progress.step('Loading ranked DE result', 1);
+    await progress.step('Loading ranked DE result', 2);
     const deRows = await loadDeForContrast(contrast);
     if (!deRows.length) throw new Error('No DE rows are available. Run DESeq2 first for uploaded data.');
 
-    fgseaSetStatus(status, 'Loading pathway GMT...');
-    await progress.step(`Loading ${reference} pathway GMT`, 2);
-    const gmtSources = await loadGmtSources(reference);
     const minSize = fgseaPositiveInteger(document.getElementById('gsea-min-size')?.value, 1, 5);
     const maxSize = fgseaPositiveInteger(document.getElementById('gsea-max-size')?.value, minSize, 500);
 
@@ -73,7 +72,7 @@ export async function runFgseaAnalysis() {
         source_kind: source.source_kind,
         source_id: source.source_id,
         source_label: source.source_label,
-        reference,
+        reference: source.source_label,
         min_size: minSize,
         max_size: maxSize,
         created_at: new Date().toISOString(),
@@ -113,46 +112,15 @@ function fgseaPackageSet() {
   return state.config?.webr?.modules?.fgsea?.packages || ['fgsea'];
 }
 
-function populateGseaReferences() {
-  const select = document.getElementById('gsea-reference');
-  if (!select) return;
-  const references = gseaReferences();
-  const previous = select.value || state.config?.analysis?.gseaReference || 'hg38';
-  select.innerHTML = Object.entries(references)
-    .map(([id, reference]) => `<option value="${fgseaEscapeHtml(id)}">${fgseaEscapeHtml(reference.label || id)}</option>`)
-    .join('');
-  select.value = references[previous] ? previous : Object.keys(references)[0] || '';
-}
-
-function gseaReferences() {
-  return state.config?.gsea?.references || {
-    hg38: { label: 'hg38', pathwayFile: 'gsea/hg38_demo.gmt' },
-    mm10: { label: 'mm10', pathwayFile: 'gsea/mm10_demo.gmt' },
-  };
-}
-
-async function loadGmtSources(referenceId) {
+async function loadGmtSources() {
   const uploaded = Array.from(document.getElementById('gsea-gmt-file')?.files || []);
-  if (uploaded.length) {
-    return Promise.all(uploaded.map(async (file) => ({
-      source_kind: 'uploaded',
-      source_id: `${file.name}-${file.size}-${file.lastModified}`,
-      source_label: file.name,
-      gmtText: await file.text(),
-    })));
-  }
-
-  const reference = gseaReferences()[referenceId];
-  if (!reference?.pathwayFile) throw new Error(`No pathway file is configured for ${referenceId}.`);
-  const dataRoot = state.config?.dataRoot || 'assets/data';
-  const text = await loadText(`${dataRoot}/${reference.pathwayFile}`, true);
-  if (!text) throw new Error(`No pathway GMT was found for ${referenceId}.`);
-  return [{
-    source_kind: 'reference',
-    source_id: referenceId,
-    source_label: reference.label || referenceId,
-    gmtText: text,
-  }];
+  if (!uploaded.length) throw new Error('Upload one or more GMT files before running fgsea.');
+  return Promise.all(uploaded.map(async (file) => ({
+    source_kind: 'uploaded',
+    source_id: `${file.name}-${file.size}-${file.lastModified}`,
+    source_label: file.name,
+    gmtText: await file.text(),
+  })));
 }
 
 function fgseaResultId(contrastId, source, minSize, maxSize) {
@@ -344,8 +312,4 @@ function fgseaSetStatus(element, message) {
 
 function fgseaRString(value) {
   return JSON.stringify(String(value));
-}
-
-function fgseaEscapeHtml(value) {
-  return String(value).replace(/[&<>'"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[ch]));
 }

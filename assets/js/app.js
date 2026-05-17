@@ -191,8 +191,6 @@ function analysisReadinessItems() {
     || document.getElementById('deseq-reference-level')?.value
     || '';
   const adjustColumns = selectedValues('deseq-adjust-columns');
-  const gseaReference = document.getElementById('gsea-reference')?.value || state.config?.analysis?.gseaReference || '';
-  const gseaReferences = state.config?.gsea?.references || {};
   const gmtUploaded = (document.getElementById('gsea-gmt-file')?.files?.length || 0) > 0;
   const packageStatuses = ['DESeq2', 'fgsea'].map((pkg) => `${pkg}: ${getPackageStatus(pkg)}`);
   const packagesReady = ['DESeq2', 'fgsea'].every((pkg) => packageReadyStatus(getPackageStatus(pkg)));
@@ -239,13 +237,11 @@ function analysisReadinessItems() {
         : 'webR is disabled in report_config.json.',
     },
     {
-      tone: gmtUploaded || gseaReferences[gseaReference]?.pathwayFile ? 'ok' : 'fail',
-      title: 'GSEA reference',
+      tone: gmtUploaded ? 'ok' : 'fail',
+      title: 'GSEA GMT files',
       message: gmtUploaded
         ? 'Uploaded GMT file(s) will be used for fgsea.'
-        : (gseaReferences[gseaReference]?.pathwayFile
-          ? `${gseaReferences[gseaReference].label || gseaReference} is configured for fgsea.`
-          : 'Choose hg38/mm10 or upload a GMT file before running fgsea.'),
+        : 'Upload one or more GMT files before running browser fgsea.',
     },
   ];
 }
@@ -436,7 +432,6 @@ function wireControls() {
   document.getElementById('deseq-numerator-level')?.addEventListener('change', renderAnalysisReadiness);
   document.getElementById('deseq-denominator-level')?.addEventListener('change', renderAnalysisReadiness);
   document.getElementById('deseq-adjust-columns')?.addEventListener('change', renderAnalysisReadiness);
-  document.getElementById('gsea-reference')?.addEventListener('change', renderAnalysisReadiness);
   document.getElementById('gsea-gmt-file')?.addEventListener('change', renderAnalysisReadiness);
   document.addEventListener('rnaseq-report:packages-changed', renderAnalysisReadiness);
   document.getElementById('count-gene-button')?.addEventListener('click', () => renderCountExplorerPlot());

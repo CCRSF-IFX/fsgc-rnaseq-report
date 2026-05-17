@@ -10,20 +10,7 @@
   "dataRoot": "assets/data",
   "analysis": {
     "conditionColumn": "condition",
-    "referenceLevel": "control",
-    "gseaReference": "hg38"
-  },
-  "gsea": {
-    "references": {
-      "hg38": {
-        "label": "hg38",
-        "pathwayFile": "gsea/hg38_demo.gmt"
-      },
-      "mm10": {
-        "label": "mm10",
-        "pathwayFile": "gsea/mm10_demo.gmt"
-      }
-    }
+    "referenceLevel": "control"
   },
   "qcThresholds": {
     "mapping_rate": {

@@ -40,7 +40,7 @@ export function pluginDefinitions() {
     plugins.push({
       id: 'fgsea_experimental',
       name: 'fgsea experimental module',
-      description: 'Run preranked GSEA from the current DE contrast using hg38 or mm10 GMT pathway sets.',
+      description: 'Run preranked GSEA from the current DE contrast using uploaded GMT pathway files.',
       packages: modules.fgsea?.packages || ['fgsea'],
       loadPackages: modules.fgsea?.loadPackages || ['fgsea'],
       memory: modules.fgsea?.memoryWarning || 'medium',
