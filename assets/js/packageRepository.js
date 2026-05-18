@@ -56,6 +56,10 @@ export function renderPackageRepositoryPanel() {
         <div class="operation-progress-track" aria-hidden="true"><span id="package-download-progress-fill"></span></div>
       </div>
       <div class="package-chips">${visiblePackages.map((pkg) => packageRepoPackageChip(pkg)).join('')}</div>
+      <div class="package-state-table">
+        <h5>Top-level package status</h5>
+        <div class="table-wrap compact">${packageRepoPackageStatusTable(visiblePackages)}</div>
+      </div>
       <div class="package-links">
         <a href="${packageRepoEscapeHtml(indexUrl)}" target="_blank" rel="noopener">PACKAGES index</a>
         <a href="${packageRepoEscapeHtml(repoUrl)}" target="_blank" rel="noopener">Package repository</a>
@@ -287,6 +291,16 @@ function packageRepoTopLevelPackagesReady() {
 function packageRepoPackageChip(pkg) {
   const status = getPackageStatus(pkg);
   return `<span>${packageRepoEscapeHtml(pkg)} <small>${packageRepoEscapeHtml(status)}</small></span>`;
+}
+
+function packageRepoPackageStatusTable(packages) {
+  if (!packages.length) return '<p class="note">No top-level analysis packages are configured.</p>';
+  const rows = packages.map((pkg) => {
+    const status = getPackageStatus(pkg);
+    const ready = arePackagesAvailable([pkg]) ? 'ready' : 'not ready';
+    return `<tr><td>${packageRepoEscapeHtml(pkg)}</td><td>${packageRepoEscapeHtml(status)}</td><td>${ready}</td></tr>`;
+  }).join('');
+  return `<table><thead><tr><th>Package</th><th>Status</th><th>Ready</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 
 function packageRepoBaseUrl() {

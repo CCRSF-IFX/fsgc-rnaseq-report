@@ -297,6 +297,8 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .package-links a { color: var(--accent); }
 .package-chips span { display: inline-flex; gap: 6px; align-items: center; background: white; border: 1px solid var(--line); border-radius: 999px; padding: 5px 9px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; }
 .package-chips small { color: var(--muted); font-family: inherit; }
+.package-state-table { margin-top: 14px; }
+.package-state-table h5 { margin: 0 0 8px; font-size: 14px; }
 .package-status { margin-top: 12px; color: var(--muted); }
 .package-local-bundle { border-top: 1px solid var(--line); margin-top: 14px; padding-top: 14px; }
 .status-message { border-radius: 8px; padding: 10px 12px; margin-bottom: 10px; }
