@@ -33,6 +33,7 @@ LOGO_MIME_TYPES = {
 
 JS_ORDER = [
     "assets/js/state.js",
+    "assets/js/metadataSchema.js",
     "assets/js/tables.js",
     "assets/js/qc.js",
     "assets/js/analysis.js",
@@ -80,6 +81,30 @@ def strip_module_syntax(source: str) -> str:
             continue
         lines.append(line)
     return "\n".join(lines)
+
+
+def local_imports(source: str, source_path: Path, repo_root: Path) -> list[str]:
+    imports = []
+    for match in re.finditer(r"^\s*import\s+(?:[\s\S]*?\s+from\s+)?['\"](\.[^'\"]+)['\"]\s*;", source, flags=re.M):
+        specifier = re.split(r"[?#]", match.group(1), maxsplit=1)[0]
+        imported = (source_path.parent / specifier).resolve()
+        try:
+            imports.append(imported.relative_to(repo_root).as_posix())
+        except ValueError:
+            continue
+    return imports
+
+
+def validate_js_order(repo_root: Path) -> None:
+    ordered = set(JS_ORDER)
+    missing = []
+    for relative_path in JS_ORDER:
+        source_path = repo_root / relative_path
+        for imported_path in local_imports(read_text(source_path), source_path, repo_root):
+            if imported_path not in ordered:
+                missing.append(f"{relative_path} imports {imported_path}, but it is not listed in JS_ORDER")
+    if missing:
+        raise RuntimeError("Standalone JavaScript bundle is incomplete:\n" + "\n".join(f"- {item}" for item in missing))
 
 
 def data_root_from_config(config_text: str) -> str:
@@ -199,6 +224,7 @@ def embedded_assets(
 
 
 def bundled_app_script(repo_root: Path, args: argparse.Namespace) -> str:
+    validate_js_order(repo_root)
     assets_json = json.dumps(
         embedded_assets(
             repo_root,
