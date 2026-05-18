@@ -10,6 +10,9 @@ const PCA_SYMBOLS = ['circle', 'square', 'diamond', 'cross', 'x', 'triangle-up',
 const PCA_SYMBOLS_3D = ['circle', 'square', 'diamond', 'cross', 'x', 'circle-open', 'square-open', 'diamond-open'];
 const VOLCANO_DISPLAY_CAP = 50;
 const HCLUST_ESM_URL = 'https://esm.sh/ml-hclust@4.0.0?bundle';
+const ENRICHMENT_DIRECTION_LIMIT = 10;
+const ENRICHMENT_UP_COLOR = '#dc2626';
+const ENRICHMENT_DOWN_COLOR = '#2563eb';
 const DE_CATEGORIES = [
   { id: 'upregulated', label: 'upregulated', color: '#dc2626', opacity: 0.82 },
   { id: 'downregulated', label: 'downregulated', color: '#2563eb', opacity: 0.82 },
@@ -373,16 +376,110 @@ function renderGeneCountSplitBoxPlot(row, sampleIds, groupColumn, splitColumn, s
 }
 
 export function renderEnrichment(rows) {
-  const top = rows.slice().sort((a, b) => Number(a.padj) - Number(b.padj)).slice(0, 15).reverse();
-  const termLabels = top.map((row) => row.term_name || row.term_id || 'term');
+  const plot = document.getElementById('enrichment-plot');
+  if (!plot) return;
+  const sourceRows = Array.isArray(rows) ? rows : [];
+  if (!sourceRows.length) {
+    clearPlot(plot, 'Run GSEA to show enriched pathways.');
+    return;
+  }
+
+  const directionalRows = sourceRows
+    .map((row) => {
+      const direction = enrichmentDirectionScore(row);
+      if (!Number.isFinite(direction) || direction === 0) return null;
+      return { row, direction, signedScore: Math.sign(direction) * enrichmentMagnitude(row) };
+    })
+    .filter(Boolean);
+
+  if (directionalRows.length) {
+    renderDirectionalEnrichment(plot, directionalRows);
+    return;
+  }
+
+  renderLegacyEnrichment(plot, sourceRows);
+}
+
+function renderDirectionalEnrichment(plot, directionalRows) {
+  const upRows = directionalRows
+    .filter((item) => item.direction > 0)
+    .sort(enrichmentDirectionalSort)
+    .slice(0, ENRICHMENT_DIRECTION_LIMIT);
+  const downRows = directionalRows
+    .filter((item) => item.direction < 0)
+    .sort(enrichmentDirectionalSort)
+    .slice(0, ENRICHMENT_DIRECTION_LIMIT);
+  const selected = [...downRows.slice().reverse(), ...upRows.slice().reverse()];
+  if (!selected.length) {
+    clearPlot(plot, 'No directional GSEA pathways are available.');
+    return;
+  }
+
+  const termLabels = selected.map((item) => enrichmentTermLabel(item.row));
   const wrappedLabels = termLabels.map((label) => wrapPlotLabel(label, 32));
-  const termKeys = top.map((row, index) => `${row.term_id || 'term'}_${index}`);
-  const layout = plotLayout('Top enriched terms');
-  Plotly.react('enrichment-plot', [{
-    x: top.map((r) => -Math.log10(plotPValue(r.padj))),
+  const termKeys = selected.map((item, index) => `${item.row.term_id || 'term'}_${index}`);
+  const maxAbsScore = Math.max(...selected.map((item) => Math.abs(item.signedScore)).filter(Number.isFinite), 1);
+  const hasUp = upRows.length > 0;
+  const hasDown = downRows.length > 0;
+  const xRange = enrichmentSignedRange(maxAbsScore, hasUp, hasDown);
+  const layout = plotLayout(enrichmentDirectionTitle(upRows.length, downRows.length));
+
+  Plotly.react(plot, [{
+    x: selected.map((item) => item.signedScore),
     y: termKeys,
     type: 'bar',
     orientation: 'h',
+    marker: {
+      color: selected.map((item) => (item.direction > 0 ? ENRICHMENT_UP_COLOR : ENRICHMENT_DOWN_COLOR)),
+      opacity: 0.86,
+    },
+    customdata: selected.map((item, index) => [
+      termLabels[index],
+      item.row.term_id || '',
+      item.direction > 0 ? 'upregulated' : 'downregulated',
+      formatNumber(item.direction),
+      formatPValue(item.row.padj),
+      item.row.genes || '',
+    ]),
+    hovertemplate: '<b>%{customdata[0]}</b><br>%{customdata[1]}<br>Direction: %{customdata[2]}<br>NES: %{customdata[3]}<br>Adjusted p-value: %{customdata[4]}<br>Genes: %{customdata[5]}<br>Signed -log10 adjusted p-value: %{x:.3g}<extra></extra>',
+  }], {
+    ...layout,
+    margin: { ...layout.margin, l: enrichmentLeftMargin(wrappedLabels), r: 36 },
+    xaxis: {
+      title: 'signed -log10 adjusted p-value (NES direction)',
+      automargin: true,
+      range: xRange,
+      zeroline: true,
+      zerolinecolor: '#94a3b8',
+      gridcolor: '#e5e7eb',
+    },
+    yaxis: {
+      automargin: true,
+      tickmode: 'array',
+      tickvals: termKeys,
+      ticktext: wrappedLabels,
+      categoryorder: 'array',
+      categoryarray: termKeys,
+    },
+    showlegend: false,
+    shapes: [
+      { type: 'line', x0: 0, x1: 0, yref: 'paper', y0: 0, y1: 1, line: { color: '#64748b', width: 1 } },
+    ],
+  }, { responsive: true });
+}
+
+function renderLegacyEnrichment(plot, rows) {
+  const top = rows.slice().sort((a, b) => enrichmentPValue(a) - enrichmentPValue(b)).slice(0, 15).reverse();
+  const termLabels = top.map((row) => enrichmentTermLabel(row));
+  const wrappedLabels = termLabels.map((label) => wrapPlotLabel(label, 32));
+  const termKeys = top.map((row, index) => `${row.term_id || 'term'}_${index}`);
+  const layout = plotLayout('Top enriched terms');
+  Plotly.react(plot, [{
+    x: top.map((r) => enrichmentMagnitude(r)),
+    y: termKeys,
+    type: 'bar',
+    orientation: 'h',
+    marker: { color: '#2563eb', opacity: 0.86 },
     customdata: top.map((r, index) => [termLabels[index], r.term_id || '', r.genes || '']),
     hovertemplate: '<b>%{customdata[0]}</b><br>%{customdata[1]}<br>Genes: %{customdata[2]}<br>-log10 adjusted p-value: %{x:.3g}<extra></extra>',
   }], {
@@ -871,6 +968,48 @@ function plotMean(values) {
 function renderClusteringStatus(message) {
   const status = document.getElementById('sample-clustering-status');
   if (status) status.textContent = message;
+}
+
+function enrichmentTermLabel(row) {
+  return row.term_name || row.term_id || 'term';
+}
+
+function enrichmentPValue(row) {
+  const value = Number(row?.padj);
+  return Number.isFinite(value) ? value : 1;
+}
+
+function enrichmentMagnitude(row) {
+  return -Math.log10(plotPValue(row?.padj));
+}
+
+function enrichmentDirectionScore(row) {
+  const nes = Number(row?.NES ?? row?.nes);
+  if (Number.isFinite(nes)) return nes;
+  const enrichmentScore = Number(row?.enrichmentScore ?? row?.enrichment_score ?? row?.ES);
+  return Number.isFinite(enrichmentScore) ? enrichmentScore : NaN;
+}
+
+function enrichmentDirectionalSort(a, b) {
+  const pDiff = enrichmentPValue(a.row) - enrichmentPValue(b.row);
+  if (pDiff !== 0) return pDiff;
+  const directionDiff = Math.abs(b.direction) - Math.abs(a.direction);
+  if (directionDiff !== 0) return directionDiff;
+  return enrichmentTermLabel(a.row).localeCompare(enrichmentTermLabel(b.row));
+}
+
+function enrichmentDirectionTitle(upCount, downCount) {
+  if (upCount && downCount) return `Top ${upCount} up- and ${downCount} downregulated pathways`;
+  if (upCount) return `Top ${upCount} upregulated pathways`;
+  if (downCount) return `Top ${downCount} downregulated pathways`;
+  return 'Top GSEA pathways';
+}
+
+function enrichmentSignedRange(maxAbsScore, hasUp, hasDown) {
+  const padded = Math.max(1, maxAbsScore * 1.08);
+  if (hasUp && hasDown) return [-padded, padded];
+  if (hasDown) return [-padded, 0];
+  return [0, padded];
 }
 
 function enrichmentLeftMargin(labels) {
