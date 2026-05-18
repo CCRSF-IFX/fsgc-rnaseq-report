@@ -449,7 +449,7 @@ DESeq2 or fgsea runs. The cache includes:
 
 - sample metadata rows when a manifest is available
 - browser-generated DESeq2 result tables
-- browser-generated fgsea result sets, including top-100 pathway enrichment-curve data when available
+- browser-generated fgsea result sets, including the configured top-N pathway enrichment-curve data when available
 - contrast metadata needed to repopulate selectors
 
 If the browser shows **"Changes you made may not be saved."**, it means

@@ -120,6 +120,8 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .plot.short { min-height: 260px; }
 .gsea-detail-panel { border-top: 1px solid var(--line); margin-top: 18px; padding-top: 14px; }
 .gsea-detail-panel .toolbar { margin-bottom: 8px; }
+.gsea-top-n-label input { width: 92px; }
+.gsea-control-note { max-width: 720px; margin: -8px 0 12px; }
 #gsea-pathway-status { min-height: 1.4em; margin: 0 0 10px; }
 .pca-layout { display: grid; grid-template-columns: minmax(0, 1.75fr) minmax(300px, 0.9fr); gap: 16px; align-items: stretch; }
 .pca-layout .plot { min-width: 0; border: 1px solid var(--line); border-radius: 8px; background: white; }

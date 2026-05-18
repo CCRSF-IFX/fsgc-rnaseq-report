@@ -84,8 +84,9 @@ function syncGseaPathwaySelect(result, preferredPathwayId = '') {
     const selected = curves.find((curve) => curve.term_id === select.value) || curves[0] || null;
     renderGseaRunningEnrichment(selected);
     if (status) {
+      const limitText = result?.curve_limit ? ` from top ${result.curve_limit}` : '';
       status.textContent = selected
-        ? `${curves.length} pathway-level enrichment plot${curves.length === 1 ? '' : 's'} retained for this result.`
+        ? `${curves.length} pathway-level enrichment plot${curves.length === 1 ? '' : 's'} retained${limitText} for this result.`
         : 'Pathway-level enrichment plots are available for browser fgsea results generated with this report version.';
     }
   };
@@ -115,6 +116,7 @@ function normalizeGseaResult(key, value) {
     reference: value.reference || '',
     min_size: value.min_size ?? '',
     max_size: value.max_size ?? '',
+    curve_limit: value.curve_limit ?? value.top_n_pathway_plots ?? '',
     created_at: value.created_at || '',
     enrichment_curves: gseaResultCurves(value),
     rows: gseaResultRows(value),
@@ -149,7 +151,8 @@ function normalizeGseaCurves(curves) {
 function gseaResultLabel(result) {
   const source = result.source_label || result.reference || result.result_id;
   const size = result.min_size && result.max_size ? `, size ${result.min_size}-${result.max_size}` : '';
-  return `${source}${size}`;
+  const curveLimit = result.curve_limit ? `, top ${result.curve_limit} plots` : '';
+  return `${source}${size}${curveLimit}`;
 }
 
 function gseaExportName(contrast, result) {

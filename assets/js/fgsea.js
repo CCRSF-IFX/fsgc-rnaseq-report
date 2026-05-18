@@ -6,7 +6,8 @@ import { evalR } from './webrManager.js';
 import { markAnalysisCacheDirty } from './analysisCache.js';
 
 let fgseaControlsWired = false;
-const FGSEA_CURVE_LIMIT = 100;
+const FGSEA_CURVE_DEFAULT_LIMIT = 100;
+const FGSEA_CURVE_MAX_LIMIT = 500;
 const FGSEA_CURVE_POINT_LIMIT = 800;
 const FGSEA_CURVE_SEPARATOR = '\n__RNASEQ_REPORT_FGSEA_CURVES__\n';
 const FGSEA_HIT_SEPARATOR = '\n__RNASEQ_REPORT_FGSEA_HITS__\n';
@@ -43,6 +44,7 @@ export async function runFgseaAnalysis() {
 
     const minSize = fgseaPositiveInteger(document.getElementById('gsea-min-size')?.value, 1, 10);
     const maxSize = fgseaPositiveInteger(document.getElementById('gsea-max-size')?.value, minSize, 500);
+    const curveLimit = fgseaCurveLimitValue();
 
     fgseaSetStatus(status, 'Loading fgsea package in webR. First run can take a few minutes.');
     await progress.step('Loading fgsea package in webR', 3);
@@ -61,7 +63,7 @@ export async function runFgseaAnalysis() {
       const analysis = await runWithProgressPulse(
         progress,
         `${sourceMessage}; still working`,
-        () => fgseaRunInWebR(deRows, source.gmtText, source.source_label, minSize, maxSize),
+        () => fgseaRunInWebR(deRows, source.gmtText, source.source_label, minSize, maxSize, curveLimit),
         {
           intervalMs: 10000,
           onPulse: (message) => fgseaSetStatus(status, `${message}. Keep this tab open.`),
@@ -69,7 +71,7 @@ export async function runFgseaAnalysis() {
       );
       const rows = analysis.rows || [];
       if (!rows.length) throw new Error(`fgsea returned no pathways for ${source.source_label}. Check gene identifiers and pathway gene sets.`);
-      const resultId = fgseaResultId(contrast.id, source, minSize, maxSize);
+      const resultId = fgseaResultId(contrast.id, source, minSize, maxSize, curveLimit);
       const result = storeGseaResult({
         result_id: resultId,
         contrast_id: contrast.id,
@@ -80,6 +82,7 @@ export async function runFgseaAnalysis() {
         reference: source.source_label,
         min_size: minSize,
         max_size: maxSize,
+        curve_limit: curveLimit,
         created_at: new Date().toISOString(),
         enrichment_curves: analysis.enrichment_curves || [],
         rows: rows.map((row) => ({
@@ -97,7 +100,8 @@ export async function runFgseaAnalysis() {
     await renderCurrentEnrichment({ resultId: lastResult?.result_id });
     const totalPathways = completed.reduce((sum, result) => sum + result.rows.length, 0);
     const sourceLabel = completed.length === 1 ? completed[0].source_label : `${completed.length} GMT files`;
-    const message = `fgsea complete for ${contrast.label || contrast.id}: ${totalPathways} pathway rows across ${sourceLabel}.`;
+    const totalCurves = completed.reduce((sum, result) => sum + (result.enrichment_curves || []).length, 0);
+    const message = `fgsea complete for ${contrast.label || contrast.id}: ${totalPathways} pathway rows and ${totalCurves} pathway plot${totalCurves === 1 ? '' : 's'} across ${sourceLabel}.`;
     fgseaSetStatus(status, message);
     await progress.done(`${totalPathways} pathway rows`);
     logAnalysis(message);
@@ -129,13 +133,14 @@ async function loadGmtSources() {
   })));
 }
 
-function fgseaResultId(contrastId, source, minSize, maxSize) {
+function fgseaResultId(contrastId, source, minSize, maxSize, curveLimit) {
   return [
     contrastId,
     source.source_kind,
     source.source_id || source.source_label,
     `min${minSize}`,
     `max${maxSize}`,
+    `plots${curveLimit}`,
   ].map(fgseaSlug).filter(Boolean).join('__');
 }
 
@@ -147,7 +152,7 @@ function fgseaSlug(value) {
     .replace(/^-+|-+$/g, '') || 'gsea';
 }
 
-async function fgseaRunInWebR(deRows, gmtText, reference, minSize, maxSize) {
+async function fgseaRunInWebR(deRows, gmtText, reference, minSize, maxSize, curveLimit = FGSEA_CURVE_DEFAULT_LIMIT) {
   await loadGeneAnnotation(false);
   const statsCsv = fgseaStatsCsv(deRows);
   const code = `
@@ -159,7 +164,7 @@ gmt_text <- ${fgseaRString(gmtText)}
 reference_name <- ${fgseaRString(reference)}
 min_size <- ${Number(minSize)}
 max_size <- ${Number(maxSize)}
-curve_limit <- ${FGSEA_CURVE_LIMIT}
+curve_limit <- ${Number(curveLimit)}
 curve_point_limit <- ${FGSEA_CURVE_POINT_LIMIT}
 
 de <- read.csv(text = stats_text, check.names = FALSE, stringsAsFactors = FALSE, na.strings = c("", "NA", "NaN"))
@@ -478,6 +483,14 @@ function fgseaResultText(result) {
 function fgseaPositiveInteger(value, min, fallback) {
   const n = Number.parseInt(value, 10);
   return Number.isFinite(n) && n >= min ? n : fallback;
+}
+
+function fgseaCurveLimitValue() {
+  const input = document.getElementById('gsea-curve-limit');
+  const value = fgseaPositiveInteger(input?.value, 1, FGSEA_CURVE_DEFAULT_LIMIT);
+  const bounded = Math.max(1, Math.min(FGSEA_CURVE_MAX_LIMIT, value));
+  if (input && String(input.value) !== String(bounded)) input.value = String(bounded);
+  return bounded;
 }
 
 function fgseaSetStatus(element, message) {

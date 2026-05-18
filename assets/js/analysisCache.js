@@ -165,6 +165,7 @@ function restoreAnalysisCache(cache) {
       reference: entry.reference || '',
       min_size: entry.min_size ?? '',
       max_size: entry.max_size ?? '',
+      curve_limit: entry.curve_limit ?? entry.top_n_pathway_plots ?? '',
       created_at: entry.created_at || '',
       enrichment_curves: plainGseaCurves(entry.enrichment_curves || entry.curves),
       rows: plainRows(entry.rows),
@@ -287,6 +288,7 @@ function gseaCacheEntry(key, value) {
     reference: value.reference || '',
     min_size: value.min_size ?? '',
     max_size: value.max_size ?? '',
+    curve_limit: value.curve_limit ?? value.top_n_pathway_plots ?? '',
     created_at: value.created_at || '',
     enrichment_curves: plainGseaCurves(gseaResultCurves(value)),
     rows: plainRows(value.rows),
@@ -318,6 +320,7 @@ function gseaCacheResultId(entry) {
     entry.source_id || entry.source_label || entry.reference || 'cached',
     entry.min_size ? `min${entry.min_size}` : '',
     entry.max_size ? `max${entry.max_size}` : '',
+    entry.curve_limit ? `plots${entry.curve_limit}` : '',
   ].map(slug).filter(Boolean).join('__') || `${entry.contrast_id || 'contrast'}__gsea`;
 }
 
