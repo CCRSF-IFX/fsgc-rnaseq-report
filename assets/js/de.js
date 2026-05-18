@@ -1,7 +1,7 @@
 import { state } from './state.js';
 import { loadDeForContrast } from './dataLoader.js';
 import { renderTable } from './tables.js';
-import { renderVolcano, renderMA } from './plots.js';
+import { renderVolcano, renderMA, numericPValue } from './plots.js';
 
 export function populateContrastSelectors() {
   for (const id of ['contrast-select', 'enrichment-contrast-select']) {
@@ -20,6 +20,6 @@ export async function renderCurrentContrast() {
   const lfc = Number(document.getElementById('lfc-threshold')?.value || 1);
   renderVolcano(rows, padj, lfc);
   renderMA(rows, padj, lfc);
-  const filtered = rows.filter((r) => Number(r.padj) <= padj && Math.abs(Number(r.log2FoldChange)) >= lfc);
+  const filtered = rows.filter((r) => numericPValue(r.padj) <= padj && Math.abs(Number(r.log2FoldChange)) >= lfc);
   renderTable('de-table', filtered, { limit: 200, exportName: `${contrast.id}.filtered.csv` });
 }

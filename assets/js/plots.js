@@ -532,7 +532,7 @@ export function renderGseaRunningEnrichment(curve) {
   const title = curve.term_name || curve.term_id || 'GSEA enrichment plot';
   const subtitle = [
     Number.isFinite(Number(curve.NES)) ? `NES ${formatNumber(curve.NES)}` : '',
-    Number.isFinite(Number(curve.padj)) ? `padj ${formatNumber(curve.padj)}` : '',
+    Number.isFinite(numericPValue(curve.padj)) ? `padj ${formatNumber(curve.padj)}` : '',
     Number.isFinite(Number(curve.size)) ? `size ${curve.size}` : '',
   ].filter(Boolean).join(' · ');
 
@@ -641,7 +641,7 @@ function maTrace(points, category) {
 }
 
 function deCategory(row, padj, lfc) {
-  const adjustedP = Number(row.padj);
+  const adjustedP = numericPValue(row.padj);
   const log2fc = Number(row.log2FoldChange);
   const passesP = Number.isFinite(adjustedP) && adjustedP <= padj;
   if (!passesP || !Number.isFinite(log2fc)) return 'not_significant';
@@ -975,7 +975,7 @@ function enrichmentTermLabel(row) {
 }
 
 function enrichmentPValue(row) {
-  const value = Number(row?.padj);
+  const value = numericPValue(row?.padj);
   return Number.isFinite(value) ? value : 1;
 }
 
@@ -1018,13 +1018,21 @@ function enrichmentLeftMargin(labels) {
   return Math.min(320, Math.max(150, maxLength * 7 + 34));
 }
 
+export function numericPValue(value) {
+  if (value === null || value === undefined) return NaN;
+  const text = String(value).trim();
+  if (!text || ['na', 'nan', 'null', 'undefined'].includes(text.toLowerCase())) return NaN;
+  const n = Number(text);
+  return Number.isFinite(n) && n >= 0 ? n : NaN;
+}
+
 function plotPValue(value) {
-  const n = Number(value);
+  const n = numericPValue(value);
   return Number.isFinite(n) ? Math.max(n, 1e-300) : 1;
 }
 
 function formatPValue(value) {
-  const n = Number(value);
+  const n = numericPValue(value);
   if (!Number.isFinite(n)) return escapePlotText(value || 'NA');
   if (n === 0) return '0';
   if (Math.abs(n) < 0.001) return n.toExponential(2);
