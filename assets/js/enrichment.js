@@ -1,6 +1,6 @@
 import { state } from './state.js';
 import { loadEnrichmentForContrast } from './dataLoader.js';
-import { renderEnrichment, renderGseaRunningEnrichment } from './plots.js';
+import { renderEnrichment, renderGseaRunningEnrichment, topEnrichmentPlotRows } from './plots.js';
 import { renderTable } from './tables.js';
 
 export async function renderCurrentEnrichment(options = {}) {
@@ -70,28 +70,54 @@ function syncGseaPathwaySelect(result, preferredPathwayId = '') {
   const status = document.getElementById('gsea-pathway-status');
   if (!select) return;
   const curves = gseaResultCurves(result);
+  const topRows = topEnrichmentPlotRows(gseaResultRows(result));
+  const topCurves = gseaTopPlotCurves(topRows, curves);
+  const displayCurves = topCurves.length ? topCurves : curves;
   const previous = preferredPathwayId || select.value;
 
-  select.innerHTML = curves.length
-    ? curves.map((curve) => `<option value="${escapeHtml(curve.term_id)}">${escapeHtml(curve.term_name || curve.term_id)}</option>`).join('')
+  select.innerHTML = displayCurves.length
+    ? displayCurves.map((curve) => `<option value="${escapeHtml(curve.term_id)}">${escapeHtml(curve.term_name || curve.term_id)}</option>`).join('')
     : '<option value="">No pathway curves available</option>';
-  select.disabled = curves.length === 0;
+  select.disabled = displayCurves.length === 0;
 
-  if (curves.some((curve) => curve.term_id === previous)) select.value = previous;
-  else select.value = curves[0]?.term_id || '';
+  if (displayCurves.some((curve) => curve.term_id === previous)) select.value = previous;
+  else select.value = displayCurves[0]?.term_id || '';
 
   const renderSelected = () => {
-    const selected = curves.find((curve) => curve.term_id === select.value) || curves[0] || null;
+    const selected = displayCurves.find((curve) => curve.term_id === select.value) || displayCurves[0] || null;
     renderGseaRunningEnrichment(selected);
     if (status) {
-      const limitText = result?.curve_limit ? ` from top ${result.curve_limit}` : '';
+      const missingTopCurves = Math.max(0, topRows.length - topCurves.length);
+      const sourceText = topCurves.length ? 'shown in the top pathway barplot' : 'retained for this result';
+      const missingText = missingTopCurves
+        ? ` ${missingTopCurves} displayed pathway${missingTopCurves === 1 ? ' is' : 's are'} missing retained curve data; increase Pathway plots and rerun fgsea if needed.`
+        : '';
       status.textContent = selected
-        ? `${curves.length} pathway-level enrichment plot${curves.length === 1 ? '' : 's'} retained${limitText} for this result.`
+        ? `${displayCurves.length} pathway-level enrichment plot${displayCurves.length === 1 ? '' : 's'} available from pathways ${sourceText}.${missingText}`
         : 'Pathway-level enrichment plots are available for browser fgsea results generated with this report version.';
     }
   };
   select.onchange = renderSelected;
   renderSelected();
+}
+
+function gseaTopPlotCurves(rows, curves) {
+  if (!rows.length || !curves.length) return [];
+  const curveByTerm = new Map(curves.map((curve) => [gseaTermKey(curve.term_id), curve]));
+  const seen = new Set();
+  return rows
+    .map((row) => curveByTerm.get(gseaTermKey(row.term_id || row.pathway)))
+    .filter((curve) => {
+      if (!curve) return false;
+      const key = gseaTermKey(curve.term_id);
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+}
+
+function gseaTermKey(value) {
+  return String(value || '').trim();
 }
 
 function normalizeGseaResult(key, value) {
@@ -151,8 +177,15 @@ function normalizeGseaCurves(curves) {
 function gseaResultLabel(result) {
   const source = result.source_label || result.reference || result.result_id;
   const size = result.min_size && result.max_size ? `, size ${result.min_size}-${result.max_size}` : '';
-  const curveLimit = result.curve_limit ? `, top ${result.curve_limit} plots` : '';
+  const curveLimit = result.curve_limit ? `, ${gseaCurveLimitLabel(result.curve_limit)}` : '';
   return `${source}${size}${curveLimit}`;
+}
+
+function gseaCurveLimitLabel(value) {
+  const label = String(value || '').trim().toLowerCase();
+  if (label === 'barplot') return 'barplot pathway plots';
+  if (label === 'all') return 'all pathway plots';
+  return `top ${value} pathway plots`;
 }
 
 function gseaExportName(contrast, result) {

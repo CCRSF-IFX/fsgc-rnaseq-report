@@ -435,10 +435,10 @@
             <label>Pathway GMT files <input id="gsea-gmt-file" type="file" accept=".gmt,.txt" multiple /></label>
             <label>Min size <input id="gsea-min-size" type="number" min="1" value="10" /></label>
             <label>Max size <input id="gsea-max-size" type="number" min="1" value="500" /></label>
-            <label class="gsea-top-n-label">Pathway plots <input id="gsea-curve-limit" type="number" min="1" max="500" value="100" aria-describedby="gsea-curve-limit-help" /></label>
+            <label class="gsea-top-n-label">Pathway plots <select id="gsea-curve-limit" aria-describedby="gsea-curve-limit-help"><option value="barplot" selected>Barplot pathways</option><option value="100">Top 100</option><option value="500">Top 500</option><option value="all">All</option></select></label>
             <button id="gsea-run">Run fgsea</button>
           </div>
-          <p class="note gsea-control-note" id="gsea-curve-limit-help">Retain running enrichment-score plots for the top N pathways in the result and analysis cache. Larger values increase cache size.</p>
+          <p class="note gsea-control-note" id="gsea-curve-limit-help">Retain running enrichment-score plots for the pathways shown in the top up/down barplot by default. Larger presets and All increase cache size.</p>
           <p class="note" id="gsea-status">Run DESeq2 first for uploaded data, then run fgsea against one or more uploaded GMT pathway files.</p>
           <div id="enrichment-plot" class="plot tall"></div>
           <div class="gsea-detail-panel">
@@ -448,7 +448,7 @@
                   <label for="gsea-pathway-select">Running Enrichment-Score Plot</label>
                   <span class="tip-wrap">
                     <span class="tip-icon" tabindex="0" aria-describedby="gsea-pathway-tip" aria-label="Running enrichment-score plot help">?</span>
-                    <span id="gsea-pathway-tip" class="tip-bubble" role="tooltip">Choose which pathway to draw as a running enrichment-score plot. The menu is populated from the top pathways retained by the current GSEA result cache.</span>
+                    <span id="gsea-pathway-tip" class="tip-bubble" role="tooltip">Choose which pathway to draw as a running enrichment-score plot. The menu follows the pathways shown in the top up/down GSEA barplot when curve data is available.</span>
                   </span>
                 </span>
                 <select id="gsea-pathway-select" aria-describedby="gsea-pathway-tip"></select>

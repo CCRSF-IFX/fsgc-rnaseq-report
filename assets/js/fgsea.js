@@ -6,8 +6,9 @@ import { evalR } from './webrManager.js';
 import { markAnalysisCacheDirty } from './analysisCache.js';
 
 let fgseaControlsWired = false;
-const FGSEA_CURVE_DEFAULT_LIMIT = 100;
+const FGSEA_CURVE_DEFAULT_LIMIT = 'barplot';
 const FGSEA_CURVE_MAX_LIMIT = 500;
+const FGSEA_CURVE_BARPLOT_PER_DIRECTION = 10;
 const FGSEA_CURVE_POINT_LIMIT = 800;
 const FGSEA_CURVE_SEPARATOR = '\n__RNASEQ_REPORT_FGSEA_CURVES__\n';
 const FGSEA_HIT_SEPARATOR = '\n__RNASEQ_REPORT_FGSEA_HITS__\n';
@@ -164,7 +165,9 @@ gmt_text <- ${fgseaRString(gmtText)}
 reference_name <- ${fgseaRString(reference)}
 min_size <- ${Number(minSize)}
 max_size <- ${Number(maxSize)}
-curve_limit <- ${Number(curveLimit)}
+curve_mode <- ${fgseaRString(fgseaCurveMode(curveLimit))}
+curve_limit <- ${fgseaCurveNumericLimit(curveLimit)}
+curve_barplot_per_direction <- ${FGSEA_CURVE_BARPLOT_PER_DIRECTION}
 curve_point_limit <- ${FGSEA_CURVE_POINT_LIMIT}
 
 de <- read.csv(text = stats_text, check.names = FALSE, stringsAsFactors = FALSE, na.strings = c("", "NA", "NaN"))
@@ -268,12 +271,36 @@ running_curve <- function(pathway_genes, stats, max_points = 800L) {
   )
 }
 
-curve_tables <- function(fg, pathways, stats, limit = 100L, max_points = 800L) {
+curve_order <- function(df) {
+  if (!nrow(df)) return(df)
+  df[order(df$padj, -abs(df$NES), df$pathway), , drop = FALSE]
+}
+
+top_curve_rows <- function(fg, mode = "barplot", limit = 100L, per_direction = 10L) {
+  if (!nrow(fg)) return(fg)
+  mode <- tolower(as.character(mode))
+  if (identical(mode, "all")) return(fg)
+  if (identical(mode, "barplot")) {
+    nes <- suppressWarnings(as.numeric(fg$NES))
+    up <- curve_order(fg[is.finite(nes) & nes > 0, , drop = FALSE])
+    down <- curve_order(fg[is.finite(nes) & nes < 0, , drop = FALSE])
+    up <- up[seq_len(min(nrow(up), per_direction)), , drop = FALSE]
+    down <- down[seq_len(min(nrow(down), per_direction)), , drop = FALSE]
+    selected <- rbind(down, up)
+    if (nrow(selected)) return(selected)
+    limit <- per_direction * 2L
+  }
+  limit <- suppressWarnings(as.integer(limit))
+  if (!is.finite(limit) || limit < 1L) limit <- 100L
+  fg[seq_len(min(nrow(fg), limit)), , drop = FALSE]
+}
+
+curve_tables <- function(fg, pathways, stats, mode = "barplot", limit = 100L, per_direction = 10L, max_points = 800L) {
   curve_rows <- list()
   hit_rows <- list()
   if (!nrow(fg)) return(list(curves = empty_curve_df(), hits = empty_hit_df()))
 
-  top_fg <- fg[seq_len(min(nrow(fg), limit)), ]
+  top_fg <- top_curve_rows(fg, mode, limit, per_direction)
   for (i in seq_len(nrow(top_fg))) {
     pathway_name <- top_fg$pathway[[i]]
     curve <- running_curve(pathways[[pathway_name]], stats, max_points)
@@ -338,7 +365,7 @@ if (nrow(fg) == 0) {
   hit_out <- empty_hit_df()
 } else {
   fg <- fg[order(fg$padj, -abs(fg$NES)), ]
-  curves <- curve_tables(fg, pathways, stats, curve_limit, curve_point_limit)
+  curves <- curve_tables(fg, pathways, stats, curve_mode, curve_limit, curve_barplot_per_direction, curve_point_limit)
   out <- data.frame(
     term_id = fg$pathway,
     term_name = fg$pathway,
@@ -495,10 +522,25 @@ function fgseaPositiveInteger(value, min, fallback) {
 
 function fgseaCurveLimitValue() {
   const input = document.getElementById('gsea-curve-limit');
-  const value = fgseaPositiveInteger(input?.value, 1, FGSEA_CURVE_DEFAULT_LIMIT);
-  const bounded = Math.max(1, Math.min(FGSEA_CURVE_MAX_LIMIT, value));
-  if (input && String(input.value) !== String(bounded)) input.value = String(bounded);
-  return bounded;
+  const rawValue = String(input?.value || FGSEA_CURVE_DEFAULT_LIMIT).trim().toLowerCase();
+  if (rawValue === 'barplot' || rawValue === 'all') return rawValue;
+  const value = fgseaPositiveInteger(rawValue, 1, Number.NaN);
+  if (Number.isFinite(value)) return String(Math.max(1, Math.min(FGSEA_CURVE_MAX_LIMIT, value)));
+  if (input) input.value = FGSEA_CURVE_DEFAULT_LIMIT;
+  return FGSEA_CURVE_DEFAULT_LIMIT;
+}
+
+function fgseaCurveMode(curveLimit) {
+  const value = String(curveLimit || FGSEA_CURVE_DEFAULT_LIMIT).trim().toLowerCase();
+  return (value === 'barplot' || value === 'all') ? value : 'top';
+}
+
+function fgseaCurveNumericLimit(curveLimit) {
+  const value = String(curveLimit || '').trim().toLowerCase();
+  if (value === 'all') return '0L';
+  if (value === 'barplot') return String(FGSEA_CURVE_BARPLOT_PER_DIRECTION * 2);
+  const numeric = fgseaPositiveInteger(value, 1, 100);
+  return String(Math.max(1, Math.min(FGSEA_CURVE_MAX_LIMIT, numeric)));
 }
 
 function fgseaSetStatus(element, message) {

@@ -447,13 +447,7 @@ export function renderEnrichment(rows) {
   }
   if (!requirePlotly(plot, 'GSEA plotting requires Plotly. The enrichment table remains available.')) return;
 
-  const directionalRows = sourceRows
-    .map((row) => {
-      const direction = enrichmentDirectionScore(row);
-      if (!Number.isFinite(direction) || direction === 0) return null;
-      return { row, direction, signedScore: Math.sign(direction) * enrichmentMagnitude(row) };
-    })
-    .filter(Boolean);
+  const directionalRows = enrichmentDirectionalRows(sourceRows);
 
   if (directionalRows.length) {
     renderDirectionalEnrichment(plot, directionalRows);
@@ -463,7 +457,24 @@ export function renderEnrichment(rows) {
   renderLegacyEnrichment(plot, sourceRows);
 }
 
-function renderDirectionalEnrichment(plot, directionalRows) {
+export function topEnrichmentPlotRows(rows) {
+  const sourceRows = Array.isArray(rows) ? rows : [];
+  const directionalRows = enrichmentDirectionalRows(sourceRows);
+  if (directionalRows.length) return topDirectionalEnrichmentRows(directionalRows).map((item) => item.row);
+  return topLegacyEnrichmentRows(sourceRows);
+}
+
+function enrichmentDirectionalRows(rows) {
+  return rows
+    .map((row) => {
+      const direction = enrichmentDirectionScore(row);
+      if (!Number.isFinite(direction) || direction === 0) return null;
+      return { row, direction, signedScore: Math.sign(direction) * enrichmentMagnitude(row) };
+    })
+    .filter(Boolean);
+}
+
+function topDirectionalEnrichmentRows(directionalRows) {
   const upRows = directionalRows
     .filter((item) => item.direction > 0)
     .sort(enrichmentDirectionalSort)
@@ -472,7 +483,15 @@ function renderDirectionalEnrichment(plot, directionalRows) {
     .filter((item) => item.direction < 0)
     .sort(enrichmentDirectionalSort)
     .slice(0, ENRICHMENT_DIRECTION_LIMIT);
-  const selected = [...downRows.slice().reverse(), ...upRows.slice().reverse()];
+  return [...downRows.slice().reverse(), ...upRows.slice().reverse()];
+}
+
+function topLegacyEnrichmentRows(rows) {
+  return rows.slice().sort((a, b) => enrichmentPValue(a) - enrichmentPValue(b)).slice(0, 15).reverse();
+}
+
+function renderDirectionalEnrichment(plot, directionalRows) {
+  const selected = topDirectionalEnrichmentRows(directionalRows);
   if (!selected.length) {
     clearPlot(plot, 'No directional GSEA pathways are available.');
     return;
@@ -482,10 +501,12 @@ function renderDirectionalEnrichment(plot, directionalRows) {
   const wrappedLabels = termLabels.map((label) => wrapPlotLabel(label, 32));
   const termKeys = selected.map((item, index) => `${item.row.term_id || 'term'}_${index}`);
   const maxAbsScore = Math.max(...selected.map((item) => Math.abs(item.signedScore)).filter(Number.isFinite), 1);
-  const hasUp = upRows.length > 0;
-  const hasDown = downRows.length > 0;
+  const upCount = selected.filter((item) => item.direction > 0).length;
+  const downCount = selected.filter((item) => item.direction < 0).length;
+  const hasUp = upCount > 0;
+  const hasDown = downCount > 0;
   const xRange = enrichmentSignedRange(maxAbsScore, hasUp, hasDown);
-  const layout = plotLayout(enrichmentDirectionTitle(upRows.length, downRows.length));
+  const layout = plotLayout(enrichmentDirectionTitle(upCount, downCount));
 
   Plotly.react(plot, [{
     x: selected.map((item) => item.signedScore),
@@ -532,7 +553,7 @@ function renderDirectionalEnrichment(plot, directionalRows) {
 }
 
 function renderLegacyEnrichment(plot, rows) {
-  const top = rows.slice().sort((a, b) => enrichmentPValue(a) - enrichmentPValue(b)).slice(0, 15).reverse();
+  const top = topLegacyEnrichmentRows(rows);
   const termLabels = top.map((row) => enrichmentTermLabel(row));
   const wrappedLabels = termLabels.map((label) => wrapPlotLabel(label, 32));
   const termKeys = top.map((row, index) => `${row.term_id || 'term'}_${index}`);
