@@ -647,12 +647,11 @@ function renderCanvasXpressAnnotationTrackLabels(canvas, chart, annotationColumn
   labelLayer.className = 'canvasxpress-track-labels';
   annotationColumns.forEach((column, index) => {
     const overlay = overlays?.[column];
-    const segments = overlay?.segments?.xy || [];
-    const leftEdge = segments.length
-      ? Math.min(...segments.map((segment) => Number(segment?.[0] ?? segment?.[2] ?? Number.POSITIVE_INFINITY)))
-      : Number.NaN;
-    const rowMid = Number(overlay?.segments?.mid ?? overlay?.mid ?? overlay?.label);
-    const left = Number.isFinite(leftEdge) ? leftEdge * scaleX : Math.max(96, cssWidth * 0.28);
+    const rowMid = canvasXpressOverlayRowMid(overlay);
+    const pixelLeftEdge = Number.isFinite(rowMid) ? canvasXpressAnnotationPixelLeftEdge(canvas, rowMid) : Number.NaN;
+    const overlayLeftEdge = canvasXpressOverlayLeftEdge(overlay);
+    const leftEdge = Number.isFinite(pixelLeftEdge) ? pixelLeftEdge : overlayLeftEdge;
+    const left = Number.isFinite(leftEdge) ? leftEdge * scaleX : Math.max(80, Math.min(128, cssWidth * 0.12));
     const top = Number.isFinite(rowMid)
       ? rowMid * scaleY
       : (80 + (index * 18));
@@ -660,11 +659,71 @@ function renderCanvasXpressAnnotationTrackLabels(canvas, chart, annotationColumn
     const label = document.createElement('span');
     label.className = 'canvasxpress-track-label';
     label.textContent = column;
-    label.style.left = `${left - 8}px`;
+    label.style.left = `${canvasXpressTrackLabelAnchor(left, cssWidth)}px`;
     label.style.top = `${top}px`;
     labelLayer.appendChild(label);
   });
   if (labelLayer.childElementCount) stage.appendChild(labelLayer);
+}
+
+function canvasXpressTrackLabelAnchor(stripLeft, cssWidth) {
+  const rawAnchor = Number.isFinite(stripLeft) ? stripLeft - 8 : Math.max(80, Math.min(128, cssWidth * 0.12));
+  const gutterAnchor = Math.max(72, Math.min(140, cssWidth * 0.16));
+  return Math.max(12, Math.min(rawAnchor, gutterAnchor));
+}
+
+function canvasXpressOverlayRowMid(overlay) {
+  return Number(overlay?.segments?.mid ?? overlay?.mid ?? overlay?.label);
+}
+
+function canvasXpressOverlayLeftEdge(overlay) {
+  const segments = Array.isArray(overlay?.segments?.xy) ? overlay.segments.xy : [];
+  const values = [];
+  segments.forEach((segment) => {
+    if (Array.isArray(segment)) {
+      [segment[0], segment[2]].forEach((value) => {
+        const numeric = Number(value);
+        if (Number.isFinite(numeric)) values.push(numeric);
+      });
+      return;
+    }
+    if (segment && typeof segment === 'object') {
+      [segment.x, segment.x1, segment.x2, segment.left, segment.right].forEach((value) => {
+        const numeric = Number(value);
+        if (Number.isFinite(numeric)) values.push(numeric);
+      });
+    }
+  });
+  return values.length ? Math.min(...values) : Number.NaN;
+}
+
+function canvasXpressAnnotationPixelLeftEdge(canvas, rowMid) {
+  const ctx = canvas?.getContext?.('2d', { willReadFrequently: true });
+  if (!ctx) return Number.NaN;
+  const width = Math.floor(canvas.width || 0);
+  const height = Math.floor(canvas.height || 0);
+  if (!width || !height) return Number.NaN;
+
+  const centerY = Math.max(0, Math.min(height - 1, Math.round(rowMid)));
+  const scanRows = [centerY, centerY - 2, centerY + 2, centerY - 5, centerY + 5]
+    .filter((y) => y >= 0 && y < height);
+  for (const y of scanRows) {
+    try {
+      const row = ctx.getImageData(0, y, width, 1).data;
+      for (let x = 0; x < width; x += 1) {
+        const offset = x * 4;
+        const alpha = row[offset + 3];
+        if (alpha < 16) continue;
+        const red = row[offset];
+        const green = row[offset + 1];
+        const blue = row[offset + 2];
+        if (red < 245 || green < 245 || blue < 245) return x;
+      }
+    } catch (_) {
+      return Number.NaN;
+    }
+  }
+  return Number.NaN;
 }
 
 function canvasXpressHeatmapSize(wrap, geneCount, sampleCount, annotationCount, showSampleNames) {
