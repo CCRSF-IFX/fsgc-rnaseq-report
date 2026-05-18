@@ -14,6 +14,11 @@ const ENRICHMENT_DIRECTION_LIMIT = 10;
 const ENRICHMENT_UP_COLOR = '#dc2626';
 const ENRICHMENT_DOWN_COLOR = '#2563eb';
 const PLOTLY_UNAVAILABLE_MESSAGE = 'Plotly is still loading or unavailable. Tables and non-Plotly controls remain available.';
+const PLOTLY_SVG_DOWNLOAD_ICON = {
+  width: 24,
+  height: 24,
+  path: 'M5 3h10l4 4v14H5zM14 4v5h5M8 12h8v2H8zM8 16h8v2H8z',
+};
 const DE_CATEGORIES = [
   { id: 'upregulated', label: 'upregulated', color: '#dc2626', opacity: 0.82 },
   { id: 'downregulated', label: 'downregulated', color: '#2563eb', opacity: 0.82 },
@@ -25,6 +30,36 @@ let distanceHeatmapRenderId = 0;
 
 export function isPlotlyReady() {
   return typeof globalThis.Plotly?.react === 'function';
+}
+
+function plotlyConfig(filename) {
+  const safeFilename = plotDownloadFilename(filename);
+  return {
+    responsive: true,
+    displaylogo: false,
+    toImageButtonOptions: {
+      format: 'png',
+      filename: safeFilename,
+      scale: 2,
+    },
+    modeBarButtonsToAdd: [{
+      name: 'Download SVG',
+      icon: PLOTLY_SVG_DOWNLOAD_ICON,
+      click: (plotEl) => {
+        globalThis.Plotly?.downloadImage?.(plotEl, {
+          format: 'svg',
+          filename: plotDownloadFilename(safeFilename, plotEl),
+        });
+      },
+    }],
+  };
+}
+
+function plotDownloadFilename(filename, plotEl) {
+  const fallback = typeof plotEl?.id === 'string' && plotEl.id
+    ? plotEl.id
+    : 'rnaseq-report-plot';
+  return String(filename || fallback).replace(/[^A-Za-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || 'rnaseq-report-plot';
 }
 
 export function renderPCA(colorBy = 'condition', pair = 'PC1,PC2', shapeBy = 'none', projection = '2d') {
@@ -110,7 +145,7 @@ export function renderPCA(colorBy = 'condition', pair = 'PC1,PC2', shapeBy = 'no
     layout.xaxis = { title: `${xKey} (${pct(variance[xKey])})` };
     layout.yaxis = { title: `${yKey} (${pct(variance[yKey])})` };
   }
-  Plotly.react('pca-plot', traces, layout, { responsive: true });
+  Plotly.react('pca-plot', traces, layout, plotlyConfig('pca-plot'));
   renderScree();
 }
 
@@ -131,7 +166,7 @@ export function renderScree() {
     yaxis: { title: '% variance', rangemode: 'tozero', gridcolor: '#e5e7eb' },
     bargap: 0.28,
     showlegend: false,
-  }, { responsive: true });
+  }, plotlyConfig('pca-variance-explained'));
 }
 
 export function renderDistanceHeatmap() {
@@ -188,7 +223,7 @@ export function renderQCPlots() {
       x: rows.map((r) => r.sample_id),
       y: rows.map((r) => Number(r[spec.key])),
       type: 'bar',
-    }], { ...plotLayout(spec.title), yaxis: spec.yaxis }, { responsive: true });
+    }], { ...plotLayout(spec.title), yaxis: spec.yaxis }, plotlyConfig(spec.id));
   });
 }
 
@@ -232,7 +267,7 @@ export function renderVolcano(rows, padj = 0.05, lfc = 1) {
       borderpad: 4,
       text: `${cappedCount} point${cappedCount === 1 ? '' : 's'} capped at -log10(padj)=${formatNumber(yCap)}`,
     }] : [],
-  }, { responsive: true });
+  }, plotlyConfig('volcano-plot'));
 }
 
 export function renderMA(rows, padj = 0.05, lfc = 1) {
@@ -244,7 +279,7 @@ export function renderMA(rows, padj = 0.05, lfc = 1) {
     xaxis: { title: 'baseMean', type: 'log' },
     yaxis: { title: 'log2 fold change' },
     legend: { tracegroupgap: 4 },
-  }, { responsive: true });
+  }, plotlyConfig('ma-plot'));
 }
 
 export function renderGeneCounts(geneQuery, options = {}) {
@@ -293,7 +328,7 @@ function renderGeneCountBarPlot(row, sampleIds, status) {
     ...plotLayout(`${geneCountLabel(row)} counts`),
     xaxis: { title: 'Sample' },
     yaxis: { title: 'Count' },
-  }, { responsive: true });
+  }, plotlyConfig(`${geneCountLabel(row)}-count-barplot`));
 }
 
 function renderGeneCountBoxPlot(row, sampleIds, groupColumn, splitColumn, status, plot) {
@@ -348,7 +383,7 @@ function renderGeneCountBoxPlot(row, sampleIds, groupColumn, splitColumn, status
     xaxis: { title: groupColumn },
     yaxis: { title: 'Count' },
     boxmode: 'group',
-  }, { responsive: true });
+  }, plotlyConfig(`${geneCountLabel(row)}-count-boxplot`));
 }
 
 function renderGeneCountSplitBoxPlot(row, sampleIds, groupColumn, splitColumn, status, plot) {
@@ -399,7 +434,7 @@ function renderGeneCountSplitBoxPlot(row, sampleIds, groupColumn, splitColumn, s
     yaxis: { title: 'Count' },
     boxmode: 'group',
     legend: { title: { text: splitColumn } },
-  }, { responsive: true });
+  }, plotlyConfig(`${geneCountLabel(row)}-count-boxplot-${groupColumn}-by-${splitColumn}`));
 }
 
 export function renderEnrichment(rows) {
@@ -493,7 +528,7 @@ function renderDirectionalEnrichment(plot, directionalRows) {
     shapes: [
       { type: 'line', x0: 0, x1: 0, yref: 'paper', y0: 0, y1: 1, line: { color: '#64748b', width: 1 } },
     ],
-  }, { responsive: true });
+  }, plotlyConfig('gsea-directional-pathways'));
 }
 
 function renderLegacyEnrichment(plot, rows) {
@@ -522,7 +557,7 @@ function renderLegacyEnrichment(plot, rows) {
       categoryorder: 'array',
       categoryarray: termKeys,
     },
-  }, { responsive: true });
+  }, plotlyConfig('gsea-top-enriched-terms'));
 }
 
 export function renderGseaRunningEnrichment(curve) {
@@ -596,7 +631,7 @@ export function renderGseaRunningEnrichment(curve) {
       { type: 'line', xref: 'paper', x0: 0, x1: 1, y0: 0, y1: 0, line: { color: '#ef4444', width: 1 } },
       ...(Number.isFinite(es) ? [{ type: 'line', xref: 'paper', x0: 0, x1: 1, y0: es, y1: es, line: { color: '#ef4444', dash: 'dash', width: 1 } }] : []),
     ],
-  }, { responsive: true });
+  }, plotlyConfig('gsea-running-enrichment-score'));
 }
 
 function volcanoDisplayCap(rows, padj) {
@@ -846,13 +881,13 @@ function renderClusteredDistanceHeatmap(sampleIds, matrix, clustering) {
   const heatmapTrace = distanceHeatmapTrace(positions, orderedSampleIds, orderedMatrix, true);
   const topDendrogram = dendrogramTrace(clustering.tree, 'top');
   const leftDendrogram = dendrogramTrace(clustering.tree, 'left');
-  Plotly.react('distance-heatmap', [topDendrogram, leftDendrogram, heatmapTrace], distanceHeatmapLayout(orderedSampleIds, clustering.maxHeight, true), { responsive: true });
+  Plotly.react('distance-heatmap', [topDendrogram, leftDendrogram, heatmapTrace], distanceHeatmapLayout(orderedSampleIds, clustering.maxHeight, true), plotlyConfig('sample-distance-clustered-heatmap'));
 }
 
 function renderPlainDistanceHeatmap(sampleIds, matrix) {
   if (!requirePlotly('distance-heatmap', 'Sample distance plotting requires Plotly.')) return;
   const positions = sampleIds.map((_, index) => index);
-  Plotly.react('distance-heatmap', [distanceHeatmapTrace(positions, sampleIds, matrix, false)], distanceHeatmapLayout(sampleIds, 0, false), { responsive: true });
+  Plotly.react('distance-heatmap', [distanceHeatmapTrace(positions, sampleIds, matrix, false)], distanceHeatmapLayout(sampleIds, 0, false), plotlyConfig('sample-distance-heatmap'));
 }
 
 function distanceHeatmapTrace(positions, sampleIds, matrix, clustered) {
