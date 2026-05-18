@@ -361,6 +361,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .tip-icon { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border: 1px solid #bfdbfe; border-radius: 999px; background: var(--accent-soft); color: var(--accent); font-size: 12px; font-weight: 800; line-height: 1; cursor: help; }
 .tip-icon:focus { outline: 2px solid #93c5fd; outline-offset: 2px; }
 .tip-bubble { position: absolute; top: calc(100% + 8px); left: 50%; z-index: 40; width: min(320px, calc(100vw - 56px)); padding: 9px 10px; border-radius: 8px; background: #0f172a; color: white; box-shadow: var(--shadow); font-size: 12px; font-weight: 400; line-height: 1.4; white-space: normal; opacity: 0; visibility: hidden; pointer-events: none; transform: translateX(-50%); }
+.modal-field-label .tip-bubble { left: 0; width: min(360px, calc(100vw - 72px)); transform: none; }
 .tip-wrap:hover .tip-bubble, .tip-wrap:focus-within .tip-bubble { opacity: 1; visibility: visible; }
 .annotation-strip { display: grid; grid-template-columns: minmax(80px, auto) 1fr; gap: 10px 14px; align-items: center; margin: 6px 0 14px; color: var(--muted); }
 .annotation-label { font-weight: 700; color: var(--ink); }
