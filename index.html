@@ -388,12 +388,14 @@
             <label>Contrast <select id="contrast-select"></select></label>
             <label>padj <= <input id="padj-threshold" type="number" step="0.01" value="0.05" /></label>
             <label>|log2FC| >= <input id="lfc-threshold" type="number" step="0.25" value="1" /></label>
+            <label class="check-label"><input id="de-show-all-genes" type="checkbox" /> Show all genes</label>
             <button id="de-apply">Apply</button>
           </div>
           <div class="grid two">
             <div id="volcano-plot" class="plot tall"></div>
             <div id="ma-plot" class="plot tall"></div>
           </div>
+          <p class="note" id="de-table-status"></p>
           <div id="de-table"></div>
         </article>
         <article class="card">

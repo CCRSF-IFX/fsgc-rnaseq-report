@@ -530,6 +530,7 @@ function wireControls() {
     renderCurrentPCA();
   });
   document.getElementById('de-apply')?.addEventListener('click', renderCurrentContrast);
+  document.getElementById('de-show-all-genes')?.addEventListener('change', renderCurrentContrast);
   document.getElementById('contrast-select')?.addEventListener('change', renderCurrentContrast);
   document.getElementById('enrichment-contrast-select')?.addEventListener('change', renderCurrentEnrichment);
   document.getElementById('gsea-result-select')?.addEventListener('change', renderCurrentEnrichment);

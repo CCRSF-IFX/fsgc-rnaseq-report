@@ -18,8 +18,32 @@ export async function renderCurrentContrast() {
   const rows = await loadDeForContrast(contrast);
   const padj = Number(document.getElementById('padj-threshold')?.value || 0.05);
   const lfc = Number(document.getElementById('lfc-threshold')?.value || 1);
+  const showAll = Boolean(document.getElementById('de-show-all-genes')?.checked);
   renderVolcano(rows, padj, lfc);
   renderMA(rows, padj, lfc);
-  const filtered = rows.filter((r) => numericPValue(r.padj) <= padj && Math.abs(Number(r.log2FoldChange)) >= lfc);
-  renderTable('de-table', filtered, { limit: 200, exportName: `${contrast.id}.filtered.csv` });
+  const degRows = rows.filter((row) => isDeg(row, padj, lfc));
+  const tableRows = (showAll ? rows : degRows).map((row) => ({
+    significance: deTableCategory(row, padj, lfc),
+    ...row,
+  }));
+  const tableStatus = document.getElementById('de-table-status');
+  if (tableStatus) {
+    tableStatus.textContent = showAll
+      ? `Showing all ${rows.length.toLocaleString()} genes. Use the significance column to filter volcano categories.`
+      : `Showing ${degRows.length.toLocaleString()} DEG rows passing padj <= ${padj} and |log2FC| >= ${lfc}. Turn on "Show all genes" for the full DE result.`;
+  }
+  renderTable('de-table', tableRows, { exportName: `${contrast.id}.${showAll ? 'all' : 'deg'}.csv` });
+}
+
+function isDeg(row, padj, lfc) {
+  return numericPValue(row.padj) <= padj && Math.abs(Number(row.log2FoldChange)) >= lfc;
+}
+
+function deTableCategory(row, padj, lfc) {
+  const adjustedP = numericPValue(row.padj);
+  const log2fc = Number(row.log2FoldChange);
+  if (!Number.isFinite(adjustedP) || adjustedP > padj || !Number.isFinite(log2fc)) return 'not significant';
+  if (log2fc >= lfc) return 'upregulated';
+  if (log2fc <= -lfc) return 'downregulated';
+  return 'padj only';
 }
