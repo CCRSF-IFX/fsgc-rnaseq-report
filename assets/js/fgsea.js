@@ -109,7 +109,7 @@ export async function runFgseaAnalysis() {
     const totalPathways = completed.reduce((sum, result) => sum + result.rows.length, 0);
     const sourceLabel = completed.length === 1 ? completed[0].source_label : `${completed.length} GMT files`;
     const totalCurves = completed.reduce((sum, result) => sum + (result.enrichment_curves || []).length, 0);
-    const message = `fgsea complete for ${contrast.label || contrast.id}: ${totalPathways} pathway rows and ${totalCurves} pathway plot${totalCurves === 1 ? '' : 's'} across ${sourceLabel}.`;
+    const message = `fgsea complete for ${contrast.label || contrast.id}: ${totalPathways} pathway rows across ${sourceLabel}. Retained running ES plots: ${totalCurves}.`;
     fgseaSetStatus(status, message);
     await progress.done(`${totalPathways} pathway rows`);
     logAnalysis(message);

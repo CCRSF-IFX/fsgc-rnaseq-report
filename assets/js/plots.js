@@ -10,7 +10,7 @@ const PCA_SYMBOLS = ['circle', 'square', 'diamond', 'cross', 'x', 'triangle-up',
 const PCA_SYMBOLS_3D = ['circle', 'square', 'diamond', 'cross', 'x', 'circle-open', 'square-open', 'diamond-open'];
 const VOLCANO_DISPLAY_CAP = 50;
 const HCLUST_ESM_URL = 'https://esm.sh/ml-hclust@4.0.0?bundle';
-const ENRICHMENT_DIRECTION_LIMIT = 10;
+const DEFAULT_ENRICHMENT_DIRECTION_LIMIT = 10;
 const ENRICHMENT_UP_COLOR = '#dc2626';
 const ENRICHMENT_DOWN_COLOR = '#2563eb';
 const PLOTLY_UNAVAILABLE_MESSAGE = 'Plotly is still loading or unavailable. Tables and non-Plotly controls remain available.';
@@ -437,7 +437,7 @@ function renderGeneCountSplitBoxPlot(row, sampleIds, groupColumn, splitColumn, s
   }, plotlyConfig(`${geneCountLabel(row)}-count-boxplot-${groupColumn}-by-${splitColumn}`));
 }
 
-export function renderEnrichment(rows) {
+export function renderEnrichment(rows, options = {}) {
   const plot = document.getElementById('enrichment-plot');
   if (!plot) return;
   const sourceRows = Array.isArray(rows) ? rows : [];
@@ -450,7 +450,7 @@ export function renderEnrichment(rows) {
   const directionalRows = enrichmentDirectionalRows(sourceRows);
 
   if (directionalRows.length) {
-    renderDirectionalEnrichment(plot, directionalRows);
+    renderDirectionalEnrichment(plot, directionalRows, options);
     return;
   }
 
@@ -475,8 +475,8 @@ function enrichmentDirectionalRows(rows) {
 }
 
 function topDirectionalEnrichmentRows(directionalRows, options = {}) {
-  const upLimit = enrichmentDirectionLimit(options.upLimit, ENRICHMENT_DIRECTION_LIMIT);
-  const downLimit = enrichmentDirectionLimit(options.downLimit, ENRICHMENT_DIRECTION_LIMIT);
+  const upLimit = enrichmentDirectionLimit(options.upLimit, DEFAULT_ENRICHMENT_DIRECTION_LIMIT);
+  const downLimit = enrichmentDirectionLimit(options.downLimit, DEFAULT_ENRICHMENT_DIRECTION_LIMIT);
   const upRows = directionalRows
     .filter((item) => item.direction > 0)
     .sort(enrichmentDirectionalSort)
@@ -497,8 +497,8 @@ function topLegacyEnrichmentRows(rows) {
   return rows.slice().sort((a, b) => enrichmentPValue(a) - enrichmentPValue(b)).slice(0, 15).reverse();
 }
 
-function renderDirectionalEnrichment(plot, directionalRows) {
-  const selected = topDirectionalEnrichmentRows(directionalRows);
+function renderDirectionalEnrichment(plot, directionalRows, options = {}) {
+  const selected = topDirectionalEnrichmentRows(directionalRows, options);
   if (!selected.length) {
     clearPlot(plot, 'No directional GSEA pathways are available.');
     return;
