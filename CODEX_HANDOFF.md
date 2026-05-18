@@ -156,7 +156,7 @@ From `/Users/xies4/github/rna_report/rnaseq-report`:
 python3 scripts/validate_assets.py assets/data
 python3 scripts/validate_assets.py assets/data/simulated
 python3 -m json.tool assets/report_config.json >/dev/null
-python3 -m py_compile scripts/validate_assets.py scripts/build_standalone_report.py scripts/qc_excel.py
+python3 -m py_compile scripts/validate_assets.py scripts/build_report_bundle.py scripts/qc_excel.py
 node --check assets/js/app.js
 node --check assets/js/analysis.js
 node --check assets/js/dataLoader.js
@@ -169,8 +169,8 @@ node --check assets/js/plots.js
 node --check assets/js/userData.js
 ruby -e 'require "yaml"; YAML.load_file(".github/workflows/deploy-pages.yml"); puts "yaml ok"'
 awk '{ gsub(/^[[:space:]]+|[[:space:]]+$/, "", $0); if ($0 == "" || substr($0, 1, 1) == "#") next; if (!seen[$0]++) { if (out != "") out = out ","; out = out $0 } } END { print out }' webr-packages/packages
-python3 scripts/build_standalone_report.py
-python3 scripts/build_standalone_report.py --data-root assets/data/simulated --output dist/simulated-report.html
+python3 scripts/build_report_bundle.py
+python3 scripts/build_report_bundle.py --data-root assets/data/simulated --output dist/simulated-report.html
 ```
 
 Expected package parser output:

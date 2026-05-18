@@ -28,7 +28,7 @@ this report.
 - `assets/report_config.json` - report title, data root, analysis settings, QC thresholds, and webR package configuration.
 - `schemas/` - documented JSON structures.
 - `scripts/validate_assets.py` - lightweight asset validator.
-- `scripts/build_standalone_report.py` - builds a double-clickable single-file HTML report.
+- `scripts/build_report_bundle.py` - bundles the report app, config, data assets, and optional profiles into a double-clickable single-file HTML report.
 - `webr-packages/` - versioned package snapshot definition for optional webR modules.
 - `.github/workflows/deploy-pages.yml` - GitHub Pages deployment plus report-scoped webR package repo build.
 
@@ -54,7 +54,7 @@ Do not rely on double-clicking `index.html`. Browsers commonly block local
 For users who should not run a local server, build a single HTML file:
 
 ```bash
-python3 scripts/build_standalone_report.py
+python3 scripts/build_report_bundle.py
 ```
 
 Send the generated file:
@@ -86,7 +86,7 @@ on sample-level metadata.
 For a larger report that can render plots without internet access, inline Plotly:
 
 ```bash
-python3 scripts/build_standalone_report.py --embed-plotly
+python3 scripts/build_report_bundle.py --embed-plotly
 ```
 
 `--embed-plotly` only inlines Plotly. The Clustergrammer heatmap still loads
@@ -96,16 +96,16 @@ scripts and update `assets/js/heatmap.js`.
 Useful builder options:
 
 ```bash
-python3 scripts/build_standalone_report.py --data-root path/to/data
-python3 scripts/build_standalone_report.py --project-title "Study 42 RNA-seq" --project-abbr S42 --run-id "batch-2026-05-16"
-python3 scripts/build_standalone_report.py --project-logo path/to/logo.svg
-python3 scripts/build_standalone_report.py --report-author "Jane Doe" --report-organization "Example Bioinformatics Core"
-python3 scripts/build_standalone_report.py --report-version "0.2.0"
-python3 scripts/build_standalone_report.py --data-root path/to/fsgc-rsem-data --FSGC
-python3 scripts/build_standalone_report.py --data-root path/to/data-with-qc-excel --include-qc-excel
-python3 scripts/build_standalone_report.py --output path/to/report.html
-python3 scripts/build_standalone_report.py --plotly-file path/to/plotly.min.js
-python3 scripts/build_standalone_report.py --plotly-url https://cdn.plot.ly/plotly-2.35.2.min.js
+python3 scripts/build_report_bundle.py --data-root path/to/data
+python3 scripts/build_report_bundle.py --project-title "Study 42 RNA-seq" --project-abbr S42 --run-id "batch-2026-05-16"
+python3 scripts/build_report_bundle.py --project-logo path/to/logo.svg
+python3 scripts/build_report_bundle.py --report-author "Jane Doe" --report-organization "Example Bioinformatics Core"
+python3 scripts/build_report_bundle.py --report-version "0.2.0"
+python3 scripts/build_report_bundle.py --data-root path/to/fsgc-rsem-data --profile fsgc-rsem
+python3 scripts/build_report_bundle.py --data-root path/to/data-with-qc-excel --include-qc-excel
+python3 scripts/build_report_bundle.py --output path/to/report.html
+python3 scripts/build_report_bundle.py --plotly-file path/to/plotly.min.js
+python3 scripts/build_report_bundle.py --plotly-url https://cdn.plot.ly/plotly-2.35.2.min.js
 ```
 
 `--data-root` lets you build a standalone report from a specific data directory
@@ -131,10 +131,10 @@ that default for a specific build.
 that label is empty and hidden. `--report-author`, `--report-organization`, and
 `--report-version` override the attribution and report template version shown in
 the header, overview, and provenance table.
-`--FSGC` marks the embedded count matrix as FSGC-format RSEM expected counts in
-the generated report config and provenance. Use it for FSGC RSEM outputs where
-the count matrix may store gene symbols inside `gene_id` values such as
-`ENSG00000004777.18_ARHGAP33`.
+`--profile fsgc-rsem` marks the embedded count matrix as FSGC-format RSEM
+expected counts in the generated report config and provenance. Use it for FSGC
+RSEM outputs where the count matrix may store gene symbols inside `gene_id`
+values such as `ENSG00000004777.18_ARHGAP33`.
 
 `dist/` is ignored by git because generated report files can contain run-specific
 data.
@@ -381,7 +381,7 @@ python3 scripts/validate_assets.py assets/data/gse164073
 Build a single-file report from this dataset with:
 
 ```bash
-python3 scripts/build_standalone_report.py --data-root assets/data/gse164073 --output dist/gse164073-report.html
+python3 scripts/build_report_bundle.py --data-root assets/data/gse164073 --output dist/gse164073-report.html
 ```
 
 ## Optional webR Modules
@@ -652,7 +652,7 @@ Run these before pushing workflow or report changes:
 ```bash
 python3 scripts/validate_assets.py assets/data
 python3 -m json.tool assets/report_config.json >/dev/null
-python3 -m py_compile scripts/build_standalone_report.py scripts/validate_assets.py scripts/qc_excel.py
+python3 -m py_compile scripts/build_report_bundle.py scripts/validate_assets.py scripts/qc_excel.py
 node --check assets/js/app.js
 node --check assets/js/analysis.js
 node --check assets/js/dataLoader.js
@@ -665,7 +665,7 @@ node --check assets/js/plots.js
 node --check assets/js/userData.js
 ruby -e 'require "yaml"; YAML.load_file(".github/workflows/deploy-pages.yml"); puts "yaml ok"'
 awk '{ gsub(/^[[:space:]]+|[[:space:]]+$/, "", $0); if ($0 == "" || substr($0, 1, 1) == "#") next; if (!seen[$0]++) { if (out != "") out = out ","; out = out $0 } } END { print out }' webr-packages/packages
-python3 scripts/build_standalone_report.py
+python3 scripts/build_report_bundle.py
 ```
 
 Expected package parser output for the current repo:

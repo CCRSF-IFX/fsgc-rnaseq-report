@@ -25,5 +25,5 @@ python3 scripts/validate_assets.py assets/data/gse164073
 Build a single-file demo report with:
 
 ```bash
-python3 scripts/build_standalone_report.py --data-root assets/data/gse164073 --output dist/gse164073-report.html
+python3 scripts/build_report_bundle.py --data-root assets/data/gse164073 --output dist/gse164073-report.html
 ```
