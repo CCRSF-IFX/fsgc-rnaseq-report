@@ -2,7 +2,7 @@ import { state, setStatus, metadataColumns } from './state.js';
 import { loadCoreAssets } from './dataLoader.js';
 import { adjustVisibleDataTables, renderTable } from './tables.js';
 import { summarizeQC, badge, qcRowsWithStatus } from './qc.js';
-import { renderPCA, renderDistanceHeatmap, renderQCPlots, renderGeneCounts } from './plots.js?v=20260517-hclust';
+import { isPlotlyReady, renderPCA, renderDistanceHeatmap, renderQCPlots, renderGeneCounts } from './plots.js?v=20260518-plotly-resilience';
 import { populateContrastSelectors, renderCurrentContrast } from './de.js';
 import { renderCurrentEnrichment } from './enrichment.js';
 import { renderDownstreamCards } from './downstreamPlugins.js';
@@ -26,6 +26,7 @@ import {
 } from './metadataSchema.js';
 
 let packageSnapshotEventsWired = false;
+let plotlyLoadPromise = null;
 
 async function main() {
   wireTabs();
@@ -55,18 +56,18 @@ async function main() {
     renderAnalysisReadiness();
     renderDownstreamCards();
     renderPackageRepositoryPanel();
-    setStatus('Report assets loaded; loading plots...');
-    await waitForPlotly();
+    setupUserDataControls({ refresh: refreshReportFromState });
+    setupCountExplorerControls();
+    wireControls();
     renderQC();
     setupPcaControls();
     setupExpressionHeatmapControls();
     setupCanvasXpressHeatmapControls();
+    renderCountExplorerPlot({ allowEmpty: false });
     await renderCurrentContrast();
     await renderCurrentEnrichment();
-    setupUserDataControls({ refresh: refreshReportFromState });
-    setupCountExplorerControls();
-    wireControls();
-    setStatus('Report assets loaded');
+    setStatus(isPlotlyReady() ? 'Report assets loaded' : 'Report assets loaded; plots loading in background', { busy: !isPlotlyReady() });
+    loadPlotlyAndRenderPlots();
   } catch (error) {
     setStatus(`Error: ${error.message}`);
     console.error(error);
@@ -74,12 +75,17 @@ async function main() {
 }
 
 function waitForPlotly(timeoutMs = 30000) {
-  if (globalThis.Plotly) return Promise.resolve();
+  if (isPlotlyReady()) return Promise.resolve();
+  if (plotlyLoadPromise) return plotlyLoadPromise;
   const script = document.querySelector('[data-plotly]');
   if (!script) return Promise.reject(new Error('Plotly script is missing.'));
+  if (script.dataset.plotlyState === 'failed') return Promise.reject(new Error('Plotly failed to load.'));
+  if (script.dataset.plotlyState === 'loaded') return Promise.reject(new Error('Plotly loaded but did not initialize.'));
 
-  return new Promise((resolve, reject) => {
+  plotlyLoadPromise = new Promise((resolve, reject) => {
     let done = false;
+    let check;
+    let timeout;
     const cleanup = () => {
       script.removeEventListener('load', handleLoad);
       script.removeEventListener('error', handleError);
@@ -98,14 +104,44 @@ function waitForPlotly(timeoutMs = 30000) {
       cleanup();
       reject(new Error(message));
     };
-    const handleLoad = () => (globalThis.Plotly ? finish() : fail('Plotly loaded but did not initialize.'));
-    const handleError = () => fail('Plotly failed to load.');
-    const check = setInterval(() => { if (globalThis.Plotly) finish(); }, 50);
-    const timeout = setTimeout(() => fail('Plotly did not load within 30 seconds.'), timeoutMs);
+    const handleLoad = () => {
+      script.dataset.plotlyState = 'loaded';
+      if (isPlotlyReady()) finish();
+      else fail('Plotly loaded but did not initialize.');
+    };
+    const handleError = () => {
+      script.dataset.plotlyState = 'failed';
+      fail('Plotly failed to load.');
+    };
+    check = setInterval(() => { if (isPlotlyReady()) finish(); }, 50);
+    timeout = setTimeout(() => fail('Plotly did not load within 30 seconds.'), timeoutMs);
 
     script.addEventListener('load', handleLoad, { once: true });
     script.addEventListener('error', handleError, { once: true });
+  }).finally(() => {
+    plotlyLoadPromise = null;
   });
+
+  return plotlyLoadPromise;
+}
+
+function loadPlotlyAndRenderPlots() {
+  waitForPlotly()
+    .then(renderPlotlyViews)
+    .then(() => setStatus('Report assets loaded', { tone: 'ok' }))
+    .catch((error) => {
+      console.warn(error);
+      setStatus(`Report assets loaded; plots unavailable (${error.message})`, { tone: 'warn' });
+    });
+}
+
+async function renderPlotlyViews() {
+  renderQC();
+  renderCurrentPCA();
+  renderDistanceHeatmap();
+  renderCountExplorerPlot({ allowEmpty: false });
+  await renderCurrentContrast();
+  await renderCurrentEnrichment();
 }
 
 function renderHeader() {

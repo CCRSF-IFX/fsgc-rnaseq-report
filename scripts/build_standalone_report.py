@@ -261,7 +261,7 @@ def plotly_tag(args: argparse.Namespace, repo_root: Path) -> str:
         plotly_source = download_text(args.plotly_url)
         return f"<script>\n{plotly_source}\n</script>"
 
-    return f'<script src="{args.plotly_url}" defer data-plotly></script>'
+    return f'<script src="{args.plotly_url}" async data-plotly onload="this.dataset.plotlyState=\'loaded\'" onerror="this.dataset.plotlyState=\'failed\'"></script>'
 
 
 def download_text(url: str) -> str:

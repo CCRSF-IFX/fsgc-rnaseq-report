@@ -13,6 +13,7 @@ const HCLUST_ESM_URL = 'https://esm.sh/ml-hclust@4.0.0?bundle';
 const ENRICHMENT_DIRECTION_LIMIT = 10;
 const ENRICHMENT_UP_COLOR = '#dc2626';
 const ENRICHMENT_DOWN_COLOR = '#2563eb';
+const PLOTLY_UNAVAILABLE_MESSAGE = 'Plotly is still loading or unavailable. Tables and non-Plotly controls remain available.';
 const DE_CATEGORIES = [
   { id: 'upregulated', label: 'upregulated', color: '#dc2626', opacity: 0.82 },
   { id: 'downregulated', label: 'downregulated', color: '#2563eb', opacity: 0.82 },
@@ -22,7 +23,16 @@ const DE_CATEGORIES = [
 let hclustModulePromise = null;
 let distanceHeatmapRenderId = 0;
 
+export function isPlotlyReady() {
+  return typeof globalThis.Plotly?.react === 'function';
+}
+
 export function renderPCA(colorBy = 'condition', pair = 'PC1,PC2', shapeBy = 'none', projection = '2d') {
+  if (!isPlotlyReady()) {
+    showPlotlyPlaceholder('pca-plot', 'PCA plotting requires Plotly. Controls remain available while Plotly loads.');
+    showPlotlyPlaceholder('scree-plot', 'Variance plotting requires Plotly. Controls remain available while Plotly loads.');
+    return;
+  }
   const points = state.pca.samples || [];
   const pcKeys = pcaComponentKeys(points);
   const is3d = projection === '3d' && pcKeys.length >= 3;
@@ -105,6 +115,7 @@ export function renderPCA(colorBy = 'condition', pair = 'PC1,PC2', shapeBy = 'no
 }
 
 export function renderScree() {
+  if (!requirePlotly('scree-plot', 'Variance plotting requires Plotly.')) return;
   const variance = state.pca.variance_explained || {};
   const pcs = Object.keys(variance);
   Plotly.react('scree-plot', [{
@@ -125,6 +136,10 @@ export function renderScree() {
 
 export function renderDistanceHeatmap() {
   if (!state.distance) return;
+  if (!requirePlotly('distance-heatmap', 'Sample distance plotting requires Plotly. Heatmap controls remain available.')) {
+    renderClusteringStatus('Sample distance plotting will render after Plotly loads.');
+    return;
+  }
   const renderId = ++distanceHeatmapRenderId;
   const sampleIds = state.distance.sample_ids || [];
   const matrix = normalizeDistanceMatrix(state.distance.matrix || [], sampleIds.length);
@@ -150,6 +165,10 @@ export function renderQCPlots() {
   const rows = qcRowsWithStatus();
   const plots = document.getElementById('qc-plots');
   if (!plots) return;
+  if (!isPlotlyReady()) {
+    plots.innerHTML = `<p class="note">${escapePlotText(PLOTLY_UNAVAILABLE_MESSAGE)}</p>`;
+    return;
+  }
   const specs = [
     { id: 'reads-plot', key: 'total_reads', title: 'Total reads (PF)', yaxis: { title: 'reads' } },
     { id: 'mapping-plot', key: 'mapping_rate', title: 'Mapped reads (trimmed)', yaxis: { tickformat: '.0%', range: [0, 1] } },
@@ -174,6 +193,7 @@ export function renderQCPlots() {
 }
 
 export function renderVolcano(rows, padj = 0.05, lfc = 1) {
+  if (!requirePlotly('volcano-plot', 'Volcano plotting requires Plotly. The differential-expression table remains available.')) return;
   const yCap = volcanoDisplayCap(rows, padj);
   const points = rows.map((row) => volcanoPoint(row, padj, lfc, yCap)).filter(Boolean);
   const cappedCount = points.filter((point) => point.capped).length;
@@ -216,6 +236,7 @@ export function renderVolcano(rows, padj = 0.05, lfc = 1) {
 }
 
 export function renderMA(rows, padj = 0.05, lfc = 1) {
+  if (!requirePlotly('ma-plot', 'MA plotting requires Plotly. The differential-expression table remains available.')) return;
   const points = rows.map((row) => maPoint(row, padj, lfc)).filter(Boolean);
   const traces = DE_CATEGORIES.map((category) => maTrace(points.filter((point) => point.category === category.id), category)).filter(Boolean);
   Plotly.react('ma-plot', traces, {
@@ -234,6 +255,12 @@ export function renderGeneCounts(geneQuery, options = {}) {
   if (!query) {
     clearGeneCountPlot(plot);
     if (status) status.textContent = 'Enter a gene symbol or ID.';
+    return;
+  }
+  if (!isPlotlyReady()) {
+    clearGeneCountPlot(plot);
+    plot.innerHTML = `<p class="note">${escapePlotText(PLOTLY_UNAVAILABLE_MESSAGE)}</p>`;
+    if (status) status.textContent = 'Gene count plotting requires Plotly.';
     return;
   }
 
@@ -383,6 +410,7 @@ export function renderEnrichment(rows) {
     clearPlot(plot, 'Run GSEA to show enriched pathways.');
     return;
   }
+  if (!requirePlotly(plot, 'GSEA plotting requires Plotly. The enrichment table remains available.')) return;
 
   const directionalRows = sourceRows
     .map((row) => {
@@ -514,6 +542,7 @@ export function renderGseaRunningEnrichment(curve) {
     clearPlot(plot, 'No running enrichment-score points are available for this pathway.');
     return;
   }
+  if (!requirePlotly(plot, 'Running enrichment-score plotting requires Plotly.')) return;
 
   const hits = (Array.isArray(curve.hits) ? curve.hits : [])
     .map((hit) => ({
@@ -581,6 +610,18 @@ function volcanoDisplayCap(rows, padj) {
 function clearPlot(plot, message = '') {
   globalThis.Plotly?.purge?.(plot);
   plot.innerHTML = message ? `<p class="note">${escapePlotText(message)}</p>` : '';
+}
+
+function requirePlotly(plotOrId, message = PLOTLY_UNAVAILABLE_MESSAGE) {
+  if (isPlotlyReady()) return true;
+  showPlotlyPlaceholder(plotOrId, message);
+  return false;
+}
+
+function showPlotlyPlaceholder(plotOrId, message = PLOTLY_UNAVAILABLE_MESSAGE) {
+  const plot = typeof plotOrId === 'string' ? document.getElementById(plotOrId) : plotOrId;
+  if (!plot) return;
+  clearPlot(plot, message);
 }
 
 function volcanoPoint(row, padj, lfc, yCap) {
@@ -793,6 +834,7 @@ function assignClusterPositions(node, leafOrder) {
 }
 
 function renderClusteredDistanceHeatmap(sampleIds, matrix, clustering) {
+  if (!requirePlotly('distance-heatmap', 'Sample distance plotting requires Plotly.')) return;
   if (!clustering) {
     renderPlainDistanceHeatmap(sampleIds, matrix);
     renderClusteringStatus('Hierarchical clustering requires at least two samples and a valid distance matrix.');
@@ -808,6 +850,7 @@ function renderClusteredDistanceHeatmap(sampleIds, matrix, clustering) {
 }
 
 function renderPlainDistanceHeatmap(sampleIds, matrix) {
+  if (!requirePlotly('distance-heatmap', 'Sample distance plotting requires Plotly.')) return;
   const positions = sampleIds.map((_, index) => index);
   Plotly.react('distance-heatmap', [distanceHeatmapTrace(positions, sampleIds, matrix, false)], distanceHeatmapLayout(sampleIds, 0, false), { responsive: true });
 }
