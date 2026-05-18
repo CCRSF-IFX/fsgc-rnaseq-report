@@ -1,15 +1,22 @@
-import { installRPackages, loadRPackage } from './webrManager.js';
+import { getRPackageVersions, installRPackages, loadRPackage } from './webrManager.js';
 import { ensurePackageSnapshotAvailable } from './packageSnapshot.js';
 import { createProgressReporter, logAnalysis, runWithProgressPulse } from './state.js';
 
 const packageStatus = new Map();
+const packageVersions = new Map();
 
 export function getPackageStatus(pkg) {
   return packageStatus.get(pkg) || 'not-installed';
 }
 
-export function markPackagesAvailable(packages, status = 'mounted') {
+export function getPackageVersion(pkg) {
+  return packageVersions.get(pkg) || '';
+}
+
+export function markPackagesAvailable(packages, status = 'mounted', options = {}) {
+  const versions = options.versions || {};
   uniquePackageNames(packages).forEach((pkg) => packageStatus.set(pkg, status));
+  markPackageVersions(versions, { notify: false });
   notifyPackageStatusChanged();
 }
 
@@ -26,7 +33,11 @@ export async function ensureRPackages(packages, options = {}) {
   const loadTargets = uniquePackageNames(options.load || packages);
   const missing = installTargets.filter((pkg) => !isPackageAvailable(pkg));
   const needsLoad = loadTargets.filter((pkg) => getPackageStatus(pkg) !== 'loaded');
-  if (missing.length === 0 && needsLoad.length === 0) return;
+  if (missing.length === 0 && needsLoad.length === 0) {
+    markPackageVersions(await getRPackageVersions(installTargets), { notify: false });
+    notifyPackageStatusChanged();
+    return;
+  }
 
   const progress = createProgressReporter('R package setup', Math.max(3, missing.length + needsLoad.length + (missing.length ? 3 : 2)));
   let step = 1;
@@ -55,6 +66,7 @@ export async function ensureRPackages(packages, options = {}) {
       await progress.step(`Loading ${pkg}`, step + index);
       await loadPackageWithStatus(pkg);
     }
+    markPackageVersions(await getRPackageVersions(installTargets), { notify: false });
     await progress.done(`Packages ready: ${loadTargets.join(', ')}`);
     notifyPackageStatusChanged();
   } catch (error) {
@@ -68,6 +80,15 @@ export async function ensureRPackages(packages, options = {}) {
 
 function uniquePackageNames(packages) {
   return Array.from(new Set((packages || []).map((pkg) => String(pkg || '').trim()).filter(Boolean)));
+}
+
+export function markPackageVersions(versions, options = {}) {
+  Object.entries(versions || {}).forEach(([pkg, version]) => {
+    const cleanPkg = String(pkg || '').trim();
+    const cleanVersion = String(version || '').trim();
+    if (cleanPkg && cleanVersion) packageVersions.set(cleanPkg, cleanVersion);
+  });
+  if (options.notify !== false) notifyPackageStatusChanged();
 }
 
 async function loadPackageWithStatus(pkg) {

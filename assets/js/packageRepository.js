@@ -1,8 +1,18 @@
 import { state, logAnalysis, setStatus, yieldToBrowser } from './state.js';
-import { arePackagesAvailable, ensureRPackages, getPackageStatus, markPackagesAvailable } from './packageManager.js';
+import {
+  arePackagesAvailable,
+  ensureRPackages,
+  getPackageStatus,
+  getPackageVersion,
+  markPackagesAvailable,
+  markPackageVersions,
+} from './packageManager.js';
 import { mountRLibraryBundle } from './webrManager.js';
 import { checkPackageSnapshot, getPackageSnapshotStatus, packageSnapshotBaseUrl, packageSnapshotCanInstall, packageSnapshotIndexUrl } from './packageSnapshot.js';
 import { enhanceTablesWithin } from './tables.js';
+
+let packageRepoVersionLoadPromise = null;
+let packageRepoVersionLoadAttemptedUrl = '';
 
 export function renderPackageRepositoryPanel() {
   const container = document.getElementById('package-repository-panel');
@@ -23,26 +33,38 @@ export function renderPackageRepositoryPanel() {
   const snapshotStatus = getPackageSnapshotStatus();
   const canInstallOrLoad = packageRepoCanInstallOrLoad(packages);
   const installDisabled = disabled || !packages.length || !canInstallOrLoad ? 'disabled' : '';
+  const repoDisplay = packageRepoDisplayUrl(repoUrl || indexUrl);
+  const packageSummary = `${visiblePackages.length} top-level package${visiblePackages.length === 1 ? '' : 's'}`;
+  const dependencySummary = `${dependencyCount} dependenc${dependencyCount === 1 ? 'y' : 'ies'} included`;
 
   container.innerHTML = `
     <section class="package-panel">
-      <div>
-        <h4>webR package snapshot</h4>
-        <p class="note">${packageRepoEscapeHtml(cfg.packageRepoVersion || 'unversioned')} · ${packageRepoEscapeHtml(repoUrl || 'not configured')}</p>
-        <p class="note">Showing top-level packages only; ${dependencyCount} dependencies are included in the snapshot.</p>
-        <div id="package-snapshot-availability" class="status-message ${packageRepoSnapshotTone(snapshotStatus)}">${packageRepoEscapeHtml(packageRepoSnapshotMessage(snapshotStatus))}</div>
+      <div class="package-panel-header">
+        <div class="package-panel-heading">
+          <span class="package-eyebrow">webR packages</span>
+          <h4>Package snapshot</h4>
+          <p class="note">${packageRepoEscapeHtml(cfg.packageRepoVersion || 'unversioned')} · ${packageRepoEscapeHtml(repoDisplay || 'repository not configured')}</p>
+        </div>
+        <div class="package-summary-pills" aria-label="Package summary">
+          <span>${packageRepoEscapeHtml(packageSummary)}</span>
+          <span>${packageRepoEscapeHtml(dependencySummary)}</span>
+        </div>
       </div>
-      <div class="package-actions">
-        <button class="secondary" id="package-check" ${disabled}>${snapshotStatus.state === 'checking' ? 'Checking snapshot...' : 'Check snapshot'}</button>
-        <button id="package-install" ${installDisabled}>Install/load packages</button>
-        <button class="secondary" id="package-download-snapshot" type="button" data-download-url="${packageRepoEscapeHtml(bundleUrl)}" data-download-name="${packageRepoEscapeHtml(bundleFilename)}" ${bundleUrl ? '' : 'disabled'}>Download snapshot ZIP</button>
+      <div id="package-snapshot-availability" class="status-message package-snapshot-message ${packageRepoSnapshotTone(snapshotStatus)}">${packageRepoEscapeHtml(packageRepoSnapshotMessage(snapshotStatus))}</div>
+      <div class="package-action-row">
+        <div class="package-actions package-actions-tight">
+          <button class="secondary" id="package-check" ${disabled}>${snapshotStatus.state === 'checking' ? 'Checking snapshot...' : 'Check snapshot'}</button>
+          <button id="package-install" ${installDisabled}>Install/load packages</button>
+          <button class="secondary" id="package-download-snapshot" type="button" data-download-url="${packageRepoEscapeHtml(bundleUrl)}" data-download-name="${packageRepoEscapeHtml(bundleFilename)}" ${bundleUrl ? '' : 'disabled'}>Download snapshot ZIP</button>
+        </div>
+        ${packageRepoResourceLinks(indexUrl, repoUrl)}
       </div>
       <div class="package-local-bundle">
-        <div>
+        <div class="package-local-copy">
           <strong>Local webR library bundle</strong>
           <p class="note">Load ${packageRepoEscapeHtml(libraryBundle.archiveFile)} to mount a prebuilt package library for ${packageRepoEscapeHtml(snapshotVersion)} without reinstalling every dependency.</p>
         </div>
-        <div class="package-actions">
+        <div class="package-actions package-actions-tight">
           ${libraryBundleDownloadUrl ? `<button id="package-download-library" type="button" data-download-url="${packageRepoEscapeHtml(libraryBundleDownloadUrl)}" data-download-name="${packageRepoEscapeHtml(libraryBundle.archiveFile || '')}">Download webR library bundle</button>` : ''}
           <label class="file-button secondary">Mount bundle <input id="package-library-bundle-file" type="file" accept=".zip,.data,.gz,.metadata,.json" multiple ${disabled} /></label>
           ${libraryBundle.releaseUrl ? `<a class="button secondary" href="${packageRepoEscapeHtml(libraryBundle.releaseUrl)}" target="_blank" rel="noopener">Release bundle</a>` : ''}
@@ -55,20 +77,22 @@ export function renderPackageRepositoryPanel() {
         </div>
         <div class="operation-progress-track" aria-hidden="true"><span id="package-download-progress-fill"></span></div>
       </div>
-      <div class="package-chips">${visiblePackages.map((pkg) => packageRepoPackageChip(pkg)).join('')}</div>
       <div class="package-state-table">
-        <h5>Top-level package status</h5>
+        <div class="package-state-head">
+          <h5>Analysis packages</h5>
+          <span class="note">Top-level packages shown; dependencies stay internal.</span>
+        </div>
         <div class="table-wrap compact">${packageRepoPackageStatusTable(visiblePackages)}</div>
-      </div>
-      <div class="package-links">
-        <a href="${packageRepoEscapeHtml(indexUrl)}" target="_blank" rel="noopener">PACKAGES index</a>
-        <a href="${packageRepoEscapeHtml(repoUrl)}" target="_blank" rel="noopener">Package repository</a>
       </div>
       <div id="package-repository-status" class="package-status"></div>
     </section>`;
 
   if (cfg.enabled !== false && snapshotStatus.state === 'unchecked') {
     checkPackageSnapshot().finally(renderPackageRepositoryPanel);
+  } else if (snapshotStatus.available === true && packageRepoMissingDisplayedVersions(visiblePackages)) {
+    packageRepoLoadSnapshotVersions(visiblePackages).then(renderPackageRepositoryPanel).catch((error) => {
+      logAnalysis(`Could not load package versions from snapshot: ${error.message}`);
+    });
   }
 
   document.getElementById('package-check')?.addEventListener('click', () => checkPackageRepository({ force: true }));
@@ -140,8 +164,8 @@ export function packageRepositoryLibraryBundleDownloadUrl() {
 
 export async function mountPackageRepositoryLibraryBundle(files, options = {}) {
   const packages = options.packages || packageRepoRequiredPackages();
-  await mountRLibraryBundle(files, packages);
-  markPackagesAvailable(packages, options.status || 'mounted');
+  const versions = await mountRLibraryBundle(files, packages);
+  markPackagesAvailable(packages, options.status || 'mounted', { versions });
   logAnalysis('webR library bundle mounted; package downloads are not needed for this session.');
   return packages;
 }
@@ -217,10 +241,10 @@ export async function checkPackageRepository(options = {}) {
     const missingDeps = packageRepoMissingDependencies(packages, dependencyIndex);
     const missingVisible = visiblePackages.filter((pkg) => !found.has(pkg));
     const hiddenProblemCount = missing.filter((pkg) => !visiblePackages.includes(pkg)).length + missingDeps.length;
-    const rows = visiblePackages.map((pkg) => {
-      const record = found.get(pkg);
-      return `<tr><td>${packageRepoEscapeHtml(pkg)}</td><td>${record ? packageRepoEscapeHtml(record.Version || '') : 'missing'}</td><td>${record ? 'available' : 'missing'}</td></tr>`;
-    }).join('');
+    markPackageVersions(Object.fromEntries(visiblePackages
+      .map((pkg) => [pkg, found.get(pkg)?.Version || ''])
+      .filter(([, version]) => version)), { notify: false });
+    renderPackageRepositoryPanel();
     const problemCount = missingVisible.length + hiddenProblemCount;
     const problemDetails = [
       missingVisible.length ? `Missing top-level packages: ${missingVisible.map(packageRepoEscapeHtml).join(', ')}.` : '',
@@ -231,7 +255,6 @@ export async function checkPackageRepository(options = {}) {
       : `Snapshot contains the top-level analysis packages; ${dependencyCount} dependencies are included.`;
     packageRepoSetStatus(`
       <div class="${problemCount ? 'status-message warn' : 'status-message ok'}">${summary}</div>
-      <div class="table-wrap compact"><table><thead><tr><th>Package</th><th>Version</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table></div>
       `, problemCount ? 'warn' : 'ok', true);
   } catch (error) {
     packageRepoSetStatus(`Snapshot check failed: ${error.message}`, 'fail');
@@ -246,6 +269,29 @@ async function packageRepoFallbackPackages() {
   } catch (_) {
     return new Map();
   }
+}
+
+async function packageRepoLoadSnapshotVersions(packages) {
+  const indexUrl = packageRepoIndexUrl();
+  if (!indexUrl || packageRepoVersionLoadAttemptedUrl === indexUrl) return;
+  if (packageRepoVersionLoadPromise) return packageRepoVersionLoadPromise;
+  packageRepoVersionLoadAttemptedUrl = indexUrl;
+  packageRepoVersionLoadPromise = (async () => {
+    const response = await fetch(indexUrl, { cache: 'no-store' });
+    if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
+    const records = packageRepoParsePackages(await response.text());
+    const found = new Map(records.map((record) => [record.Package, record]));
+    markPackageVersions(Object.fromEntries(packages
+      .map((pkg) => [pkg, found.get(pkg)?.Version || ''])
+      .filter(([, version]) => version)), { notify: false });
+  })().finally(() => {
+    packageRepoVersionLoadPromise = null;
+  });
+  return packageRepoVersionLoadPromise;
+}
+
+function packageRepoMissingDisplayedVersions(packages) {
+  return packages.some((pkg) => !getPackageVersion(pkg));
 }
 
 function packageRepoRequiredPackages() {
@@ -288,19 +334,26 @@ function packageRepoTopLevelPackagesReady() {
   return packages.length > 0 && arePackagesAvailable(packages);
 }
 
-function packageRepoPackageChip(pkg) {
-  const status = getPackageStatus(pkg);
-  return `<span>${packageRepoEscapeHtml(pkg)} <small>${packageRepoEscapeHtml(status)}</small></span>`;
-}
-
 function packageRepoPackageStatusTable(packages) {
   if (!packages.length) return '<p class="note">No top-level analysis packages are configured.</p>';
   const rows = packages.map((pkg) => {
     const status = getPackageStatus(pkg);
-    const ready = arePackagesAvailable([pkg]) ? 'ready' : 'not ready';
-    return `<tr><td>${packageRepoEscapeHtml(pkg)}</td><td>${packageRepoEscapeHtml(status)}</td><td>${ready}</td></tr>`;
+    const version = getPackageVersion(pkg);
+    const ready = arePackagesAvailable([pkg]);
+    return `<tr>
+      <td><strong>${packageRepoEscapeHtml(pkg)}</strong></td>
+      <td>${version ? packageRepoEscapeHtml(version) : '<span class="package-muted-value">Pending</span>'}</td>
+      <td>${packageRepoStateBadge(status, ready)}</td>
+    </tr>`;
   }).join('');
-  return `<table><thead><tr><th>Package</th><th>Status</th><th>Ready</th></tr></thead><tbody>${rows}</tbody></table>`;
+  return `<table><thead><tr><th>Package</th><th>Version</th><th>State</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+function packageRepoStateBadge(status, ready) {
+  const cleanStatus = String(status || '').trim() || 'not-installed';
+  const tone = cleanStatus === 'failed' ? 'fail' : ready ? 'ready' : 'pending';
+  const label = ready ? cleanStatus : 'not ready';
+  return `<span class="package-state-badge ${tone}">${packageRepoEscapeHtml(label)}</span>`;
 }
 
 function packageRepoBaseUrl() {
@@ -316,6 +369,25 @@ function packageRepoBundleUrl() {
   if (configured) return configured;
   const version = state.config?.webr?.packageRepoVersion || 'snapshot';
   return `${packageRepoBaseUrl()}rnaseq-report-webr-packages-${version}.zip`;
+}
+
+function packageRepoResourceLinks(indexUrl, repoUrl) {
+  const links = [
+    indexUrl ? `<a href="${packageRepoEscapeHtml(indexUrl)}" target="_blank" rel="noopener">PACKAGES index</a>` : '',
+    repoUrl ? `<a href="${packageRepoEscapeHtml(repoUrl)}" target="_blank" rel="noopener">Package repository</a>` : '',
+  ].filter(Boolean).join('');
+  return links ? `<div class="package-links">${links}</div>` : '';
+}
+
+function packageRepoDisplayUrl(url) {
+  const raw = String(url || '').trim();
+  if (!raw) return '';
+  try {
+    const parsed = new URL(raw, globalThis.location?.href);
+    return `${parsed.hostname}${parsed.pathname}`.replace(/\/$/, '');
+  } catch (_) {
+    return raw;
+  }
 }
 
 async function downloadPackageRepositoryFile(buttonId, label) {

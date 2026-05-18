@@ -61,6 +61,28 @@ export async function loadRPackage(packageName) {
   await evalR(`library(${JSON.stringify(packageName)}, character.only = TRUE)`);
 }
 
+export async function getRPackageVersions(packages = []) {
+  await initWebR();
+  const packageVector = rCharacterVector(packages);
+  const result = await evalR(`
+    requested <- ${packageVector}
+    versions <- if (!length(requested)) {
+      character()
+    } else {
+      vapply(requested, function(pkg) {
+        if (!length(find.package(pkg, quiet = TRUE))) return("")
+        as.character(utils::packageVersion(pkg))
+      }, character(1))
+    }
+    paste(paste(names(versions), unname(versions), sep = "\t"), collapse = "\n")
+  `);
+  const text = Array.isArray(result?.values) ? result.values[0] : String(result || '');
+  return Object.fromEntries(String(text || '')
+    .split(/\r?\n/)
+    .map((line) => line.split('\t'))
+    .filter(([pkg, version]) => pkg && version));
+}
+
 export async function mountRLibraryBundle(files, packages = []) {
   await initWebR();
   const bundle = await readLibraryBundleFiles(files);
@@ -91,7 +113,9 @@ export async function mountRLibraryBundle(files, packages = []) {
     const visiblePreview = visibleValues.length ? visibleValues.slice(0, 12).join(', ') : 'none';
     throw new Error(`Mounted library bundle is missing package(s): ${missingValues.join(', ')}. Package directories visible at ${mountpoint}: ${visiblePreview}.`);
   }
+  const versions = await getRPackageVersions(packages);
   logAnalysis(`Mounted webR library bundle from ${bundle.label}.`);
+  return versions;
 }
 
 export async function runSmallSummary() {
