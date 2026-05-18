@@ -456,11 +456,49 @@ function escapeHtml(value) {
 
 function renderQC() {
   const summary = summarizeQC();
+  renderQcExcelDownload();
   document.getElementById('qc-summary').innerHTML = `
     <p>${badge('ok')} ${summary.counts.ok} &nbsp; ${badge('warn')} ${summary.counts.warn} &nbsp; ${badge('fail')} ${summary.counts.fail}</p>`;
   renderQCPlots();
   const rows = qcRowsWithStatus().map((row) => ({ ...row, status: row.status.toUpperCase() }));
   renderTable('qc-table', rows, { exportName: 'qc_metrics.csv' });
+}
+
+function renderQcExcelDownload() {
+  const toolbar = document.getElementById('qc-excel-toolbar');
+  const button = document.getElementById('qc-excel-download');
+  const note = document.getElementById('qc-excel-note');
+  if (!toolbar || !button) return;
+
+  const asset = qcExcelAsset();
+  toolbar.hidden = !asset;
+  if (!asset) return;
+
+  button.textContent = `Download ${asset.filename || 'QC Excel'}`;
+  button.onclick = () => downloadEmbeddedAsset(asset);
+  if (note) note.textContent = `${asset.filename || 'QC workbook'} is embedded in this standalone report.`;
+}
+
+function qcExcelAsset() {
+  const configured = state.config?.qcExcelAsset || {};
+  const path = cleanHeaderText(configured.path);
+  if (!path) return null;
+  const data = globalThis.REPORT_EMBEDDED_ASSETS?.[path];
+  if (!data || !String(data).startsWith('data:')) return null;
+  return {
+    data,
+    filename: cleanHeaderText(configured.filename) || path.split('/').pop() || 'qc_metrics.xlsx',
+  };
+}
+
+function downloadEmbeddedAsset(asset) {
+  const link = document.createElement('a');
+  link.href = asset.data;
+  link.download = asset.filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setStatus(`${asset.filename} download started`, { tone: 'ok' });
 }
 
 function setupPcaControls() {

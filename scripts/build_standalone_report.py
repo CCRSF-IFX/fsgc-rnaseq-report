@@ -22,6 +22,10 @@ DEFAULT_OUTPUT = Path("dist/rnaseq-report.html")
 PLOTLY_CDN = "https://cdn.plot.ly/plotly-2.35.2.min.js"
 EMBEDDED_DATA_ROOT = "assets/data"
 QC_EXCEL_NAMES = {"qc_metrics.xlsx", "qc_metrics.xlsm"}
+QC_EXCEL_MIME_TYPES = {
+    ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    ".xlsm": "application/vnd.ms-excel.sheet.macroEnabled.12",
+}
 LOGO_MIME_TYPES = {
     ".gif": "image/gif",
     ".jpg": "image/jpeg",
@@ -134,6 +138,14 @@ def image_data_uri(path: Path, repo_root: Path) -> str:
     return f"data:{mime_type};base64,{encoded}"
 
 
+def file_data_uri(path: Path, mime_type: str | None = None) -> str:
+    resolved = path.resolve()
+    inferred = mimetypes.guess_type(resolved.name)[0]
+    content_type = mime_type or inferred or "application/octet-stream"
+    encoded = base64.b64encode(resolved.read_bytes()).decode("ascii")
+    return f"data:{content_type};base64,{encoded}"
+
+
 def local_logo_path(value: object) -> Path | None:
     logo = str(value or "").strip()
     if not logo or logo.startswith("//") or re.match(r"^[a-zA-Z][a-zA-Z0-9+.-]*:", logo):
@@ -152,6 +164,7 @@ def embedded_assets(
     report_version: str | None = None,
     run_id: str | None = None,
     fsgc_rsem: bool = False,
+    include_qc_excel: bool = False,
 ) -> dict[str, str]:
     config_path = repo_root / "assets/report_config.json"
     config_text = read_text(config_path)
@@ -215,20 +228,38 @@ def embedded_assets(
     assets = {"assets/report_config.json": config_text}
 
     if not data_dir.exists():
+        if include_qc_excel:
+            raise FileNotFoundError(f"--include-qc-excel requested, but data directory does not exist: {data_dir}")
         return assets
 
+    embedded_qc_excel: dict[str, str] | None = None
     for path in sorted(data_dir.rglob("*")):
         if path.is_file():
             embedded_path = Path(virtual_data_root) / path.relative_to(data_dir)
             if path.name.lower() in QC_EXCEL_NAMES:
                 embedded_qc_path = (Path(virtual_data_root) / "qc_metrics.json").as_posix()
-                if embedded_qc_path not in assets:
+                if include_qc_excel or embedded_qc_path not in assets:
                     rows = load_summary_sheet(path, sheet_name="Summary")
                     assets[embedded_qc_path] = json.dumps(rows, ensure_ascii=False, indent=2)
+                if include_qc_excel:
+                    mime_type = QC_EXCEL_MIME_TYPES.get(path.suffix.lower())
+                    embedded_qc_excel = {
+                        "path": embedded_path.as_posix(),
+                        "filename": path.name,
+                        "mimeType": mime_type or "application/octet-stream",
+                    }
+                    assets[embedded_qc_excel["path"]] = file_data_uri(path, mime_type)
                 continue
             if path.suffix.lower() in {".xlsx", ".xlsm"}:
                 continue
             assets[embedded_path.as_posix()] = read_text(path)
+    if include_qc_excel:
+        if not embedded_qc_excel:
+            raise FileNotFoundError(
+                f"--include-qc-excel requested, but no qc_metrics.xlsx or qc_metrics.xlsm was found in {data_dir}"
+            )
+        config["qcExcelAsset"] = embedded_qc_excel
+        assets["assets/report_config.json"] = json.dumps(config, ensure_ascii=False, indent=2)
     if fsgc_rsem:
         annotate_fsgc_rsem_assets(assets, virtual_data_root)
     return assets
@@ -273,6 +304,7 @@ def bundled_app_script(repo_root: Path, args: argparse.Namespace) -> str:
             report_version=clean_optional_text(args.report_version),
             run_id=clean_optional_text(args.run_id),
             fsgc_rsem=args.fsgc,
+            include_qc_excel=args.include_qc_excel,
         ),
         ensure_ascii=False,
         separators=(",", ":"),
@@ -425,6 +457,13 @@ def main() -> None:
         dest="fsgc",
         action="store_true",
         help="Mark the embedded count matrix as FSGC-format RSEM expected counts and add this to report provenance.",
+    )
+    parser.add_argument(
+        "--include-qc-excel",
+        "--embed-qc-excel",
+        dest="include_qc_excel",
+        action="store_true",
+        help="Embed qc_metrics.xlsx or qc_metrics.xlsm in the standalone HTML and show a QC Excel download button.",
     )
     args = parser.parse_args()
 

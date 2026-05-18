@@ -102,6 +102,7 @@ python3 scripts/build_standalone_report.py --project-logo path/to/logo.svg
 python3 scripts/build_standalone_report.py --report-author "Jane Doe" --report-organization "Example Bioinformatics Core"
 python3 scripts/build_standalone_report.py --report-version "0.2.0"
 python3 scripts/build_standalone_report.py --data-root path/to/fsgc-rsem-data --FSGC
+python3 scripts/build_standalone_report.py --data-root path/to/data-with-qc-excel --include-qc-excel
 python3 scripts/build_standalone_report.py --output path/to/report.html
 python3 scripts/build_standalone_report.py --plotly-file path/to/plotly.min.js
 python3 scripts/build_standalone_report.py --plotly-url https://cdn.plot.ly/plotly-2.35.2.min.js
@@ -112,7 +113,10 @@ without editing `assets/report_config.json`. The directory can be repo-relative
 or absolute, and its files are embedded into the generated HTML under the
 report's internal `assets/data/` path. If that directory contains
 `qc_metrics.xlsx`, the builder reads the `Summary` sheet and embeds it as
-`qc_metrics.json` in the generated HTML.
+`qc_metrics.json` in the generated HTML. Add `--include-qc-excel` to also embed
+the original `qc_metrics.xlsx` or `qc_metrics.xlsm` workbook and show a download
+button in the QC tab. When this flag is used, the Excel `Summary` sheet also
+overwrites the embedded `qc_metrics.json` content for that standalone build.
 
 `--project-title` overrides the title shown in the browser tab, sidebar, and
 report header for that generated HTML. `--project-abbr` or
