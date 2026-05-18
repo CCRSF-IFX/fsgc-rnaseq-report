@@ -1,10 +1,12 @@
 import { logAnalysis, setStatus, state } from './state.js';
+import { arePackagesAvailable } from './packageManager.js';
 import { checkPackageSnapshot, getPackageSnapshotStatus } from './packageSnapshot.js';
 import {
   downloadPackageFileWithProgress,
   mountPackageRepositoryLibraryBundle,
   packageRepositoryLibraryBundleConfig,
   packageRepositoryLibraryBundleDownloadUrl,
+  packageRepositoryLoadPackages,
   packageRepositoryRequiredPackages,
 } from './packageRepository.js';
 
@@ -79,7 +81,7 @@ function syncPackageFallbackModal() {
 
   configurePackageFallbackDownload();
 
-  if (status.available === true) {
+  if (status.available === true || packageFallbackPackagesReady()) {
     hidePackageFallbackModal();
     return;
   }
@@ -90,6 +92,13 @@ function syncPackageFallbackModal() {
   if (status.available === false && !packageFallbackDismissed()) {
     showPackageFallbackModal(status);
   }
+}
+
+function packageFallbackPackagesReady() {
+  const requiredPackages = packageRepositoryRequiredPackages();
+  if (requiredPackages.length > 0 && arePackagesAvailable(requiredPackages)) return true;
+  const loadPackages = packageRepositoryLoadPackages();
+  return loadPackages.length > 0 && arePackagesAvailable(loadPackages);
 }
 
 function showPackageFallbackModal(status) {

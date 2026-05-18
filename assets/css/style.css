@@ -288,6 +288,8 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .note { color: var(--muted); }
 .warning { border-left: 4px solid var(--warn); background: #fffbeb; padding: 12px; border-radius: 10px; }
 .plugin-card { display: flex; flex-direction: column; gap: 10px; }
+.package-inline { display: inline-flex; gap: 4px; align-items: baseline; margin-right: 6px; }
+.package-inline small { color: var(--muted); font-size: 12px; }
 .package-panel { border: 1px solid var(--line); border-radius: 8px; padding: 16px; margin-bottom: 18px; background: #f8fafc; }
 .package-panel h4 { margin: 0 0 6px; }
 .package-panel p { margin: 0; }

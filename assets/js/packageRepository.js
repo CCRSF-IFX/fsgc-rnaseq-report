@@ -1,5 +1,5 @@
 import { state, logAnalysis, setStatus, yieldToBrowser } from './state.js';
-import { ensureRPackages, getPackageStatus, markPackagesAvailable } from './packageManager.js';
+import { arePackagesAvailable, ensureRPackages, getPackageStatus, markPackagesAvailable } from './packageManager.js';
 import { mountRLibraryBundle } from './webrManager.js';
 import { checkPackageSnapshot, getPackageSnapshotStatus, packageSnapshotBaseUrl, packageSnapshotCanInstall, packageSnapshotIndexUrl } from './packageSnapshot.js';
 import { enhanceTablesWithin } from './tables.js';
@@ -21,7 +21,8 @@ export function renderPackageRepositoryPanel() {
   const snapshotVersion = cfg.packageRepoVersion || 'the configured package snapshot';
   const disabled = cfg.enabled ? '' : 'disabled';
   const snapshotStatus = getPackageSnapshotStatus();
-  const installDisabled = disabled || !packages.length || !packageSnapshotCanInstall() ? 'disabled' : '';
+  const canInstallOrLoad = packageRepoCanInstallOrLoad(packages);
+  const installDisabled = disabled || !packages.length || !canInstallOrLoad ? 'disabled' : '';
 
   container.innerHTML = `
     <section class="package-panel">
@@ -54,7 +55,7 @@ export function renderPackageRepositoryPanel() {
         </div>
         <div class="operation-progress-track" aria-hidden="true"><span id="package-download-progress-fill"></span></div>
       </div>
-      <div class="package-chips">${visiblePackages.map((pkg) => `<span>${packageRepoEscapeHtml(pkg)} <small>${packageRepoEscapeHtml(getPackageStatus(pkg))}</small></span>`).join('')}</div>
+      <div class="package-chips">${visiblePackages.map((pkg) => packageRepoPackageChip(pkg)).join('')}</div>
       <div class="package-links">
         <a href="${packageRepoEscapeHtml(indexUrl)}" target="_blank" rel="noopener">PACKAGES index</a>
         <a href="${packageRepoEscapeHtml(repoUrl)}" target="_blank" rel="noopener">Package repository</a>
@@ -87,8 +88,10 @@ export function renderPackageRepositoryPanel() {
   document.getElementById('package-install')?.addEventListener('click', async () => {
     try {
       packageRepoSetStatus('Installing packages in webR...', 'info');
-      await checkPackageSnapshot();
-      if (!packageSnapshotCanInstall()) throw new Error(`${getPackageSnapshotStatus().message} Mount a local webR library bundle or recheck after the snapshot is available.`);
+      if (!arePackagesAvailable(packages)) {
+        await checkPackageSnapshot();
+        if (!packageSnapshotCanInstall()) throw new Error(`${getPackageSnapshotStatus().message} Mount a local webR library bundle or recheck after the snapshot is available.`);
+      }
       const loadPackages = packageRepoLoadPackages();
       await ensureRPackages(packages, { load: loadPackages });
       logAnalysis(`webR packages installed; loaded top-level packages: ${loadPackages.join(', ') || 'none'}`);
@@ -264,6 +267,26 @@ function packageRepoLoadPackages() {
     });
   });
   return packages;
+}
+
+function packageRepoCanInstallOrLoad(packages) {
+  if (!packages.length) return false;
+  return packageSnapshotCanInstall() || arePackagesAvailable(packages);
+}
+
+function packageRepoRequiredPackagesReady() {
+  const packages = packageRepoRequiredPackages();
+  return packages.length > 0 && arePackagesAvailable(packages);
+}
+
+function packageRepoTopLevelPackagesReady() {
+  const packages = packageRepoLoadPackages();
+  return packages.length > 0 && arePackagesAvailable(packages);
+}
+
+function packageRepoPackageChip(pkg) {
+  const status = getPackageStatus(pkg);
+  return `<span>${packageRepoEscapeHtml(pkg)} <small>${packageRepoEscapeHtml(status)}</small></span>`;
 }
 
 function packageRepoBaseUrl() {
@@ -462,12 +485,19 @@ function formatBytes(bytes) {
 
 function packageRepoSnapshotTone(status) {
   if (status.available === true) return 'ok';
+  if (packageRepoRequiredPackagesReady() || packageRepoTopLevelPackagesReady()) return 'ok';
   if (status.state === 'checking' || status.state === 'unchecked') return 'warn';
   return 'fail';
 }
 
 function packageRepoSnapshotMessage(status) {
   if (status.available === true) return 'Snapshot available. Install/load packages is enabled.';
+  if (packageRepoRequiredPackagesReady()) {
+    return 'Snapshot is not available, but the local package library is mounted. Top-level packages can be loaded.';
+  }
+  if (packageRepoTopLevelPackagesReady()) {
+    return 'Snapshot is not available, but the top-level analysis packages are already loaded.';
+  }
   if (status.state === 'checking') return 'Checking whether the configured webR package snapshot is available...';
   if (status.state === 'unchecked') return 'Snapshot availability will be checked automatically.';
   return `${status.message || 'Snapshot is not available.'} Install/load packages is disabled until it is available.`;

@@ -13,6 +13,14 @@ export function markPackagesAvailable(packages, status = 'mounted') {
   notifyPackageStatusChanged();
 }
 
+export function isPackageAvailable(pkg) {
+  return ['installed', 'loaded', 'mounted'].includes(getPackageStatus(pkg));
+}
+
+export function arePackagesAvailable(packages) {
+  return uniquePackageNames(packages).every(isPackageAvailable);
+}
+
 export async function ensureRPackages(packages, options = {}) {
   const installTargets = uniquePackageNames(packages);
   const loadTargets = uniquePackageNames(options.load || packages);
@@ -60,10 +68,6 @@ export async function ensureRPackages(packages, options = {}) {
 
 function uniquePackageNames(packages) {
   return Array.from(new Set((packages || []).map((pkg) => String(pkg || '').trim()).filter(Boolean)));
-}
-
-function isPackageAvailable(pkg) {
-  return ['installed', 'loaded', 'mounted'].includes(getPackageStatus(pkg));
 }
 
 async function loadPackageWithStatus(pkg) {

@@ -1,5 +1,5 @@
 import { state, logAnalysis } from './state.js';
-import { ensureRPackages, getPackageStatus } from './packageManager.js';
+import { arePackagesAvailable, ensureRPackages, getPackageStatus } from './packageManager.js';
 import { getPackageSnapshotStatus, packageSnapshotCanInstall } from './packageSnapshot.js';
 import { renderPCA } from './plots.js';
 
@@ -61,6 +61,7 @@ export function renderDownstreamCards() {
     const dependencyCount = Math.max(0, plugin.packages.length - visiblePackages.length);
     const dependencyNote = dependencyCount ? `; ${dependencyCount} dependencies included in snapshot` : '';
     const packageBlocked = pluginPackageActionBlocked(plugin);
+    const installBlocked = pluginInstallActionBlocked(plugin);
     const packageNote = packageBlocked
       ? '<p class="note">Package snapshot is not available yet. Check Runtime & Packages or mount a local webR library bundle.</p>'
       : '';
@@ -68,10 +69,10 @@ export function renderDownstreamCards() {
       <article class="card plugin-card" data-plugin-id="${plugin.id}">
         <h4>${plugin.name}</h4>
         <p>${plugin.description}</p>
-        <p><strong>Packages:</strong> ${visiblePackages.length ? visiblePackages.map((p) => `<code>${p}</code>`).join(' ') : 'none'}${dependencyNote}</p>
+        <p><strong>Packages:</strong> ${visiblePackages.length ? visiblePackages.map(pluginPackageStatusLabel).join(' ') : 'none'}${dependencyNote}</p>
         <p><strong>Memory:</strong> ${plugin.memory}</p>
         ${packageNote}
-        <div><button data-action="install" ${plugin.packages.length && !packageBlocked ? '' : 'disabled'}>Install/load packages</button> <button data-action="run" ${packageBlocked ? 'disabled' : ''}>Run</button></div>
+        <div><button data-action="install" ${plugin.packages.length && !installBlocked ? '' : 'disabled'}>Install/load packages</button> <button data-action="run" ${packageBlocked ? 'disabled' : ''}>Run</button></div>
       </article>`;
   }).join('');
   container.innerHTML = cards;
@@ -87,7 +88,7 @@ export function renderDownstreamCards() {
     });
     card.querySelector('[data-action="run"]')?.addEventListener('click', async () => {
       try {
-        if (plugin.packages.length) await ensureRPackages(plugin.packages, { load: plugin.loadPackages || plugin.packages });
+        if (plugin.packages.length && !pluginTopLevelPackagesReady(plugin)) await ensureRPackages(plugin.packages, { load: plugin.loadPackages || plugin.packages });
         await plugin.run();
       } catch (error) { logAnalysis(`${plugin.name} failed: ${error.message}`); }
     });
@@ -98,9 +99,26 @@ function pluginVisiblePackages(plugin) {
   return plugin.loadPackages || plugin.packages || [];
 }
 
+function pluginPackageStatusLabel(pkg) {
+  return `<span class="package-inline"><code>${pkg}</code> <small>${getPackageStatus(pkg)}</small></span>`;
+}
+
 function pluginPackageActionBlocked(plugin) {
   if (!plugin.packages?.length) return false;
-  if (plugin.packages.every((pkg) => ['installed', 'loaded', 'mounted'].includes(getPackageStatus(pkg)))) return false;
+  if (pluginTopLevelPackagesReady(plugin)) return false;
+  if (arePackagesAvailable(plugin.packages)) return false;
   getPackageSnapshotStatus();
   return !packageSnapshotCanInstall();
+}
+
+function pluginInstallActionBlocked(plugin) {
+  if (!plugin.packages?.length) return true;
+  if (arePackagesAvailable(plugin.packages)) return false;
+  getPackageSnapshotStatus();
+  return !packageSnapshotCanInstall();
+}
+
+function pluginTopLevelPackagesReady(plugin) {
+  const packages = pluginVisiblePackages(plugin);
+  return packages.length > 0 && arePackagesAvailable(packages);
 }
