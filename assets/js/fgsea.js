@@ -6,9 +6,12 @@ import { evalR } from './webrManager.js';
 import { markAnalysisCacheDirty } from './analysisCache.js';
 
 let fgseaControlsWired = false;
-const FGSEA_CURVE_DEFAULT_LIMIT = 'barplot';
-const FGSEA_CURVE_MAX_LIMIT = 500;
-const FGSEA_CURVE_BARPLOT_PER_DIRECTION = 10;
+const FGSEA_CURVE_DEFAULT_PRESET = 'top20';
+const FGSEA_CURVE_MAX_PER_DIRECTION = 500;
+const FGSEA_CURVE_PRESETS = {
+  top20: { up: 10, down: 10 },
+  top40: { up: 20, down: 20 },
+};
 const FGSEA_CURVE_POINT_LIMIT = 800;
 const FGSEA_CURVE_SEPARATOR = '\n__RNASEQ_REPORT_FGSEA_CURVES__\n';
 const FGSEA_HIT_SEPARATOR = '\n__RNASEQ_REPORT_FGSEA_HITS__\n';
@@ -17,6 +20,8 @@ export function setupFgseaControls() {
   if (fgseaControlsWired) return;
   fgseaControlsWired = true;
   document.getElementById('gsea-run')?.addEventListener('click', runFgseaAnalysis);
+  document.getElementById('gsea-curve-limit')?.addEventListener('change', syncFgseaCurveControls);
+  syncFgseaCurveControls();
 }
 
 export async function runFgseaAnalysis() {
@@ -45,7 +50,7 @@ export async function runFgseaAnalysis() {
 
     const minSize = fgseaPositiveInteger(document.getElementById('gsea-min-size')?.value, 1, 10);
     const maxSize = fgseaPositiveInteger(document.getElementById('gsea-max-size')?.value, minSize, 500);
-    const curveLimit = fgseaCurveLimitValue();
+    const curveSetting = fgseaCurveSettingValue();
 
     fgseaSetStatus(status, 'Loading fgsea package in webR. First run can take a few minutes.');
     await progress.step('Loading fgsea package in webR', 3);
@@ -64,7 +69,7 @@ export async function runFgseaAnalysis() {
       const analysis = await runWithProgressPulse(
         progress,
         `${sourceMessage}; still working`,
-        () => fgseaRunInWebR(deRows, source.gmtText, source.source_label, minSize, maxSize, curveLimit),
+        () => fgseaRunInWebR(deRows, source.gmtText, source.source_label, minSize, maxSize, curveSetting),
         {
           intervalMs: 10000,
           onPulse: (message) => fgseaSetStatus(status, `${message}. Keep this tab open.`),
@@ -72,7 +77,7 @@ export async function runFgseaAnalysis() {
       );
       const rows = analysis.rows || [];
       if (!rows.length) throw new Error(`fgsea returned no pathways for ${source.source_label}. Check gene identifiers and pathway gene sets.`);
-      const resultId = fgseaResultId(contrast.id, source, minSize, maxSize, curveLimit);
+      const resultId = fgseaResultId(contrast.id, source, minSize, maxSize, curveSetting);
       const result = storeGseaResult({
         result_id: resultId,
         contrast_id: contrast.id,
@@ -83,7 +88,9 @@ export async function runFgseaAnalysis() {
         reference: source.source_label,
         min_size: minSize,
         max_size: maxSize,
-        curve_limit: curveLimit,
+        curve_limit: curveSetting.id,
+        curve_up_limit: curveSetting.up,
+        curve_down_limit: curveSetting.down,
         created_at: new Date().toISOString(),
         enrichment_curves: analysis.enrichment_curves || [],
         rows: rows.map((row) => ({
@@ -134,14 +141,14 @@ async function loadGmtSources() {
   })));
 }
 
-function fgseaResultId(contrastId, source, minSize, maxSize, curveLimit) {
+function fgseaResultId(contrastId, source, minSize, maxSize, curveSetting) {
   return [
     contrastId,
     source.source_kind,
     source.source_id || source.source_label,
     `min${minSize}`,
     `max${maxSize}`,
-    `plots${curveLimit}`,
+    `plots${fgseaCurveSettingId(curveSetting)}`,
   ].map(fgseaSlug).filter(Boolean).join('__');
 }
 
@@ -153,9 +160,10 @@ function fgseaSlug(value) {
     .replace(/^-+|-+$/g, '') || 'gsea';
 }
 
-async function fgseaRunInWebR(deRows, gmtText, reference, minSize, maxSize, curveLimit = FGSEA_CURVE_DEFAULT_LIMIT) {
+async function fgseaRunInWebR(deRows, gmtText, reference, minSize, maxSize, curveSetting = fgseaDefaultCurveSetting()) {
   await loadGeneAnnotation(false);
   const statsCsv = fgseaStatsCsv(deRows);
+  const curveConfig = fgseaNormalizeCurveSetting(curveSetting);
   const code = `
 suppressPackageStartupMessages(library(fgsea))
 fgsea_param <- BiocParallel::SerialParam(progressbar = FALSE)
@@ -165,9 +173,8 @@ gmt_text <- ${fgseaRString(gmtText)}
 reference_name <- ${fgseaRString(reference)}
 min_size <- ${Number(minSize)}
 max_size <- ${Number(maxSize)}
-curve_mode <- ${fgseaRString(fgseaCurveMode(curveLimit))}
-curve_limit <- ${fgseaCurveNumericLimit(curveLimit)}
-curve_barplot_per_direction <- ${FGSEA_CURVE_BARPLOT_PER_DIRECTION}
+curve_up_limit <- ${curveConfig.up}
+curve_down_limit <- ${curveConfig.down}
 curve_point_limit <- ${FGSEA_CURVE_POINT_LIMIT}
 
 de <- read.csv(text = stats_text, check.names = FALSE, stringsAsFactors = FALSE, na.strings = c("", "NA", "NaN"))
@@ -276,31 +283,31 @@ curve_order <- function(df) {
   df[order(df$padj, -abs(df$NES), df$pathway), , drop = FALSE]
 }
 
-top_curve_rows <- function(fg, mode = "barplot", limit = 100L, per_direction = 10L) {
+top_curve_rows <- function(fg, up_limit = 10L, down_limit = 10L) {
   if (!nrow(fg)) return(fg)
-  mode <- tolower(as.character(mode))
-  if (identical(mode, "all")) return(fg)
-  if (identical(mode, "barplot")) {
-    nes <- suppressWarnings(as.numeric(fg$NES))
-    up <- curve_order(fg[is.finite(nes) & nes > 0, , drop = FALSE])
-    down <- curve_order(fg[is.finite(nes) & nes < 0, , drop = FALSE])
-    up <- up[seq_len(min(nrow(up), per_direction)), , drop = FALSE]
-    down <- down[seq_len(min(nrow(down), per_direction)), , drop = FALSE]
-    selected <- rbind(down, up)
-    if (nrow(selected)) return(selected)
-    limit <- per_direction * 2L
-  }
-  limit <- suppressWarnings(as.integer(limit))
-  if (!is.finite(limit) || limit < 1L) limit <- 100L
-  fg[seq_len(min(nrow(fg), limit)), , drop = FALSE]
+  up_limit <- suppressWarnings(as.integer(up_limit))
+  down_limit <- suppressWarnings(as.integer(down_limit))
+  if (!is.finite(up_limit)) up_limit <- 10L
+  if (!is.finite(down_limit)) down_limit <- 10L
+  up_limit <- max(0L, up_limit)
+  down_limit <- max(0L, down_limit)
+  nes <- suppressWarnings(as.numeric(fg$NES))
+  up <- curve_order(fg[is.finite(nes) & nes > 0, , drop = FALSE])
+  down <- curve_order(fg[is.finite(nes) & nes < 0, , drop = FALSE])
+  up <- up[seq_len(min(nrow(up), up_limit)), , drop = FALSE]
+  down <- down[seq_len(min(nrow(down), down_limit)), , drop = FALSE]
+  selected <- rbind(down, up)
+  if (nrow(selected)) return(selected)
+  fallback_limit <- max(1L, up_limit + down_limit)
+  fg[seq_len(min(nrow(fg), fallback_limit)), , drop = FALSE]
 }
 
-curve_tables <- function(fg, pathways, stats, mode = "barplot", limit = 100L, per_direction = 10L, max_points = 800L) {
+curve_tables <- function(fg, pathways, stats, up_limit = 10L, down_limit = 10L, max_points = 800L) {
   curve_rows <- list()
   hit_rows <- list()
   if (!nrow(fg)) return(list(curves = empty_curve_df(), hits = empty_hit_df()))
 
-  top_fg <- top_curve_rows(fg, mode, limit, per_direction)
+  top_fg <- top_curve_rows(fg, up_limit, down_limit)
   for (i in seq_len(nrow(top_fg))) {
     pathway_name <- top_fg$pathway[[i]]
     curve <- running_curve(pathways[[pathway_name]], stats, max_points)
@@ -365,7 +372,7 @@ if (nrow(fg) == 0) {
   hit_out <- empty_hit_df()
 } else {
   fg <- fg[order(fg$padj, -abs(fg$NES)), ]
-  curves <- curve_tables(fg, pathways, stats, curve_mode, curve_limit, curve_barplot_per_direction, curve_point_limit)
+  curves <- curve_tables(fg, pathways, stats, curve_up_limit, curve_down_limit, curve_point_limit)
   out <- data.frame(
     term_id = fg$pathway,
     term_name = fg$pathway,
@@ -520,27 +527,58 @@ function fgseaPositiveInteger(value, min, fallback) {
   return Number.isFinite(n) && n >= min ? n : fallback;
 }
 
-function fgseaCurveLimitValue() {
-  const input = document.getElementById('gsea-curve-limit');
-  const rawValue = String(input?.value || FGSEA_CURVE_DEFAULT_LIMIT).trim().toLowerCase();
-  if (rawValue === 'barplot' || rawValue === 'all') return rawValue;
-  const value = fgseaPositiveInteger(rawValue, 1, Number.NaN);
-  if (Number.isFinite(value)) return String(Math.max(1, Math.min(FGSEA_CURVE_MAX_LIMIT, value)));
-  if (input) input.value = FGSEA_CURVE_DEFAULT_LIMIT;
-  return FGSEA_CURVE_DEFAULT_LIMIT;
+function syncFgseaCurveControls() {
+  const preset = document.getElementById('gsea-curve-limit')?.value || FGSEA_CURVE_DEFAULT_PRESET;
+  const customControls = document.getElementById('gsea-curve-custom-controls');
+  if (customControls) customControls.hidden = preset !== 'custom';
 }
 
-function fgseaCurveMode(curveLimit) {
-  const value = String(curveLimit || FGSEA_CURVE_DEFAULT_LIMIT).trim().toLowerCase();
-  return (value === 'barplot' || value === 'all') ? value : 'top';
+function fgseaCurveSettingValue() {
+  const presetInput = document.getElementById('gsea-curve-limit');
+  const preset = String(presetInput?.value || FGSEA_CURVE_DEFAULT_PRESET).trim().toLowerCase();
+  if (Object.prototype.hasOwnProperty.call(FGSEA_CURVE_PRESETS, preset)) {
+    return fgseaNormalizeCurveSetting({ preset, ...FGSEA_CURVE_PRESETS[preset] });
+  }
+  if (preset === 'custom') {
+    return fgseaNormalizeCurveSetting({
+      preset,
+      up: document.getElementById('gsea-curve-up-limit')?.value,
+      down: document.getElementById('gsea-curve-down-limit')?.value,
+    });
+  }
+  if (presetInput) presetInput.value = FGSEA_CURVE_DEFAULT_PRESET;
+  syncFgseaCurveControls();
+  return fgseaDefaultCurveSetting();
 }
 
-function fgseaCurveNumericLimit(curveLimit) {
-  const value = String(curveLimit || '').trim().toLowerCase();
-  if (value === 'all') return '0L';
-  if (value === 'barplot') return String(FGSEA_CURVE_BARPLOT_PER_DIRECTION * 2);
-  const numeric = fgseaPositiveInteger(value, 1, 100);
-  return String(Math.max(1, Math.min(FGSEA_CURVE_MAX_LIMIT, numeric)));
+function fgseaNormalizeCurveSetting(setting = {}) {
+  const fallback = FGSEA_CURVE_PRESETS[FGSEA_CURVE_DEFAULT_PRESET];
+  const preset = String(setting.preset || FGSEA_CURVE_DEFAULT_PRESET).trim().toLowerCase();
+  const up = fgseaBoundedCurveCount(setting.up, fallback.up);
+  const down = fgseaBoundedCurveCount(setting.down, fallback.down);
+  if ((up + down) < 1) return fgseaDefaultCurveSetting();
+  return {
+    preset: preset === 'custom' ? 'custom' : (FGSEA_CURVE_PRESETS[preset] ? preset : FGSEA_CURVE_DEFAULT_PRESET),
+    up,
+    down,
+    id: preset === 'custom' ? `custom-up${up}-down${down}` : (FGSEA_CURVE_PRESETS[preset] ? preset : FGSEA_CURVE_DEFAULT_PRESET),
+  };
+}
+
+function fgseaDefaultCurveSetting() {
+  return fgseaNormalizeCurveSetting({
+    preset: FGSEA_CURVE_DEFAULT_PRESET,
+    ...FGSEA_CURVE_PRESETS[FGSEA_CURVE_DEFAULT_PRESET],
+  });
+}
+
+function fgseaBoundedCurveCount(value, fallback) {
+  const n = fgseaPositiveInteger(value, 0, fallback);
+  return Math.max(0, Math.min(FGSEA_CURVE_MAX_PER_DIRECTION, n));
+}
+
+function fgseaCurveSettingId(curveSetting) {
+  return fgseaNormalizeCurveSetting(curveSetting).id;
 }
 
 function fgseaSetStatus(element, message) {

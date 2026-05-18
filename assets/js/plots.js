@@ -457,10 +457,10 @@ export function renderEnrichment(rows) {
   renderLegacyEnrichment(plot, sourceRows);
 }
 
-export function topEnrichmentPlotRows(rows) {
+export function topEnrichmentPlotRows(rows, options = {}) {
   const sourceRows = Array.isArray(rows) ? rows : [];
   const directionalRows = enrichmentDirectionalRows(sourceRows);
-  if (directionalRows.length) return topDirectionalEnrichmentRows(directionalRows).map((item) => item.row);
+  if (directionalRows.length) return topDirectionalEnrichmentRows(directionalRows, options).map((item) => item.row);
   return topLegacyEnrichmentRows(sourceRows);
 }
 
@@ -474,16 +474,23 @@ function enrichmentDirectionalRows(rows) {
     .filter(Boolean);
 }
 
-function topDirectionalEnrichmentRows(directionalRows) {
+function topDirectionalEnrichmentRows(directionalRows, options = {}) {
+  const upLimit = enrichmentDirectionLimit(options.upLimit, ENRICHMENT_DIRECTION_LIMIT);
+  const downLimit = enrichmentDirectionLimit(options.downLimit, ENRICHMENT_DIRECTION_LIMIT);
   const upRows = directionalRows
     .filter((item) => item.direction > 0)
     .sort(enrichmentDirectionalSort)
-    .slice(0, ENRICHMENT_DIRECTION_LIMIT);
+    .slice(0, upLimit);
   const downRows = directionalRows
     .filter((item) => item.direction < 0)
     .sort(enrichmentDirectionalSort)
-    .slice(0, ENRICHMENT_DIRECTION_LIMIT);
+    .slice(0, downLimit);
   return [...downRows.slice().reverse(), ...upRows.slice().reverse()];
+}
+
+function enrichmentDirectionLimit(value, fallback) {
+  const n = Number.parseInt(value, 10);
+  return Number.isFinite(n) && n >= 0 ? n : fallback;
 }
 
 function topLegacyEnrichmentRows(rows) {

@@ -70,7 +70,7 @@ function syncGseaPathwaySelect(result, preferredPathwayId = '') {
   const status = document.getElementById('gsea-pathway-status');
   if (!select) return;
   const curves = gseaResultCurves(result);
-  const topRows = topEnrichmentPlotRows(gseaResultRows(result));
+  const topRows = topEnrichmentPlotRows(gseaResultRows(result), gseaCurvePlotLimits(result));
   const topCurves = gseaTopPlotCurves(topRows, curves);
   const displayCurves = topCurves.length ? topCurves : curves;
   const previous = preferredPathwayId || select.value;
@@ -90,7 +90,7 @@ function syncGseaPathwaySelect(result, preferredPathwayId = '') {
       const missingTopCurves = Math.max(0, topRows.length - topCurves.length);
       const sourceText = topCurves.length ? 'shown in the top pathway barplot' : 'retained for this result';
       const missingText = missingTopCurves
-        ? ` ${missingTopCurves} displayed pathway${missingTopCurves === 1 ? ' is' : 's are'} missing retained curve data; increase Pathway plots and rerun fgsea if needed.`
+        ? ` ${missingTopCurves} displayed pathway${missingTopCurves === 1 ? ' is' : 's are'} missing retained curve data; increase Retain running ES plots and rerun fgsea if needed.`
         : '';
       status.textContent = selected
         ? `${displayCurves.length} pathway-level enrichment plot${displayCurves.length === 1 ? '' : 's'} available from pathways ${sourceText}.${missingText}`
@@ -143,6 +143,8 @@ function normalizeGseaResult(key, value) {
     min_size: value.min_size ?? '',
     max_size: value.max_size ?? '',
     curve_limit: value.curve_limit ?? value.top_n_pathway_plots ?? '',
+    curve_up_limit: value.curve_up_limit ?? '',
+    curve_down_limit: value.curve_down_limit ?? '',
     created_at: value.created_at || '',
     enrichment_curves: gseaResultCurves(value),
     rows: gseaResultRows(value),
@@ -177,15 +179,39 @@ function normalizeGseaCurves(curves) {
 function gseaResultLabel(result) {
   const source = result.source_label || result.reference || result.result_id;
   const size = result.min_size && result.max_size ? `, size ${result.min_size}-${result.max_size}` : '';
-  const curveLimit = result.curve_limit ? `, ${gseaCurveLimitLabel(result.curve_limit)}` : '';
+  const curveLimit = result.curve_limit ? `, ${gseaCurveLimitLabel(result)}` : '';
   return `${source}${size}${curveLimit}`;
 }
 
-function gseaCurveLimitLabel(value) {
-  const label = String(value || '').trim().toLowerCase();
-  if (label === 'barplot') return 'barplot pathway plots';
-  if (label === 'all') return 'all pathway plots';
-  return `top ${value} pathway plots`;
+function gseaCurvePlotLimits(result) {
+  const preset = String(result?.curve_limit || '').trim().toLowerCase();
+  if (preset === 'top40') return { upLimit: 20, downLimit: 20 };
+  if (preset === 'custom' || preset.startsWith('custom-')) {
+    const parsed = preset.match(/^custom-up(\d+)-down(\d+)$/);
+    return {
+      upLimit: gseaCurveCount(result?.curve_up_limit, parsed ? Number(parsed[1]) : 10),
+      downLimit: gseaCurveCount(result?.curve_down_limit, parsed ? Number(parsed[2]) : 10),
+    };
+  }
+  return { upLimit: 10, downLimit: 10 };
+}
+
+function gseaCurveLimitLabel(result) {
+  const preset = String(result?.curve_limit || '').trim().toLowerCase();
+  const limits = gseaCurvePlotLimits(result);
+  if (preset === 'top40') return 'top 40 barplot pathways (20 up + 20 down)';
+  if (preset === 'custom' || preset.startsWith('custom-')) {
+    return `custom running ES plots (${limits.upLimit} up + ${limits.downLimit} down)`;
+  }
+  if (preset === 'barplot') return 'top 20 barplot pathways (10 up + 10 down)';
+  if (/^\d+$/.test(preset)) return `top ${preset} pathway plots`;
+  if (preset === 'all') return 'all pathway plots';
+  return 'top 20 barplot pathways (10 up + 10 down)';
+}
+
+function gseaCurveCount(value, fallback) {
+  const n = Number.parseInt(value, 10);
+  return Number.isFinite(n) && n >= 0 ? n : fallback;
 }
 
 function gseaExportName(contrast, result) {

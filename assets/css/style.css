@@ -130,7 +130,10 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .plot.short { min-height: 260px; }
 .gsea-detail-panel { border-top: 1px solid var(--line); margin-top: 18px; padding-top: 14px; }
 .gsea-detail-panel .toolbar { margin-bottom: 8px; }
-.gsea-top-n-label input { width: 92px; }
+.gsea-top-n-label select { min-width: 340px; }
+.gsea-curve-custom-controls { display: inline-flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.gsea-curve-custom-controls label { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-weight: 700; }
+.gsea-curve-custom-controls input { width: 74px; }
 .gsea-pathway-field { display: grid; gap: 6px; min-width: min(440px, 100%); }
 .gsea-pathway-label-text { display: inline-flex; align-items: center; gap: 6px; width: max-content; max-width: 100%; font-weight: 700; }
 .gsea-pathway-label-text label { padding: 0; border: 0; border-radius: 0; background: transparent; }

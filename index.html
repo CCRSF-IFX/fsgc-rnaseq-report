@@ -435,10 +435,14 @@
             <label>Pathway GMT files <input id="gsea-gmt-file" type="file" accept=".gmt,.txt" multiple /></label>
             <label>Min size <input id="gsea-min-size" type="number" min="1" value="10" /></label>
             <label>Max size <input id="gsea-max-size" type="number" min="1" value="500" /></label>
-            <label class="gsea-top-n-label">Pathway plots <select id="gsea-curve-limit" aria-describedby="gsea-curve-limit-help"><option value="barplot" selected>Barplot pathways</option><option value="100">Top 100</option><option value="500">Top 500</option><option value="all">All</option></select></label>
+            <label class="gsea-top-n-label">Retain running ES plots <select id="gsea-curve-limit" aria-describedby="gsea-curve-limit-help"><option value="top20" selected>Top 20 barplot pathways (10 up + 10 down)</option><option value="top40">Top 40 barplot pathways (20 up + 20 down)</option><option value="custom">Custom</option></select></label>
+            <span id="gsea-curve-custom-controls" class="gsea-curve-custom-controls" hidden>
+              <label>Up pathways <input id="gsea-curve-up-limit" type="number" min="0" max="500" step="1" value="10" /></label>
+              <label>Down pathways <input id="gsea-curve-down-limit" type="number" min="0" max="500" step="1" value="10" /></label>
+            </span>
             <button id="gsea-run">Run fgsea</button>
           </div>
-          <p class="note gsea-control-note" id="gsea-curve-limit-help">Retain running enrichment-score plots for the pathways shown in the top up/down barplot by default. Larger presets and All increase cache size.</p>
+          <p class="note gsea-control-note" id="gsea-curve-limit-help">Choose which pathways keep detailed running enrichment-score plot data. The default keeps the top 10 positively enriched and top 10 negatively enriched pathways. The full GSEA table is always retained.</p>
           <p class="note" id="gsea-status">Run DESeq2 first for uploaded data, then run fgsea against one or more uploaded GMT pathway files.</p>
           <div id="enrichment-plot" class="plot tall"></div>
           <div class="gsea-detail-panel">
