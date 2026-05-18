@@ -225,7 +225,6 @@ export async function renderCanvasXpressHeatmap() {
   renderHeatmapGeneStatus(geneSelection, 'canvasxpress-gene-list-status');
   if (rows.length === 0) {
     if (status) status.textContent = geneSelection.emptyMessage || 'No nonzero count rows were available for the CanvasXpress heatmap.';
-    renderCanvasXpressColorScale(null);
     renderCanvasXpressAnnotationLegend([], []);
     canvas.dataset.rendered = 'false';
     wrap.innerHTML = `<p class="note">${heatmapEscapeHtml(geneSelection.emptyMessage || 'No nonzero count rows were available for the CanvasXpress heatmap.')}</p>`;
@@ -268,7 +267,6 @@ export async function renderCanvasXpressHeatmap() {
     canvas.style.width = `${canvas.width}px`;
     canvas.style.height = `${canvas.height}px`;
     const colorSpectrum = canvasXpressColorSpectrum(scale);
-    renderCanvasXpressColorScale(scale, colorSpectrum);
     renderCanvasXpressAnnotationLegend(sampleIds, annotationColumns);
 
     new globalThis.CanvasXpress(canvas.id, data, {
@@ -298,7 +296,7 @@ export async function renderCanvasXpressHeatmap() {
       colors: CANVASXPRESS_ANNOTATION_COLORS,
       colorSpectrum,
       heatmapCellBox: false,
-      showHeatmapIndicator: false,
+      showHeatmapIndicator: true,
       showColorLegend: false,
       showSampleNames: true,
       showVariableNames: showSampleNames,
@@ -327,7 +325,6 @@ export async function renderCanvasXpressHeatmap() {
     if (status) status.textContent = `CanvasXpress rendered ${rows.length} gene rows x ${sampleIds.length} sample columns${annotationText}; clustering: ${clusteringText}${excludedText}${labelText}.`;
   } catch (error) {
     canvas.dataset.rendered = 'false';
-    renderCanvasXpressColorScale(null);
     renderCanvasXpressAnnotationLegend([], []);
     if (status) status.textContent = `CanvasXpress heatmap failed: ${error.message}`;
   } finally {
@@ -647,26 +644,6 @@ function canvasXpressColorSpectrum(scale) {
   return scale === 'row'
     ? ['#2563eb', '#f8fafc', '#dc2626']
     : ['#eff6ff', '#22c55e', '#7f1d1d'];
-}
-
-function renderCanvasXpressColorScale(scale, colorSpectrum = canvasXpressColorSpectrum(scale)) {
-  const container = document.getElementById('canvasxpress-color-scale');
-  if (!container) return;
-  if (!scale) {
-    container.hidden = true;
-    container.innerHTML = '';
-    return;
-  }
-
-  const label = scale === 'row' ? 'Row z-score' : 'log2(CPM + 1)';
-  const ticks = scale === 'row' ? ['-3', '0', '3'] : ['Low', 'Mid', 'High'];
-  container.hidden = false;
-  container.innerHTML = `
-    <strong>${heatmapEscapeHtml(label)}</strong>
-    <span class="canvasxpress-scale-ramp">
-      <span class="canvasxpress-scale-gradient" style="background: linear-gradient(90deg, ${colorSpectrum.join(', ')});"></span>
-      <span class="canvasxpress-scale-ticks">${ticks.map((tick) => `<span>${heatmapEscapeHtml(tick)}</span>`).join('')}</span>
-    </span>`;
 }
 
 function renderCanvasXpressAnnotationLegend(sampleIds, annotationColumns) {
