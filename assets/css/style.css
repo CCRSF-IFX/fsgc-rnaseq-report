@@ -336,6 +336,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .package-fallback-bundle-name { margin: 10px 0 0; color: var(--ink); font-weight: 700; }
 .package-fallback-dismiss { margin-top: 14px; align-items: flex-start; color: var(--muted); font-size: 13px; font-weight: 600; }
 .package-fallback-dismiss input { margin-top: 2px; }
+.field-label-with-tip { display: inline-flex; align-items: center; gap: 6px; margin-bottom: 4px; }
 .tip-wrap { position: relative; display: inline-flex; align-items: center; }
 .tip-icon { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border: 1px solid #bfdbfe; border-radius: 999px; background: var(--accent-soft); color: var(--accent); font-size: 12px; font-weight: 800; line-height: 1; cursor: help; }
 .tip-icon:focus { outline: 2px solid #93c5fd; outline-offset: 2px; }

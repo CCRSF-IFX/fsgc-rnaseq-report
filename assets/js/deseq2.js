@@ -41,7 +41,6 @@ export function setupDeseqControls(callbacks = {}) {
       updateDeseqLevelControls();
       updateDeseqAdjustControls();
     });
-    document.getElementById('deseq-reference-level')?.addEventListener('change', updateDeseqLevelControls);
     document.getElementById('deseq-run')?.addEventListener('click', runDeseq2Analysis);
   }
   updateDeseqLevelControls();
@@ -55,24 +54,27 @@ function updateDeseqLevelControls() {
   const referenceSelect = document.getElementById('deseq-reference-level');
   const numeratorSelect = document.getElementById('deseq-numerator-level');
   const denominatorSelect = document.getElementById('deseq-denominator-level');
-  if (!referenceSelect || !numeratorSelect || !denominatorSelect) return;
+  if (!numeratorSelect || !denominatorSelect) return;
   const hasLevels = levels.length > 0;
 
   const configuredReference = state.config?.analysis?.referenceLevel;
-  const previousReference = referenceSelect.value;
-  referenceSelect.innerHTML = levelOptions;
+  const previousDenominator = denominatorSelect.value || referenceSelect?.value;
+  const previousNumerator = numeratorSelect.value;
+  if (referenceSelect) referenceSelect.innerHTML = levelOptions;
   numeratorSelect.innerHTML = levelOptions;
   denominatorSelect.innerHTML = levelOptions;
-  referenceSelect.disabled = !hasLevels;
+  if (referenceSelect) referenceSelect.disabled = true;
   numeratorSelect.disabled = !hasLevels;
   denominatorSelect.disabled = !hasLevels;
 
-  const reference = levels.includes(previousReference)
-    ? previousReference
+  const denominator = levels.includes(previousDenominator)
+    ? previousDenominator
     : (levels.includes(configuredReference) ? configuredReference : levels[0]);
-  referenceSelect.value = reference || '';
-  denominatorSelect.value = reference || '';
-  numeratorSelect.value = levels.find((level) => level !== reference) || levels[0] || '';
+  denominatorSelect.value = denominator || '';
+  if (referenceSelect) referenceSelect.value = denominator || '';
+  numeratorSelect.value = levels.includes(previousNumerator) && previousNumerator !== denominator
+    ? previousNumerator
+    : (levels.find((level) => level !== denominator) || levels[0] || '');
 }
 
 function updateDeseqAdjustControls() {
@@ -95,9 +97,9 @@ function updateDeseqAdjustControls() {
 export async function runDeseq2Analysis() {
   const column = document.getElementById('deseq-design-column')?.value;
   const adjustColumns = deseqSelectedAdjustColumns(column);
-  const reference = document.getElementById('deseq-reference-level')?.value;
   const numerator = document.getElementById('deseq-numerator-level')?.value;
-  const denominator = document.getElementById('deseq-denominator-level')?.value || reference;
+  const denominator = document.getElementById('deseq-denominator-level')?.value;
+  const reference = denominator;
   const status = document.getElementById('deseq-status');
   const runButton = document.getElementById('deseq-run');
   const runButtonLabel = runButton?.textContent || 'Run DESeq2';

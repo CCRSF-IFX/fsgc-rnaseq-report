@@ -85,7 +85,7 @@
             <li><strong>Review the run</strong><span>Use Overview and QC to confirm sample count, contrasts, warnings, genome, annotation, and pipeline provenance.</span></li>
             <li><strong>Check the data setup</strong><span>Use Data Setup to confirm count/sample matching. Upload a sample manifest for the embedded count matrix, or upload a new count matrix with its matching manifest.</span></li>
             <li><strong>Explore sample structure</strong><span>Use PCA, Heatmap & Clustering, and Gene Counts to inspect grouping, batch effects, outliers, and marker-gene behavior.</span></li>
-            <li><strong>Run browser DESeq2 when needed</strong><span>Choose one primary factor, set reference/numerator/denominator levels, and optionally adjust or block by batch, sex, subject, or pairing columns.</span></li>
+            <li><strong>Run browser DESeq2 when needed</strong><span>Choose one primary factor, set numerator and denominator levels, and optionally adjust or block by batch, sex, subject, or pairing columns.</span></li>
             <li><strong>Run fgsea from a DE result</strong><span>Select the DE contrast, upload one or more GMT pathway files, set pathway size limits, and run fgsea in the browser.</span></li>
             <li><strong>Export or reload results</strong><span>Use table CSV exports for individual result tables. For browser-run DESeq2/GSEA results, export the Methods & Export analysis cache before closing the tab.</span></li>
           </ol>
@@ -209,7 +209,7 @@
           <h3>Analysis setup</h3>
           <div class="setup-flow">
             <div><strong>1. Load data</strong><p>Use the embedded count matrix or upload a replacement with a matching manifest.</p></div>
-            <div><strong>2. Check design</strong><p>Confirm sample matching, primary factor, reference level, and optional covariates before DESeq2.</p></div>
+            <div><strong>2. Check design</strong><p>Confirm sample matching, primary factor, denominator/reference level, and optional covariates before DESeq2.</p></div>
             <div><strong>3. Run analysis</strong><p>Use DESeq2 first, then fgsea with one or more uploaded GMT pathway files.</p></div>
           </div>
           <div id="analysis-readiness" class="readiness-list"></div>
@@ -400,16 +400,24 @@
           <h3>DESeq2 in browser</h3>
           <div class="toolbar">
             <label>Primary factor <select id="deseq-design-column"></select></label>
-            <label>Reference <select id="deseq-reference-level"></select></label>
             <label>Numerator <select id="deseq-numerator-level"></select></label>
-            <label>Denominator <select id="deseq-denominator-level"></select></label>
+            <label>
+              <span class="field-label-with-tip">
+                Denominator
+                <span class="tip-wrap">
+                  <span class="tip-icon" tabindex="0" aria-describedby="deseq-denominator-tip" aria-label="Denominator reference help">?</span>
+                  <span id="deseq-denominator-tip" class="tip-bubble" role="tooltip">The denominator is used as the DESeq2 reference level for this contrast.</span>
+                </span>
+              </span>
+              <select id="deseq-denominator-level"></select>
+            </label>
             <button id="deseq-run">Run DESeq2</button>
           </div>
           <div class="toolbar deseq-adjust-toolbar">
             <label>Adjust/block by <select id="deseq-adjust-columns" multiple size="4"></select></label>
             <p class="note">Choose optional batch, sex, subject, or paired-sample columns. The primary factor is tested after these terms.</p>
           </div>
-          <p class="note" id="deseq-status">DESeq2 uses webR and the configured package snapshot for small exploratory runs.</p>
+          <p class="note" id="deseq-status">DESeq2 uses webR and the configured package snapshot. The denominator is used as the DESeq2 reference level.</p>
         </article>
       </section>
 

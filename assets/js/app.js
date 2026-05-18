@@ -290,9 +290,7 @@ function analysisReadinessItems() {
     || factorColumns[0]
     || '';
   const numerator = document.getElementById('deseq-numerator-level')?.value || '';
-  const denominator = document.getElementById('deseq-denominator-level')?.value
-    || document.getElementById('deseq-reference-level')?.value
-    || '';
+  const denominator = document.getElementById('deseq-denominator-level')?.value || '';
   const adjustColumns = selectedValues('deseq-adjust-columns');
   const gmtUploaded = (document.getElementById('gsea-gmt-file')?.files?.length || 0) > 0;
   const packageStatuses = ['DESeq2', 'fgsea'].map((pkg) => `${pkg}: ${getPackageStatus(pkg)}`);
@@ -536,7 +534,6 @@ function wireControls() {
   document.getElementById('enrichment-contrast-select')?.addEventListener('change', renderCurrentEnrichment);
   document.getElementById('gsea-result-select')?.addEventListener('change', renderCurrentEnrichment);
   document.getElementById('deseq-design-column')?.addEventListener('change', renderAnalysisReadiness);
-  document.getElementById('deseq-reference-level')?.addEventListener('change', renderAnalysisReadiness);
   document.getElementById('deseq-numerator-level')?.addEventListener('change', renderAnalysisReadiness);
   document.getElementById('deseq-denominator-level')?.addEventListener('change', renderAnalysisReadiness);
   document.getElementById('deseq-adjust-columns')?.addEventListener('change', renderAnalysisReadiness);

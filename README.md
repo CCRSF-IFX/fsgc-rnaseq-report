@@ -426,6 +426,10 @@ views remain usable from the standalone file.
 }
 ```
 
+`analysis.referenceLevel` sets the default denominator in the browser DESeq2
+controls. For each browser-run contrast, the selected denominator is used as the
+DESeq2 reference level.
+
 The built-in browser DE fallback uses Welch t-tests on log2(CPM + 1) values and
 Benjamini-Hochberg adjusted p-values. Treat those results as exploratory. Use
 pipeline-generated DESeq2 or another mature RNA-seq method for final analysis.
