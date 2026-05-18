@@ -1,4 +1,4 @@
-import { state, logAnalysis, setStatus } from './state.js';
+import { state, logAnalysis, setStatus, yieldToBrowser } from './state.js';
 import { sampleIdsInCounts } from './analysis.js';
 import { gseaResultCurves } from './enrichment.js';
 
@@ -9,6 +9,7 @@ const CACHE_CLOSE_GUIDE = 'Unsaved DESeq2/GSEA results are stored only in this b
 let cacheControlsWired = false;
 let cacheDirty = false;
 let cacheCallbacks = {};
+let cacheBusy = false;
 
 export function setupAnalysisCacheControls(callbacks = {}) {
   cacheCallbacks = callbacks;
@@ -34,44 +35,81 @@ function markAnalysisCacheClean(message = '') {
   if (message) setAnalysisCacheStatus(message);
 }
 
-function exportAnalysisCache() {
-  const cache = buildAnalysisCache();
-  if (!cache.de_results.length && !cache.gsea_results.length) {
-    setAnalysisCacheStatus('No DESeq2 or fgsea results are available to export.');
-    return;
-  }
+async function exportAnalysisCache() {
+  setAnalysisCacheBusy(true);
+  try {
+    setAnalysisCacheProgress('Preparing export', 'Collecting results', 0.12);
+    setStatus('Analysis cache: preparing export', { busy: true, progress: 0.12 });
+    await yieldToBrowser();
 
-  const blob = new Blob([`${JSON.stringify(cache, null, 2)}\n`], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = analysisCacheFilename(cache);
-  a.click();
-  URL.revokeObjectURL(url);
-  const metadataNote = cache.sample_metadata?.rows?.length
-    ? ` and ${cache.sample_metadata.rows.length} sample metadata row(s)`
-    : '';
-  markAnalysisCacheClean(`Exported cache with ${cache.de_results.length} DESeq2 result set(s), ${cache.gsea_results.length} fgsea result set(s)${metadataNote}.`);
-  logAnalysis('Analysis cache exported.');
+    const cache = buildAnalysisCache();
+    if (!cache.de_results.length && !cache.gsea_results.length) {
+      hideAnalysisCacheProgress();
+      setAnalysisCacheStatus('No DESeq2 or fgsea results are available to export.');
+      return;
+    }
+
+    setAnalysisCacheProgress('Preparing export', 'Serializing JSON', 0.48);
+    setStatus('Analysis cache: serializing JSON', { busy: true, progress: 0.48 });
+    await yieldToBrowser();
+    const payload = `${JSON.stringify(cache, null, 2)}\n`;
+
+    const filename = analysisCacheFilename(cache);
+    setAnalysisCacheProgress('Preparing export', `${formatBytes(payload.length)} ready`, 0.82);
+    setStatus('Analysis cache: preparing download', { busy: true, progress: 0.82 });
+    await yieldToBrowser();
+    downloadTextFile(filename, payload, 'application/json');
+
+    const metadataNote = cache.sample_metadata?.rows?.length
+      ? ` and ${cache.sample_metadata.rows.length} sample metadata row(s)`
+      : '';
+    setAnalysisCacheProgress('Cache exported', filename, 1, 'ok');
+    markAnalysisCacheClean(`Exported cache with ${cache.de_results.length} DESeq2 result set(s), ${cache.gsea_results.length} fgsea result set(s)${metadataNote}.`);
+    setStatus('Analysis cache exported', { tone: 'ok', progress: 1 });
+    logAnalysis(`Analysis cache exported to ${filename}.`);
+  } catch (error) {
+    setAnalysisCacheProgress('Export failed', error.message, 1, 'fail');
+    setAnalysisCacheStatus(`Cache export failed: ${error.message}`);
+    setStatus('Analysis cache export failed', { tone: 'fail' });
+    logAnalysis(`Analysis cache export failed: ${error.message}`);
+  } finally {
+    setAnalysisCacheBusy(false);
+  }
 }
 
 async function importAnalysisCacheFromInput(event) {
   const file = event.target?.files?.[0];
   if (!file) return;
 
+  setAnalysisCacheBusy(true);
   try {
-    const cache = parseAnalysisCache(JSON.parse(await file.text()));
+    setAnalysisCacheProgress('Loading cache', `Reading ${file.name}`, 0.1);
+    setStatus('Analysis cache: reading file', { busy: true, progress: 0.1 });
+    const text = await readCacheFileText(file);
+
+    setAnalysisCacheProgress('Loading cache', 'Parsing JSON', 0.62);
+    setStatus('Analysis cache: parsing JSON', { busy: true, progress: 0.62 });
+    await yieldToBrowser();
+    const cache = parseAnalysisCache(JSON.parse(text));
+
+    setAnalysisCacheProgress('Loading cache', 'Restoring results', 0.78);
+    setStatus('Analysis cache: restoring results', { busy: true, progress: 0.78 });
+    await yieldToBrowser();
     const restored = restoreAnalysisCache(cache);
     const metadataNote = restored.sampleMetadata
       ? ` and ${restored.sampleMetadataRows} sample metadata row(s)`
       : '';
     markAnalysisCacheClean(`Loaded cache with ${cache.de_results.length} DESeq2 result set(s), ${cache.gsea_results.length} fgsea result set(s)${metadataNote}.`);
     logAnalysis(`Analysis cache loaded from ${file.name}.`);
+    setAnalysisCacheProgress('Cache loaded', file.name, 1, 'ok');
     await refreshImportedAnalysis(cache, restored);
   } catch (error) {
+    setAnalysisCacheProgress('Load failed', error.message, 1, 'fail');
     setAnalysisCacheStatus(`Cache load failed: ${error.message}`);
+    setStatus('Analysis cache load failed', { tone: 'fail' });
     logAnalysis(`Analysis cache load failed: ${error.message}`);
   } finally {
+    setAnalysisCacheBusy(false);
     event.target.value = '';
   }
 }
@@ -204,7 +242,9 @@ function warnIfAnalysisCacheUnsaved(event) {
 
 function updateAnalysisCacheControls() {
   const exportButton = document.getElementById('analysis-cache-export');
-  if (exportButton) exportButton.disabled = !hasAnalysisCacheResults();
+  if (exportButton) exportButton.disabled = cacheBusy || !hasAnalysisCacheResults();
+  const cacheInput = document.getElementById('analysis-cache-file');
+  if (cacheInput) cacheInput.disabled = cacheBusy;
   const guide = document.getElementById('analysis-cache-guide');
   if (guide) guide.classList.toggle('is-unsaved', cacheDirty && hasAnalysisCacheResults());
 }
@@ -216,6 +256,66 @@ function hasAnalysisCacheResults() {
 function setAnalysisCacheStatus(message) {
   const status = document.getElementById('analysis-cache-status');
   if (status) status.textContent = message;
+}
+
+function setAnalysisCacheBusy(busy) {
+  cacheBusy = Boolean(busy);
+  updateAnalysisCacheControls();
+}
+
+function setAnalysisCacheProgress(title, detail, progress = null, tone = '') {
+  const container = document.getElementById('analysis-cache-progress');
+  if (!container) return;
+  const titleEl = document.getElementById('analysis-cache-progress-title');
+  const detailEl = document.getElementById('analysis-cache-progress-detail');
+  const fill = document.getElementById('analysis-cache-progress-fill');
+  container.hidden = false;
+  container.className = `operation-progress ${tone || ''}`.trim();
+  const value = Number(progress);
+  const hasProgress = Number.isFinite(value);
+  container.classList.toggle('is-indeterminate', !hasProgress);
+  if (titleEl) titleEl.textContent = title;
+  if (detailEl) detailEl.textContent = detail || '';
+  if (fill) fill.style.width = hasProgress ? `${Math.max(0, Math.min(100, value * 100)).toFixed(0)}%` : '';
+}
+
+function hideAnalysisCacheProgress() {
+  const container = document.getElementById('analysis-cache-progress');
+  if (container) container.hidden = true;
+}
+
+function downloadTextFile(filename, text, type) {
+  const blob = new Blob([text], { type });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+async function readCacheFileText(file) {
+  if (!file.stream || !globalThis.TextDecoder) {
+    const text = await file.text();
+    setAnalysisCacheProgress('Loading cache', `${formatBytes(text.length)} read`, 0.55);
+    return text;
+  }
+
+  const reader = file.stream().getReader();
+  const decoder = new TextDecoder();
+  const chunks = [];
+  let received = 0;
+  const total = Math.max(1, Number(file.size) || 1);
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(decoder.decode(value, { stream: true }));
+    received += value.length || 0;
+    setAnalysisCacheProgress('Loading cache', `${formatBytes(received)} of ${formatBytes(total)}`, Math.min(0.55, 0.1 + (received / total) * 0.45));
+    await yieldToBrowser();
+  }
+  chunks.push(decoder.decode());
+  return chunks.join('');
 }
 
 function plainRows(rows) {
@@ -336,4 +436,17 @@ function slug(value) {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '');
+}
+
+function formatBytes(bytes) {
+  const value = Math.max(0, Number(bytes) || 0);
+  if (value < 1024) return `${value.toFixed(0)} B`;
+  const units = ['KB', 'MB', 'GB'];
+  let current = value / 1024;
+  let unitIndex = 0;
+  while (current >= 1024 && unitIndex < units.length - 1) {
+    current /= 1024;
+    unitIndex += 1;
+  }
+  return `${current >= 10 ? current.toFixed(1) : current.toFixed(2)} ${units[unitIndex]}`;
 }

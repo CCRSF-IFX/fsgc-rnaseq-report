@@ -291,6 +291,21 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .status-message.ok { background: #dcfce7; color: var(--ok); }
 .status-message.warn { background: #fef3c7; color: var(--warn); }
 .status-message.fail { background: #fee2e2; color: var(--fail); }
+.operation-progress { display: grid; gap: 8px; margin: 10px 0 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: #f8fafc; color: var(--muted); }
+.operation-progress[hidden] { display: none; }
+.operation-progress.ok { border-color: #bbf7d0; background: #f0fdf4; }
+.operation-progress.warn { border-color: #fde68a; background: #fffbeb; }
+.operation-progress.fail { border-color: #fecaca; background: #fef2f2; }
+.operation-progress.handoff { border-color: #bfdbfe; background: #eff6ff; }
+.operation-progress-head { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; font-size: 13px; }
+.operation-progress-head strong { color: var(--ink); }
+.operation-progress-head span { overflow: hidden; text-align: right; text-overflow: ellipsis; white-space: nowrap; }
+.operation-progress.handoff .operation-progress-head { align-items: flex-start; }
+.operation-progress.handoff .operation-progress-head span { white-space: normal; text-align: left; }
+.operation-progress-track { height: 5px; overflow: hidden; border-radius: 999px; background: #e2e8f0; }
+.operation-progress.handoff .operation-progress-track { display: none; }
+.operation-progress-track span { display: block; width: 0; height: 100%; border-radius: inherit; background: var(--accent); transition: width 180ms ease; }
+.operation-progress.is-indeterminate .operation-progress-track span { width: 38%; animation: status-slide 1.15s ease-in-out infinite; }
 .cache-guide { display: grid; gap: 8px; margin-top: 12px; padding: 12px; border: 1px solid var(--line); border-left: 4px solid var(--accent); border-radius: 8px; background: #f8fafc; }
 .cache-guide.is-unsaved { border-color: #bfdbfe; border-left-color: var(--accent); background: #eff6ff; }
 .cache-guide strong { color: var(--ink); }

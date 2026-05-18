@@ -1,6 +1,7 @@
 import { logAnalysis, setStatus, state } from './state.js';
 import { checkPackageSnapshot, getPackageSnapshotStatus } from './packageSnapshot.js';
 import {
+  downloadPackageFileWithProgress,
   mountPackageRepositoryLibraryBundle,
   packageRepositoryLibraryBundleConfig,
   packageRepositoryLibraryBundleDownloadUrl,
@@ -41,12 +42,19 @@ function ensurePackageFallbackModal() {
       <div id="package-fallback-status" class="status-message fail"></div>
       <p id="package-fallback-bundle-name" class="package-fallback-bundle-name"></p>
       <div class="modal-actions package-fallback-actions">
-        <a id="package-fallback-download" class="button" href="#" download>Download webR library bundle</a>
+        <button id="package-fallback-download" type="button">Download webR library bundle</button>
         <label class="file-button secondary">Choose downloaded bundle
           <input id="package-fallback-bundle-file" type="file" accept=".zip,.data,.gz,.metadata,.json" multiple />
         </label>
         <button id="package-fallback-retry" class="secondary" type="button">Retry online snapshot</button>
         <button id="package-fallback-continue" class="secondary" type="button">Continue report only</button>
+      </div>
+      <div id="package-fallback-download-progress" class="operation-progress" role="status" aria-live="polite" hidden>
+        <div class="operation-progress-head">
+          <strong id="package-fallback-download-progress-title">Preparing download</strong>
+          <span id="package-fallback-download-progress-detail">Starting...</span>
+        </div>
+        <div class="operation-progress-track" aria-hidden="true"><span id="package-fallback-download-progress-fill"></span></div>
       </div>
       <label class="check-label package-fallback-dismiss">
         <input id="package-fallback-dismiss" type="checkbox" />
@@ -60,9 +68,7 @@ function wirePackageFallbackModal() {
   document.getElementById('package-fallback-close')?.addEventListener('click', continueReportOnly);
   document.getElementById('package-fallback-continue')?.addEventListener('click', continueReportOnly);
   document.getElementById('package-fallback-retry')?.addEventListener('click', retryPackageSnapshot);
-  document.getElementById('package-fallback-download')?.addEventListener('click', () => {
-    setPackageFallbackStatus('After the download finishes, choose the ZIP here to mount it in webR.', 'warn');
-  });
+  document.getElementById('package-fallback-download')?.addEventListener('click', downloadPackageFallbackBundle);
   document.getElementById('package-fallback-bundle-file')?.addEventListener('change', mountSelectedPackageBundle);
 }
 
@@ -111,12 +117,51 @@ function configurePackageFallbackDownload() {
   if (name) name.textContent = bundle.archiveFile ? `Expected bundle: ${bundle.archiveFile}` : '';
   if (!download) return;
   if (url) {
-    download.href = url;
-    download.setAttribute('download', bundle.archiveFile || '');
+    download.dataset.downloadUrl = url;
+    download.dataset.downloadName = bundle.archiveFile || '';
     download.removeAttribute('aria-disabled');
+    download.disabled = false;
   } else {
-    download.href = '#';
+    delete download.dataset.downloadUrl;
+    delete download.dataset.downloadName;
     download.setAttribute('aria-disabled', 'true');
+    download.disabled = true;
+  }
+}
+
+async function downloadPackageFallbackBundle() {
+  const button = document.getElementById('package-fallback-download');
+  const url = button?.dataset.downloadUrl || packageRepositoryLibraryBundleDownloadUrl();
+  const filename = button?.dataset.downloadName || packageRepositoryLibraryBundleConfig().archiveFile || 'webr-library-bundle.zip';
+  setPackageFallbackControlsDisabled(true);
+  setPackageFallbackDownloadProgress('webR library bundle', 'Starting...', null);
+  setPackageFallbackStatus('Downloading the bundle. After it finishes, choose the ZIP here to mount it in webR.', 'warn');
+  try {
+    const result = await downloadPackageFileWithProgress({
+      url,
+      filename,
+      label: 'webR library bundle',
+      onProgress: (received, total) => {
+        const hasTotal = total > 0;
+        const detail = hasTotal
+          ? `${formatBytes(received)} of ${formatBytes(total)}`
+          : `${formatBytes(received)} downloaded`;
+        setPackageFallbackDownloadProgress('webR library bundle', detail, hasTotal ? received / total : null);
+      },
+      onStatus: (title, detail, progress) => setPackageFallbackDownloadProgress(title || 'webR library bundle', detail, progress),
+    });
+    if (result.fallback) {
+      setPackageFallbackDownloadProgress('webR library bundle', 'Download opened in your browser. Track progress in the browser downloads panel, then choose the ZIP here when it finishes.', null, 'handoff');
+    } else {
+      setPackageFallbackDownloadProgress('webR library bundle', `${result.filename} ready`, 1, 'ok');
+    }
+    setPackageFallbackStatus('After the download finishes, choose the ZIP here to mount it in webR.', 'warn');
+  } catch (error) {
+    setPackageFallbackDownloadProgress('Download failed', error.message, 1, 'fail');
+    setPackageFallbackStatus(`Bundle download failed: ${error.message}`, 'fail');
+  } finally {
+    setPackageFallbackControlsDisabled(false);
+    configurePackageFallbackDownload();
   }
 }
 
@@ -148,6 +193,7 @@ async function mountSelectedPackageBundle(event) {
     logAnalysis(`webR library bundle mount failed: ${error.message}`);
   } finally {
     setPackageFallbackControlsDisabled(false);
+    configurePackageFallbackDownload();
     if (input) input.value = '';
   }
 }
@@ -160,7 +206,7 @@ function continueReportOnly() {
 }
 
 function setPackageFallbackControlsDisabled(disabled) {
-  ['package-fallback-retry', 'package-fallback-continue', 'package-fallback-close'].forEach((id) => {
+  ['package-fallback-download', 'package-fallback-retry', 'package-fallback-continue', 'package-fallback-close'].forEach((id) => {
     const element = document.getElementById(id);
     if (element) element.disabled = disabled;
   });
@@ -173,6 +219,22 @@ function setPackageFallbackStatus(message, tone = 'fail') {
   if (!status) return;
   status.className = `status-message ${tone}`;
   status.textContent = message;
+}
+
+function setPackageFallbackDownloadProgress(title, detail, progress = null, tone = '') {
+  const container = document.getElementById('package-fallback-download-progress');
+  if (!container) return;
+  const titleEl = document.getElementById('package-fallback-download-progress-title');
+  const detailEl = document.getElementById('package-fallback-download-progress-detail');
+  const fill = document.getElementById('package-fallback-download-progress-fill');
+  container.hidden = false;
+  container.className = `operation-progress ${tone || ''}`.trim();
+  const value = Number(progress);
+  const hasProgress = Number.isFinite(value);
+  container.classList.toggle('is-indeterminate', !hasProgress && tone !== 'handoff');
+  if (titleEl) titleEl.textContent = title || 'Download';
+  if (detailEl) detailEl.textContent = detail || '';
+  if (fill) fill.style.width = hasProgress ? `${Math.max(0, Math.min(100, value * 100)).toFixed(0)}%` : '';
 }
 
 function refreshPackageFallbackUi() {
@@ -206,4 +268,17 @@ function packageFallbackDismissKey() {
     bundle.version || bundle.artifactVersion || bundle.releaseTag || bundle.archiveFile || 'library',
   ].map((part) => String(part || '').trim().replace(/\s+/g, '-'));
   return `rnaseq-report:package-fallback-dismissed:${parts.join(':')}`;
+}
+
+function formatBytes(bytes) {
+  const value = Math.max(0, Number(bytes) || 0);
+  if (value < 1024) return `${value.toFixed(0)} B`;
+  const units = ['KB', 'MB', 'GB'];
+  let current = value / 1024;
+  let unitIndex = 0;
+  while (current >= 1024 && unitIndex < units.length - 1) {
+    current /= 1024;
+    unitIndex += 1;
+  }
+  return `${current >= 10 ? current.toFixed(1) : current.toFixed(2)} ${units[unitIndex]}`;
 }

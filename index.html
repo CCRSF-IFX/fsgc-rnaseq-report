@@ -451,6 +451,13 @@
             <label>Load cache <input id="analysis-cache-file" type="file" accept=".json,application/json" /></label>
           </div>
           <p class="note" id="analysis-cache-status">Export sample metadata, DESeq2 results, and all fgsea result sets together, then reload them later without rerunning browser-side analysis.</p>
+          <div id="analysis-cache-progress" class="operation-progress" role="status" aria-live="polite" hidden>
+            <div class="operation-progress-head">
+              <strong id="analysis-cache-progress-title">Preparing cache</strong>
+              <span id="analysis-cache-progress-detail">Starting...</span>
+            </div>
+            <div class="operation-progress-track" aria-hidden="true"><span id="analysis-cache-progress-fill"></span></div>
+          </div>
           <div id="analysis-cache-guide" class="cache-guide" role="note">
             <strong>Before closing this tab</strong>
             <p><span class="quoted-warning">Changes you made may not be saved</span> means DESeq2/GSEA results from this browser session have not been downloaded yet. Stay on the page, then select <strong>Export cache</strong> and save the <code>.analysis-cache.*.json</code> file.</p>

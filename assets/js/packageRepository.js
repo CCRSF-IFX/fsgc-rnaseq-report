@@ -1,4 +1,4 @@
-import { state, logAnalysis } from './state.js';
+import { state, logAnalysis, setStatus, yieldToBrowser } from './state.js';
 import { ensureRPackages, getPackageStatus, markPackagesAvailable } from './packageManager.js';
 import { mountRLibraryBundle } from './webrManager.js';
 import { checkPackageSnapshot, getPackageSnapshotStatus, packageSnapshotBaseUrl, packageSnapshotCanInstall, packageSnapshotIndexUrl } from './packageSnapshot.js';
@@ -15,6 +15,7 @@ export function renderPackageRepositoryPanel() {
   const repoUrl = packageRepoBaseUrl();
   const indexUrl = packageRepoIndexUrl();
   const bundleUrl = packageRepoBundleUrl();
+  const bundleFilename = packageRepoDownloadFilename(bundleUrl, `rnaseq-report-webr-packages-${cfg.packageRepoVersion || 'snapshot'}.zip`);
   const libraryBundle = packageRepoLibraryBundleConfig();
   const libraryBundleDownloadUrl = packageRepositoryLibraryBundleDownloadUrl();
   const snapshotVersion = cfg.packageRepoVersion || 'the configured package snapshot';
@@ -33,7 +34,7 @@ export function renderPackageRepositoryPanel() {
       <div class="package-actions">
         <button class="secondary" id="package-check" ${disabled}>${snapshotStatus.state === 'checking' ? 'Checking snapshot...' : 'Check snapshot'}</button>
         <button id="package-install" ${installDisabled}>Install/load packages</button>
-        <a class="button secondary" href="${packageRepoEscapeHtml(bundleUrl)}" download>Download snapshot ZIP</a>
+        <button class="secondary" id="package-download-snapshot" type="button" data-download-url="${packageRepoEscapeHtml(bundleUrl)}" data-download-name="${packageRepoEscapeHtml(bundleFilename)}" ${bundleUrl ? '' : 'disabled'}>Download snapshot ZIP</button>
       </div>
       <div class="package-local-bundle">
         <div>
@@ -41,10 +42,17 @@ export function renderPackageRepositoryPanel() {
           <p class="note">Load ${packageRepoEscapeHtml(libraryBundle.archiveFile)} to mount a prebuilt package library for ${packageRepoEscapeHtml(snapshotVersion)} without reinstalling every dependency.</p>
         </div>
         <div class="package-actions">
-          ${libraryBundleDownloadUrl ? `<a class="button" href="${packageRepoEscapeHtml(libraryBundleDownloadUrl)}" download="${packageRepoEscapeHtml(libraryBundle.archiveFile || '')}">Download webR library bundle</a>` : ''}
+          ${libraryBundleDownloadUrl ? `<button id="package-download-library" type="button" data-download-url="${packageRepoEscapeHtml(libraryBundleDownloadUrl)}" data-download-name="${packageRepoEscapeHtml(libraryBundle.archiveFile || '')}">Download webR library bundle</button>` : ''}
           <label class="file-button secondary">Mount bundle <input id="package-library-bundle-file" type="file" accept=".zip,.data,.gz,.metadata,.json" multiple ${disabled} /></label>
           ${libraryBundle.releaseUrl ? `<a class="button secondary" href="${packageRepoEscapeHtml(libraryBundle.releaseUrl)}" target="_blank" rel="noopener">Release bundle</a>` : ''}
         </div>
+      </div>
+      <div id="package-download-progress" class="operation-progress" role="status" aria-live="polite" hidden>
+        <div class="operation-progress-head">
+          <strong id="package-download-progress-title">Preparing download</strong>
+          <span id="package-download-progress-detail">Starting...</span>
+        </div>
+        <div class="operation-progress-track" aria-hidden="true"><span id="package-download-progress-fill"></span></div>
       </div>
       <div class="package-chips">${visiblePackages.map((pkg) => `<span>${packageRepoEscapeHtml(pkg)} <small>${packageRepoEscapeHtml(getPackageStatus(pkg))}</small></span>`).join('')}</div>
       <div class="package-links">
@@ -59,6 +67,8 @@ export function renderPackageRepositoryPanel() {
   }
 
   document.getElementById('package-check')?.addEventListener('click', () => checkPackageRepository({ force: true }));
+  document.getElementById('package-download-snapshot')?.addEventListener('click', () => downloadPackageRepositoryFile('package-download-snapshot', 'Package snapshot ZIP'));
+  document.getElementById('package-download-library')?.addEventListener('click', () => downloadPackageRepositoryFile('package-download-library', 'webR library bundle'));
   document.getElementById('package-library-bundle-file')?.addEventListener('change', async (event) => {
     const input = event.currentTarget;
     const files = input?.files;
@@ -127,6 +137,56 @@ export async function mountPackageRepositoryLibraryBundle(files, options = {}) {
   markPackagesAvailable(packages, options.status || 'mounted');
   logAnalysis('webR library bundle mounted; package downloads are not needed for this session.');
   return packages;
+}
+
+export async function downloadPackageFileWithProgress(options = {}) {
+  const url = String(options.url || '').trim();
+  if (!url) throw new Error('No download URL is configured.');
+  const label = options.label || 'Download';
+  const filename = options.filename || packageRepoDownloadFilename(url, 'download.bin');
+  const onProgress = typeof options.onProgress === 'function' ? options.onProgress : () => {};
+  const onStatus = typeof options.onStatus === 'function' ? options.onStatus : () => {};
+
+  onStatus('Starting download', '', null);
+  await yieldToBrowser();
+  try {
+    const response = await fetch(url, { cache: 'no-store' });
+    if (!response.ok) {
+      const error = new Error(`${response.status} ${response.statusText}`);
+      error.noDownloadFallback = true;
+      throw error;
+    }
+    const total = Number(response.headers.get('content-length')) || 0;
+    const type = response.headers.get('content-type') || 'application/octet-stream';
+    if (!response.body) {
+      onStatus(label, 'Downloading...', null);
+      const blob = await response.blob();
+      triggerBlobDownload(blob, filename);
+      onProgress(blob.size || total, total || blob.size || 0);
+      return { filename, bytes: blob.size || 0, measured: false };
+    }
+
+    const reader = response.body.getReader();
+    const chunks = [];
+    let received = 0;
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(value);
+      received += value.length || 0;
+      onProgress(received, total);
+      await yieldToBrowser();
+    }
+    const blob = new Blob(chunks, { type });
+    triggerBlobDownload(blob, filename);
+    onProgress(blob.size || received, total || blob.size || received);
+    return { filename, bytes: blob.size || received, measured: total > 0 };
+  } catch (error) {
+    if (error.noDownloadFallback) throw error;
+    triggerUrlDownload(url, filename);
+    logAnalysis(`${label} download started without measurable progress: ${error.message}`);
+    return { filename, fallback: true, error };
+  }
 }
 
 export async function checkPackageRepository(options = {}) {
@@ -221,6 +281,48 @@ function packageRepoBundleUrl() {
   return `${packageRepoBaseUrl()}rnaseq-report-webr-packages-${version}.zip`;
 }
 
+async function downloadPackageRepositoryFile(buttonId, label) {
+  const button = document.getElementById(buttonId);
+  const url = button?.dataset.downloadUrl || '';
+  const filename = button?.dataset.downloadName || packageRepoDownloadFilename(url, `${label}.zip`);
+  const buttons = ['package-download-snapshot', 'package-download-library']
+    .map((id) => document.getElementById(id))
+    .filter(Boolean);
+  buttons.forEach((item) => { item.disabled = true; });
+  packageRepoSetDownloadProgress(label, 'Starting...', null);
+  setStatus(`${label}: starting download`, { busy: true });
+  try {
+    const result = await downloadPackageFileWithProgress({
+      url,
+      filename,
+      label,
+      onProgress: (received, total) => {
+        const hasTotal = total > 0;
+        const detail = hasTotal
+          ? `${formatBytes(received)} of ${formatBytes(total)}`
+          : `${formatBytes(received)} downloaded`;
+        packageRepoSetDownloadProgress(label, detail, hasTotal ? received / total : null);
+        setStatus(`${label}: ${detail}`, { busy: true, progress: hasTotal ? received / total : undefined });
+      },
+      onStatus: (title, detail, progress) => packageRepoSetDownloadProgress(title || label, detail, progress),
+    });
+    if (result.fallback) {
+      packageRepoSetDownloadProgress(label, 'Download opened in your browser. Track progress in the browser downloads panel, then mount the ZIP here when it finishes.', null, 'handoff');
+      setStatus(`${label}: browser download started`, { tone: 'warn' });
+    } else {
+      packageRepoSetDownloadProgress(label, `${result.filename} ready`, 1, 'ok');
+      setStatus(`${label}: download ready`, { tone: 'ok', progress: 1 });
+      logAnalysis(`${label} downloaded: ${result.filename}.`);
+    }
+  } catch (error) {
+    packageRepoSetDownloadProgress(label, error.message, 1, 'fail');
+    setStatus(`${label}: download failed`, { tone: 'fail' });
+    packageRepoSetStatus(`${label} download failed: ${error.message}`, 'fail');
+  } finally {
+    buttons.forEach((item) => { item.disabled = !item.dataset.downloadUrl; });
+  }
+}
+
 function packageRepoLibraryBundleConfig() {
   const cfg = state.config?.webr || {};
   const bundle = cfg.libraryBundle || {};
@@ -302,6 +404,60 @@ function packageRepoSetStatus(message, tone = 'info', html = false) {
   } else {
     status.textContent = message;
   }
+}
+
+function packageRepoSetDownloadProgress(title, detail, progress = null, tone = '') {
+  const container = document.getElementById('package-download-progress');
+  if (!container) return;
+  const titleEl = document.getElementById('package-download-progress-title');
+  const detailEl = document.getElementById('package-download-progress-detail');
+  const fill = document.getElementById('package-download-progress-fill');
+  container.hidden = false;
+  container.className = `operation-progress ${tone || ''}`.trim();
+  const value = Number(progress);
+  const hasProgress = Number.isFinite(value);
+  container.classList.toggle('is-indeterminate', !hasProgress && tone !== 'handoff');
+  if (titleEl) titleEl.textContent = title || 'Download';
+  if (detailEl) detailEl.textContent = detail || '';
+  if (fill) fill.style.width = hasProgress ? `${Math.max(0, Math.min(100, value * 100)).toFixed(0)}%` : '';
+}
+
+function triggerBlobDownload(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  triggerUrlDownload(url, filename);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function triggerUrlDownload(url, filename) {
+  const a = document.createElement('a');
+  a.href = url;
+  if (filename) a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
+function packageRepoDownloadFilename(url, fallback) {
+  try {
+    const pathname = new URL(url, globalThis.location?.href).pathname;
+    const name = decodeURIComponent(pathname.split('/').filter(Boolean).pop() || '');
+    return name || fallback;
+  } catch (_) {
+    return fallback;
+  }
+}
+
+function formatBytes(bytes) {
+  const value = Math.max(0, Number(bytes) || 0);
+  if (value < 1024) return `${value.toFixed(0)} B`;
+  const units = ['KB', 'MB', 'GB'];
+  let current = value / 1024;
+  let unitIndex = 0;
+  while (current >= 1024 && unitIndex < units.length - 1) {
+    current /= 1024;
+    unitIndex += 1;
+  }
+  return `${current >= 10 ? current.toFixed(1) : current.toFixed(2)} ${units[unitIndex]}`;
 }
 
 function packageRepoSnapshotTone(status) {
