@@ -271,7 +271,7 @@ export async function renderCanvasXpressHeatmap() {
     renderCanvasXpressColorScale(scale, colorSpectrum);
     renderCanvasXpressAnnotationLegend(sampleIds, annotationColumns);
 
-    new globalThis.CanvasXpress(canvas.id, data, {
+    const chart = new globalThis.CanvasXpress(canvas.id, data, {
       graphType: 'Heatmap',
       graphOrientation: 'horizontal',
       title: '',
@@ -285,14 +285,14 @@ export async function renderCanvasXpressHeatmap() {
       dendrogramHeight: (clusterRows || clusterColumns) ? 56 : 18,
       showSmpDendrogram: clusterRows,
       showVarDendrogram: clusterColumns,
-      smpDendrogramPosition: 'right',
+      smpDendrogramPosition: 'left',
       varDendrogramPosition: 'top',
       varOverlays: annotationColumns,
       showSmpOverlaysLegend: false,
       showVarOverlaysLegend: false,
       varOverlayProperties: Object.fromEntries(annotationColumns.map((column) => [
         column,
-        { showLegend: false, showName: true, position: 'top', thickness: 18 },
+        { showLegend: false, showName: false, position: 'top', thickness: 18 },
       ])),
       colors: CANVASXPRESS_ANNOTATION_COLORS,
       colorSpectrum,
@@ -311,14 +311,16 @@ export async function renderCanvasXpressHeatmap() {
       varTextBaseline: 'middle',
       varTextMargin: 8,
       overlayTextScaleFontFactor: 0.85,
-      showNameOverlays: true,
+      showNameOverlays: false,
       showValueOverlays: false,
       legendTextScaleFontFactor: 0.78,
-      smpTitleLabelPosition: 'right',
+      smpTitleLabelPosition: 'left',
       varTitleLabelPosition: 'bottom',
       smpTitle: 'Genes',
       varTitle: showSampleNames ? 'Samples' : false,
     });
+    await heatmapNextFrame();
+    renderCanvasXpressAnnotationTrackLabels(canvas, chart, annotationColumns);
     const excluded = allSampleIds.length - sampleIds.length;
     const annotationText = annotationColumns.length ? `; annotations: ${annotationColumns.length}` : '';
     const excludedText = excluded ? `; excluded samples: ${excluded}` : '';
@@ -611,17 +613,58 @@ function canvasXpressRendered() {
 
 function resetCanvasXpressCanvas(wrap, canvasId) {
   wrap.innerHTML = '';
+  const stage = document.createElement('div');
+  stage.className = 'canvasxpress-canvas-stage';
   const canvas = document.createElement('canvas');
   canvas.id = canvasId;
   canvas.width = 1100;
   canvas.height = 720;
   canvas.dataset.rendered = 'false';
-  wrap.appendChild(canvas);
+  stage.appendChild(canvas);
+  wrap.appendChild(stage);
   return canvas;
 }
 
 function renderCanvasXpressLoading(wrap, geneCount) {
   wrap.innerHTML = `<div class="canvasxpress-loading">Rendering ${geneCount} gene${geneCount === 1 ? '' : 's'}...</div>`;
+}
+
+function renderCanvasXpressAnnotationTrackLabels(canvas, chart, annotationColumns) {
+  const stage = canvas?.parentElement;
+  if (!stage) return;
+  stage.querySelector('.canvasxpress-track-labels')?.remove();
+  if (!annotationColumns.length) return;
+
+  const overlays = chart?.plotInfo?.variableOverlays;
+  const canvasWidth = canvas.width || 1;
+  const canvasHeight = canvas.height || 1;
+  const cssWidth = parseFloat(canvas.style.width) || canvas.clientWidth || canvasWidth;
+  const cssHeight = parseFloat(canvas.style.height) || canvas.clientHeight || canvasHeight;
+  const scaleX = cssWidth / canvasWidth;
+  const scaleY = cssHeight / canvasHeight;
+
+  const labelLayer = document.createElement('div');
+  labelLayer.className = 'canvasxpress-track-labels';
+  annotationColumns.forEach((column, index) => {
+    const overlay = overlays?.[column];
+    const segments = overlay?.segments?.xy || [];
+    const leftEdge = segments.length
+      ? Math.min(...segments.map((segment) => Number(segment?.[0] ?? segment?.[2] ?? Number.POSITIVE_INFINITY)))
+      : Number.NaN;
+    const rowMid = Number(overlay?.segments?.mid ?? overlay?.mid ?? overlay?.label);
+    const left = Number.isFinite(leftEdge) ? leftEdge * scaleX : Math.max(96, cssWidth * 0.28);
+    const top = Number.isFinite(rowMid)
+      ? rowMid * scaleY
+      : (80 + (index * 18));
+
+    const label = document.createElement('span');
+    label.className = 'canvasxpress-track-label';
+    label.textContent = column;
+    label.style.left = `${left - 8}px`;
+    label.style.top = `${top}px`;
+    labelLayer.appendChild(label);
+  });
+  if (labelLayer.childElementCount) stage.appendChild(labelLayer);
 }
 
 function canvasXpressHeatmapSize(wrap, geneCount, sampleCount, annotationCount, showSampleNames) {

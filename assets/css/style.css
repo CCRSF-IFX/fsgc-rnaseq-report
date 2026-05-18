@@ -233,7 +233,10 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .canvasxpress-scale-ticks { display: flex; justify-content: space-between; width: 100%; font-variant-numeric: tabular-nums; line-height: 1; }
 .canvasxpress-heatmap-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(160px, 200px); gap: 14px; align-items: start; }
 .canvasxpress-heatmap-shell { min-height: 560px; border: 1px solid var(--line); border-radius: 8px; padding: 10px; background: white; overflow: auto; }
+.canvasxpress-canvas-stage { position: relative; display: inline-block; min-width: 100%; }
 .canvasxpress-heatmap-shell canvas { display: block; max-width: 100%; min-width: 620px; min-height: 560px; }
+.canvasxpress-track-labels { position: absolute; inset: 0; pointer-events: none; z-index: 2; }
+.canvasxpress-track-label { position: absolute; transform: translate(-100%, -50%); max-width: 120px; padding-right: 6px; color: #334155; font-size: 11px; font-weight: 700; line-height: 1; text-align: right; white-space: nowrap; }
 .canvasxpress-loading { display: grid; place-items: center; min-height: 560px; color: var(--muted); font-weight: 700; }
 .canvasxpress-annotation-legend { display: flex; flex-direction: column; gap: 14px; position: sticky; top: 12px; max-height: min(720px, calc(100vh - 160px)); overflow: auto; border: 1px solid var(--line); border-radius: 8px; padding: 12px; background: #f8fafc; color: var(--ink); }
 .canvasxpress-annotation-legend[hidden] { display: none; }
