@@ -461,7 +461,12 @@ function renderQC() {
     <p>${badge('ok')} ${summary.counts.ok} &nbsp; ${badge('warn')} ${summary.counts.warn} &nbsp; ${badge('fail')} ${summary.counts.fail}</p>`;
   renderQCPlots();
   const rows = qcRowsWithStatus().map((row) => ({ ...row, status: row.status.toUpperCase() }));
-  renderTable('qc-table', rows, { exportName: 'qc_metrics.csv' });
+  renderTable('qc-table', rows, { columns: qcTableColumns(rows), exportName: 'qc_metrics.csv' });
+}
+
+function qcTableColumns(rows) {
+  const hidden = new Set(['status', 'reason', 'reasons']);
+  return Object.keys(rows[0] || {}).filter((column) => !hidden.has(String(column).trim().toLowerCase()));
 }
 
 function renderQcExcelDownload() {
