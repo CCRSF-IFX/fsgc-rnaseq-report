@@ -101,6 +101,7 @@ python3 scripts/build_standalone_report.py --project-title "Study 42 RNA-seq" --
 python3 scripts/build_standalone_report.py --project-logo path/to/logo.svg
 python3 scripts/build_standalone_report.py --report-author "Jane Doe" --report-organization "Example Bioinformatics Core"
 python3 scripts/build_standalone_report.py --report-version "0.2.0"
+python3 scripts/build_standalone_report.py --data-root path/to/fsgc-rsem-data --FSGC
 python3 scripts/build_standalone_report.py --output path/to/report.html
 python3 scripts/build_standalone_report.py --plotly-file path/to/plotly.min.js
 python3 scripts/build_standalone_report.py --plotly-url https://cdn.plot.ly/plotly-2.35.2.min.js
@@ -126,6 +127,10 @@ that default for a specific build.
 that label is empty and hidden. `--report-author`, `--report-organization`, and
 `--report-version` override the attribution and report template version shown in
 the header, overview, and provenance table.
+`--FSGC` marks the embedded count matrix as FSGC-format RSEM expected counts in
+the generated report config and provenance. Use it for FSGC RSEM outputs where
+the count matrix may store gene symbols inside `gene_id` values such as
+`ENSG00000004777.18_ARHGAP33`.
 
 `dist/` is ignored by git because generated report files can contain run-specific
 data.
