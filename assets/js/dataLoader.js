@@ -47,6 +47,8 @@ const QC_NUMERIC_COLUMN_PATTERNS = [
   /_bases$/i,
 ];
 
+const FSGC_GENE_ID_PATTERN = /^(ENS[A-Z]*G\d+(?:\.\d+)?)_(.+)$/i;
+
 function getEmbeddedAsset(path) {
   const assets = globalThis.REPORT_EMBEDDED_ASSETS;
   return assets && Object.prototype.hasOwnProperty.call(assets, path) ? assets[path] : undefined;
@@ -119,6 +121,75 @@ export function normalizeStringRows(rows) {
   return sourceRows.map((row) => Object.fromEntries(
     Object.entries(row || {}).map(([key, value]) => [normalizeHeader(key), normalizeStringValue(value)]),
   ));
+}
+
+export function parseCountMatrix(text, filename = '') {
+  const lower = String(filename || '').toLowerCase();
+  const rows = lower.endsWith('.tsv') || lower.endsWith('.txt') ? parseTsv(text) : parseCsv(text);
+  return normalizeCountMatrixRows(rows);
+}
+
+export function normalizeCountMatrixRows(rows) {
+  const sourceRows = Array.isArray(rows) ? rows : [];
+  const first = sourceRows[0] || {};
+  const columns = Object.keys(first);
+  const geneIdColumn = findCountMetadataColumn(columns, ['gene_id']);
+  const geneNameColumn = findCountMetadataColumn(columns, ['gene_name']);
+  const geneSymbolColumn = findCountMetadataColumn(columns, ['gene_symbol']);
+  const explicitIdentifierColumn = geneIdColumn || geneNameColumn || geneSymbolColumn;
+  const fallbackIdentifierColumn = explicitIdentifierColumn || columns[0] || '';
+  let inferredGeneSymbols = 0;
+  let unmatchedIdentifierRows = 0;
+  let usedFallbackIdentifierColumn = false;
+
+  const normalizedRows = sourceRows.map((row) => {
+    const next = { ...row };
+    const currentSymbol = stripWrappingQuotes(geneSymbolColumn ? next[geneSymbolColumn] : next.gene_symbol);
+    if (currentSymbol) {
+      next.gene_symbol = currentSymbol;
+      return next;
+    }
+
+    const rawIdentifier = stripWrappingQuotes(
+      (geneIdColumn && next[geneIdColumn])
+        || (geneNameColumn && next[geneNameColumn])
+        || (fallbackIdentifierColumn && next[fallbackIdentifierColumn]),
+    );
+    const parsed = parseFsgcGeneIdentifier(rawIdentifier);
+    if (parsed) {
+      if (!explicitIdentifierColumn) usedFallbackIdentifierColumn = true;
+      next.gene_id_raw = rawIdentifier;
+      next.gene_id = parsed.geneId;
+      next.gene_symbol = parsed.geneSymbol;
+      inferredGeneSymbols += 1;
+    } else {
+      if (geneIdColumn && rawIdentifier) next.gene_id = rawIdentifier;
+      else if (geneNameColumn && rawIdentifier) next.gene_name = rawIdentifier;
+      if (rawIdentifier) unmatchedIdentifierRows += 1;
+    }
+    return next;
+  });
+
+  const warnings = [];
+  if (!geneSymbolColumn && sourceRows.length > 0) {
+    if (inferredGeneSymbols === 0) {
+      warnings.push('No gene_symbol column was found, and gene_id values did not match the FSGC ENSG..._SYMBOL format. DESeq2 can still run, but custom gene lists and GSEA GMT files must use matching identifiers or include a gene_symbol column.');
+    } else if (unmatchedIdentifierRows > 0) {
+      warnings.push(`Inferred gene_symbol for ${inferredGeneSymbols.toLocaleString()} row(s) from FSGC-style gene_id values, but ${unmatchedIdentifierRows.toLocaleString()} row(s) did not match the ENSG..._SYMBOL format.`);
+    }
+  }
+
+  return {
+    rows: normalizedRows,
+    warnings,
+    info: {
+      hasGeneSymbolColumn: Boolean(geneSymbolColumn),
+      inferredGeneSymbols,
+      unmatchedIdentifierRows,
+      identifierColumn: fallbackIdentifierColumn,
+      usedFallbackIdentifierColumn,
+    },
+  };
 }
 
 export function parseCountCell(value) {
@@ -195,6 +266,41 @@ function normalizeStringValue(value) {
   return stripUtf8Bom(String(value)).trim();
 }
 
+function stripWrappingQuotes(value) {
+  let text = normalizeStringValue(value);
+  while (text.length >= 2) {
+    const first = text[0];
+    const last = text[text.length - 1];
+    if ((first === '"' && last === '"') || (first === "'" && last === "'")) {
+      text = text.slice(1, -1).trim();
+    } else {
+      break;
+    }
+  }
+  return text;
+}
+
+function findCountMetadataColumn(columns, names) {
+  const allowed = new Set(names);
+  return columns.find((column) => allowed.has(normalizeCountMetadataColumnName(column))) || '';
+}
+
+function normalizeCountMetadataColumnName(column) {
+  return String(column || '').trim().toLowerCase().replace(/[\s.-]+/g, '_');
+}
+
+function parseFsgcGeneIdentifier(value) {
+  const text = stripWrappingQuotes(value);
+  const match = text.match(FSGC_GENE_ID_PATTERN);
+  if (!match) return null;
+  const geneSymbol = stripWrappingQuotes(match[2]);
+  if (!geneSymbol) return null;
+  return {
+    geneId: match[1],
+    geneSymbol,
+  };
+}
+
 function normalizeHeader(value, index = 0) {
   const header = normalizeStringValue(value);
   return header || `column_${index + 1}`;
@@ -211,6 +317,8 @@ function isKnownQcNumericColumn(column) {
 export async function loadCoreAssets() {
   state.config = await loadJson('assets/report_config.json', true);
   const dataRoot = state.config.dataRoot || 'assets/data';
+  state.countMatrixWarnings = [];
+  state.countMatrixInfo = null;
   state.counts = await loadCountMatrix(dataRoot);
   state.samples = await loadSampleMetadata(dataRoot, state.counts);
   state.qc = await loadQcMetrics(dataRoot);
@@ -317,7 +425,10 @@ async function loadCountMatrix(dataRoot) {
 async function loadCountFile(path, required) {
   const text = await loadTextQuiet(path, required);
   if (text === null) return null;
-  return path.toLowerCase().endsWith('.tsv') ? parseTsv(text) : parseCsv(text);
+  const normalized = parseCountMatrix(text, path);
+  state.countMatrixWarnings = normalized.warnings;
+  state.countMatrixInfo = normalized.info;
+  return normalized.rows;
 }
 
 async function loadSampleFile(path, required) {

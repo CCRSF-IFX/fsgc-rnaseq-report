@@ -5,7 +5,14 @@ import {
   inferContrastsFromSamples,
   sampleIdsInCounts,
 } from './analysis.js';
-import { normalizeStringRows, parseCsv, parseTsv, validateCountMatrix } from './dataLoader.js';
+import {
+  normalizeCountMatrixRows,
+  normalizeStringRows,
+  parseCountMatrix,
+  parseCsv,
+  parseTsv,
+  validateCountMatrix,
+} from './dataLoader.js';
 import { refreshMetadataSchema } from './metadataSchema.js';
 
 let userDataCallbacks = {};
@@ -27,12 +34,17 @@ async function applyUploadedUserData() {
     if (!manifestFile) throw new Error('Provide a sample manifest.');
 
     setUserDataStatus(status, 'Reading uploaded files...');
-    const counts = countFile ? parseCountMatrixUpload(await countFile.text(), countFile.name) : state.counts;
+    const countMatrix = countFile
+      ? parseCountMatrix(await countFile.text(), countFile.name)
+      : normalizeCountMatrixRows(state.counts);
+    const counts = countMatrix.rows;
     const samples = normalizeStringRows(parseSampleManifest(await manifestFile.text(), manifestFile.name));
     validateUploadedData(samples, counts);
 
     state.samples = samples;
     state.counts = counts;
+    state.countMatrixWarnings = countMatrix.warnings || [];
+    state.countMatrixInfo = countMatrix.info || null;
     refreshMetadataSchema({ preserveUser: false });
     if (countFile) {
       state.geneAnnotation = counts.map((row, index) => ({
@@ -57,9 +69,10 @@ async function applyUploadedUserData() {
     await userDataCallbacks.refresh?.();
     const matched = sampleIdsInCounts(state.samples, state.counts).length;
     const dataSource = countFile ? 'uploaded count matrix' : 'embedded count matrix';
-    const message = `Loaded ${samples.length} metadata rows for ${dataSource}; ${counts.length} genes and ${matched} samples matched count columns. Run DESeq2 before fgsea.`;
+    const countNote = countMatrixStatusNote(countMatrix);
+    const message = `Loaded ${samples.length} metadata rows for ${dataSource}; ${counts.length} genes and ${matched} samples matched count columns.${countNote ? ` ${countNote}` : ''} Run DESeq2 before fgsea.`;
     setUserDataStatus(status, message);
-    setStatus('Uploaded data loaded');
+    setStatus('Uploaded data loaded', { tone: countMatrix.warnings?.length ? 'warn' : 'ok' });
     logAnalysis(message);
   } catch (error) {
     setUserDataStatus(status, `Upload failed: ${error.message}`);
@@ -76,10 +89,6 @@ function parseSampleManifest(text, filename) {
   return filename.toLowerCase().endsWith('.tsv') || filename.toLowerCase().endsWith('.txt')
     ? parseTsv(text)
     : parseCsv(text);
-}
-
-function parseCountMatrixUpload(text, filename) {
-  return filename.toLowerCase().endsWith('.tsv') ? parseTsv(text) : parseCsv(text);
 }
 
 function validateUploadedData(samples, counts) {
@@ -103,4 +112,14 @@ function validateUploadedData(samples, counts) {
 
 function setUserDataStatus(element, message) {
   if (element) element.textContent = message;
+}
+
+function countMatrixStatusNote(countMatrix) {
+  const warnings = countMatrix?.warnings || [];
+  if (warnings.length) return `Warning: ${warnings.join(' ')}`;
+  const inferred = Number(countMatrix?.info?.inferredGeneSymbols) || 0;
+  if (!countMatrix?.info?.hasGeneSymbolColumn && inferred > 0) {
+    return `Inferred gene_symbol for ${inferred.toLocaleString()} row(s) from FSGC-style gene_id values.`;
+  }
+  return '';
 }

@@ -336,13 +336,16 @@ function analysisReadinessItems() {
   const designReady = primary && numerator && denominator && numerator !== denominator
     && designCounts.numerator >= 2 && designCounts.denominator >= 2;
   const covariateIssues = covariateReadinessIssues(sampleIds, primary, numerator, denominator, adjustColumns);
+  const countMatrixReady = sampleIds.length >= 2 && state.counts.length > 0;
+  const countMatrixWarnings = state.countMatrixWarnings || [];
+  const countMatrixNote = countMatrixReadinessNote();
 
   return [
     {
-      tone: sampleIds.length >= 2 && state.counts.length > 0 ? 'ok' : 'fail',
+      tone: countMatrixReady ? (countMatrixWarnings.length ? 'warn' : 'ok') : 'fail',
       title: 'Count matrix',
       message: state.counts.length > 0
-        ? `${state.counts.length.toLocaleString()} genes loaded; ${sampleIds.length}/${state.samples.length} samples match count columns.`
+        ? `${state.counts.length.toLocaleString()} genes loaded; ${sampleIds.length}/${state.samples.length} samples match count columns.${countMatrixNote ? ` ${countMatrixNote}` : ''}`
         : 'No count matrix rows are loaded.',
     },
     {
@@ -381,6 +384,16 @@ function analysisReadinessItems() {
         : 'Upload one or more GMT files before running browser fgsea.',
     },
   ];
+}
+
+function countMatrixReadinessNote() {
+  const warnings = state.countMatrixWarnings || [];
+  if (warnings.length) return warnings.join(' ');
+  const inferred = Number(state.countMatrixInfo?.inferredGeneSymbols) || 0;
+  if (!state.countMatrixInfo?.hasGeneSymbolColumn && inferred > 0) {
+    return `Gene symbols were inferred for ${inferred.toLocaleString()} row(s) from FSGC-style gene_id values.`;
+  }
+  return '';
 }
 
 function metadataLevels(column) {

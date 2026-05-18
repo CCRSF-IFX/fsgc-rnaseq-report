@@ -6,6 +6,8 @@ export const state = {
   pca: null,
   distance: null,
   counts: [],
+  countMatrixWarnings: [],
+  countMatrixInfo: null,
   geneAnnotation: [],
   geneAnnotationLoaded: false,
   contrasts: [],
