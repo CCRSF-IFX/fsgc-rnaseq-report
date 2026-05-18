@@ -1,6 +1,7 @@
 export const state = {
   config: null,
   samples: [],
+  metadataSchema: {},
   qc: [],
   pca: null,
   distance: null,

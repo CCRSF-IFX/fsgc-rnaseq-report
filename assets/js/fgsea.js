@@ -1,5 +1,5 @@
 import { state, logAnalysis, createProgressReporter, runWithProgressPulse } from './state.js';
-import { loadDeForContrast, loadGeneAnnotation, parseCsv } from './dataLoader.js';
+import { loadDeForContrast, loadGeneAnnotation, parseCsv, parseEnrichmentCsv } from './dataLoader.js';
 import { ensureRPackages } from './packageManager.js';
 import { renderCurrentEnrichment, storeGseaResult } from './enrichment.js';
 import { evalR } from './webrManager.js';
@@ -364,7 +364,7 @@ function fgseaParseWebRResult(result) {
   const text = fgseaResultText(result);
   const [resultText, curveAndHitText = ''] = text.split(FGSEA_CURVE_SEPARATOR);
   const [curveText = '', hitText = ''] = curveAndHitText.split(FGSEA_HIT_SEPARATOR);
-  const rows = parseCsv(resultText).map((row) => ({
+  const rows = parseEnrichmentCsv(resultText).map((row) => ({
     ...row,
     term_name: row.term_name || row.term_id || row.pathway,
     term_id: row.term_id || row.pathway || '',

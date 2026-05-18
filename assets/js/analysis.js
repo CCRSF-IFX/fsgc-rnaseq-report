@@ -3,9 +3,9 @@ export function sampleIdsInCounts(samples, counts) {
   return samples.map((sample) => sample.sample_id).filter((id) => Object.prototype.hasOwnProperty.call(firstRow, id));
 }
 
-export function inferContrastsFromSamples(samples, config = {}) {
+export function inferContrastsFromSamples(samples, config = {}, schema = {}) {
   const analysis = config.analysis || {};
-  const columns = analysisMetadataColumns(samples);
+  const columns = analysisMetadataColumns(samples, schema);
   const conditionColumn = analysis.conditionColumn || (columns.includes('condition') ? 'condition' : columns.find((column) => uniqueValues(samples, column).length >= 2));
   if (!conditionColumn) return [];
 
@@ -307,12 +307,17 @@ function benjaminiHochberg(pvalues) {
   return adjusted;
 }
 
-function analysisMetadataColumns(samples) {
+function analysisMetadataColumns(samples, schema = {}) {
   const keys = new Set();
   samples.forEach((sample) => Object.keys(sample).forEach((key) => {
     if (key !== 'sample_id') keys.add(key);
   }));
-  return Array.from(keys).sort();
+  return Array.from(keys)
+    .filter((key) => {
+      const type = schema?.[key]?.type;
+      return !type || ['categorical', 'ordered'].includes(type);
+    })
+    .sort();
 }
 
 function uniqueValues(samples, column) {

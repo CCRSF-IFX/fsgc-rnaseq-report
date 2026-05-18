@@ -5,7 +5,8 @@ import {
   inferContrastsFromSamples,
   sampleIdsInCounts,
 } from './analysis.js';
-import { parseCsv, parseTsv } from './dataLoader.js';
+import { normalizeStringRows, parseCsv, parseTsv, validateCountMatrix } from './dataLoader.js';
+import { refreshMetadataSchema } from './metadataSchema.js';
 
 let userDataCallbacks = {};
 
@@ -27,11 +28,12 @@ async function applyUploadedUserData() {
 
     setUserDataStatus(status, 'Reading uploaded files...');
     const counts = countFile ? parseCsv(await countFile.text()) : state.counts;
-    const samples = parseSampleManifest(await manifestFile.text(), manifestFile.name);
+    const samples = normalizeStringRows(parseSampleManifest(await manifestFile.text(), manifestFile.name));
     validateUploadedData(samples, counts);
 
     state.samples = samples;
     state.counts = counts;
+    refreshMetadataSchema({ preserveUser: false });
     if (countFile) {
       state.geneAnnotation = counts.map((row, index) => ({
         gene_id: row.gene_id || row.gene_symbol || row.gene_name || `gene_${index + 1}`,
@@ -42,7 +44,7 @@ async function applyUploadedUserData() {
     }
     state.pca = computePcaFromCounts(state.counts, state.samples, state.config);
     state.distance = computeSampleDistanceFromCounts(state.counts, state.samples, state.config);
-    state.contrasts = inferContrastsFromSamples(state.samples, state.config);
+    state.contrasts = inferContrastsFromSamples(state.samples, state.config, state.metadataSchema);
     state.deResults = new Map();
     state.enrichmentResults = new Map();
     state.provenance = {
@@ -88,6 +90,7 @@ function validateUploadedData(samples, counts) {
   }
   const matched = sampleIdsInCounts(samples, counts);
   if (matched.length < 2) throw new Error('At least two sample_id values must match count matrix columns.');
+  validateCountMatrix(counts, matched);
   const metadataColumns = Object.keys(samples[0]).filter((key) => key !== 'sample_id');
   if (!metadataColumns.some((column) => new Set(samples.map((sample) => sample[column]).filter(Boolean)).size >= 2)) {
     throw new Error('The sample manifest needs at least one grouping column with two or more levels for DE analysis.');

@@ -275,9 +275,11 @@ assets/
 Conventions:
 
 - `sample_id` is the primary key for sample-level files.
-- If a sample manifest is supplied, it must include `sample_id`; analysis group columns such as `condition`, `treatment`, `batch`, and `sex` are preserved as metadata.
+- If a sample manifest is supplied, it must include `sample_id`; metadata values are preserved as strings so IDs like `001` and timepoint labels like `6h` remain intact.
+- The report infers a metadata schema for each sample column and lets the user override it in Data Setup. Primary DE factors should be `categorical` or `ordered`; optional adjustment/blocking terms can also be `continuous`. Identifier columns such as `sample_id`, `donor_id`, and `pair_id` are excluded from model controls unless reclassified.
 - `counts.csv` must include at least one gene identifier column, such as `gene_id`, `gene_symbol`, or `gene_name`.
 - Count matrix sample columns must match `sample_id` values when a sample manifest is supplied. Without a manifest, sample IDs are inferred from numeric count columns.
+- Count values must be nonnegative numeric values. Fractional expected counts from tools such as RSEM are accepted; browser summaries use them as numeric counts and the DESeq2 webR runner rounds them to integers immediately before creating the DESeq2 dataset.
 - `gene_id` and `gene_symbol` identify gene-level records.
 - DE tables should include `gene_id`, `gene_symbol`, `log2FoldChange`, `pvalue`, and `padj`.
 - Count matrices are expected in wide CSV format with gene columns first and one column per sample.
@@ -285,8 +287,8 @@ Conventions:
 
 Browser-generated contrasts require a sample manifest. They use
 `analysis.conditionColumn` from `assets/report_config.json`. If it is not set,
-the report uses `condition` when available, otherwise the first metadata column
-with at least two groups.
+the report uses `condition` when available, otherwise the first categorical or
+ordered metadata column with at least two groups.
 
 QC metrics can use canonical report fields or the Excel-style headers from the
 pipeline summary. For browser-hosted assets, use JSON/CSV/TSV. For standalone
@@ -438,9 +440,14 @@ columns runs a model equivalent to:
 ```
 
 For paired designs, choose the treatment/group column as the primary factor and
-the subject or pair ID column as an adjustment/blocking column. The runner does
-not currently support arbitrary interaction terms such as
-`genotype:treatment`.
+mark the subject or pair ID column as `categorical` before selecting it as an
+adjustment/blocking column. The runner does not currently support arbitrary
+interaction terms such as `genotype:treatment`.
+
+For time-series metadata, keep raw values in the manifest. Numeric columns named
+`time`, `dose`, `RIN`, or `age` are inferred as continuous covariates, while
+labels such as `0h`, `6h`, and `24h` are inferred as ordered timepoints. Users
+can override either interpretation before running DESeq2.
 
 ### Browser Analysis Cache
 

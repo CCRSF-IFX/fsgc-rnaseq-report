@@ -99,6 +99,16 @@ body { margin: 0; font-family: Inter, ui-sans-serif, system-ui, -apple-system, B
 .readiness-item.fail .readiness-dot { background: var(--fail); }
 .readiness-item strong { display: block; margin-bottom: 2px; }
 .readiness-item p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.4; }
+.metadata-schema-grid { display: grid; gap: 8px; }
+.metadata-schema-row { display: grid; grid-template-columns: minmax(160px, 1.2fr) minmax(150px, 0.8fr) minmax(120px, 0.7fr) minmax(220px, 1.4fr); gap: 10px; align-items: center; border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; background: #f8fafc; }
+.metadata-schema-row.is-overridden { border-color: #bfdbfe; background: #eff6ff; }
+.metadata-schema-column { display: grid; gap: 2px; min-width: 0; }
+.metadata-schema-column strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.metadata-schema-column span, .metadata-schema-inferred span, .metadata-schema-values span, .metadata-schema-values small { color: var(--muted); font-size: 12px; line-height: 1.35; }
+.metadata-schema-row label { display: grid; gap: 4px; color: var(--muted); font-size: 12px; font-weight: 700; }
+.metadata-schema-row select { width: 100%; padding: 7px 8px; }
+.metadata-schema-inferred, .metadata-schema-values { display: grid; gap: 2px; min-width: 0; }
+.metadata-schema-inferred strong, .metadata-schema-values small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 input, select, textarea, button, .button { font: inherit; border: 1px solid var(--line); border-radius: 8px; padding: 9px 10px; background: white; }
 textarea { min-height: 44px; resize: vertical; }
 button, .button { background: var(--accent); border-color: var(--accent); color: white; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; justify-content: center; }
@@ -417,6 +427,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   .pca-plot-main, .pca-plot-side { min-height: 420px; }
   .guide-grid { grid-template-columns: 1fr; }
   .setup-flow { grid-template-columns: 1fr; }
+  .metadata-schema-row { grid-template-columns: 1fr; align-items: stretch; }
   .modal-backdrop { align-items: stretch; padding: 14px; }
   .modal-actions { justify-content: stretch; }
   .modal-actions button { flex: 1; }

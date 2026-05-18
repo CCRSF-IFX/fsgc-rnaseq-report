@@ -15,6 +15,15 @@ import { setupAnalysisCacheControls } from './analysisCache.js';
 import { setupPackageFallbackModal } from './packageFallbackModal.js';
 import { sampleIdsInCounts } from './analysis.js';
 import { getPackageStatus } from './packageManager.js';
+import {
+  analysisFactorColumns,
+  discreteMetadataColumns,
+  metadataColumnType,
+  metadataSchemaRows,
+  metadataTypeOptionLabel,
+  METADATA_TYPES,
+  setMetadataColumnType,
+} from './metadataSchema.js';
 
 let packageSnapshotEventsWired = false;
 
@@ -178,6 +187,7 @@ function renderOverviewMetrics() {
 }
 
 function renderSamples() {
+  renderMetadataSchemaPanel();
   renderTable('samples-table', state.samples, { exportName: 'samples.csv' });
   const search = document.getElementById('sample-search');
   if (search) search.oninput = (event) => {
@@ -185,6 +195,79 @@ function renderSamples() {
     const filtered = state.samples.filter((row) => Object.values(row).some((v) => String(v).toLowerCase().includes(q)));
     renderTable('samples-table', filtered, { exportName: 'samples.filtered.csv' });
   };
+}
+
+function renderMetadataSchemaPanel() {
+  const panel = document.getElementById('metadata-schema-panel');
+  if (!panel) return;
+  const rows = metadataSchemaRows();
+  if (!rows.length) {
+    panel.innerHTML = '<p class="note">No sample metadata columns are available yet.</p>';
+    return;
+  }
+  panel.innerHTML = `
+    <div class="metadata-schema-grid">
+      ${rows.map((row) => `
+        <div class="metadata-schema-row ${row.source === 'user' ? 'is-overridden' : ''}">
+          <div class="metadata-schema-column">
+            <strong>${escapeHtml(row.column)}</strong>
+            <span>${escapeHtml(row.reason || '')}</span>
+          </div>
+          <label>
+            Type
+            <select data-metadata-type="${escapeHtml(row.column)}">
+              ${METADATA_TYPES.map((type) => `<option value="${type}"${row.type === type ? ' selected' : ''}>${metadataTypeLabelLocal(type)}</option>`).join('')}
+            </select>
+          </label>
+          <div class="metadata-schema-inferred">
+            <span>${escapeHtml(metadataSchemaSourceLabel(row.source))}</span>
+            <strong>${escapeHtml(row.inferredLabel || row.typeLabel)}</strong>
+          </div>
+          <div class="metadata-schema-values">
+            <span>${row.unique} value${row.unique === 1 ? '' : 's'}${row.missing ? `; ${row.missing} missing` : ''}</span>
+            <small>${escapeHtml(row.valuePreview || 'No non-empty values')}</small>
+          </div>
+        </div>`).join('')}
+    </div>`;
+  panel.querySelectorAll('[data-metadata-type]').forEach((select) => {
+    select.addEventListener('change', (event) => {
+      setMetadataColumnType(event.currentTarget.dataset.metadataType, event.currentTarget.value);
+      refreshMetadataDependentUi();
+    });
+  });
+}
+
+function metadataTypeLabelLocal(type) {
+  return {
+    categorical: 'Categorical',
+    continuous: 'Continuous',
+    ordered: 'Ordered',
+    identifier: 'Identifier',
+  }[type] || type;
+}
+
+function metadataSchemaSourceLabel(source) {
+  if (source === 'user') return 'Override';
+  if (source === 'cache') return 'Cached';
+  return 'Inferred';
+}
+
+function refreshMetadataDependentUi() {
+  renderMetadataSchemaPanel();
+  setupDeseqControls({
+    populateContrastSelectors,
+    renderCurrentContrast,
+    renderOverviewMetrics,
+    renderAnalysisReadiness,
+  });
+  setupPcaControls();
+  setupExpressionHeatmapControls();
+  setupCanvasXpressHeatmapControls();
+  setupCountExplorerControls();
+  renderAnalysisReadiness();
+  renderCurrentPCA();
+  renderDistanceHeatmap();
+  renderCountExplorerPlot({ allowEmpty: false });
 }
 
 function renderAnalysisReadiness() {
@@ -201,7 +284,7 @@ function renderAnalysisReadiness() {
 function analysisReadinessItems() {
   const sampleIds = sampleIdsInCounts(state.samples, state.counts);
   const metadata = metadataColumns();
-  const factorColumns = metadata.filter((column) => metadataLevels(column).length >= 2);
+  const factorColumns = analysisFactorColumns().filter((column) => metadataLevels(column).length >= 2);
   const primary = document.getElementById('deseq-design-column')?.value
     || state.config?.analysis?.conditionColumn
     || factorColumns[0]
@@ -232,7 +315,7 @@ function analysisReadinessItems() {
       tone: factorColumns.length ? 'ok' : 'warn',
       title: 'Sample manifest',
       message: factorColumns.length
-        ? `${metadata.length} metadata column(s) available; analysis factors: ${factorColumns.join(', ')}.`
+        ? `${metadata.length} metadata column(s) available; DE factors: ${factorColumns.join(', ')}.`
         : 'No grouping column with at least two levels is available; upload a manifest before DESeq2 or fgsea.',
     },
     {
@@ -300,6 +383,11 @@ function covariateReadinessIssues(sampleIds, primary, numerator, denominator, ad
   return adjustColumns.flatMap((column) => {
     const values = selectedSampleIds.map((sampleId) => sampleMetadataValue(sampleId, column));
     if (values.some((value) => value === '')) return [`${column} has missing values.`];
+    if (metadataColumnType(column) === 'continuous') {
+      if (values.some((value) => !Number.isFinite(Number(value)))) return [`${column} is marked continuous but has non-numeric values.`];
+      if (new Set(values).size < 2) return [`${column} has no numeric variation in the selected samples.`];
+      return [];
+    }
     if (new Set(values).size < 2) return [`${column} has fewer than two levels in the selected samples.`];
     return [];
   });
@@ -332,18 +420,18 @@ function setupPcaControls() {
   const color = document.getElementById('pca-color');
   const shape = document.getElementById('pca-shape');
   const shapeLabel = document.getElementById('pca-shape-label');
-  const columns = metadataColumns();
+  const columns = discreteMetadataColumns();
   if (columns.length === 0) {
     color.innerHTML = '<option value="">None</option>';
     color.disabled = true;
   } else {
     color.disabled = false;
-    color.innerHTML = columns.map((c) => `<option value="${c}">${c}</option>`).join('');
+    color.innerHTML = columns.map((c) => `<option value="${c}">${metadataTypeOptionLabel(c)}</option>`).join('');
     if (columns.includes('condition')) color.value = 'condition';
   }
   const shapeColumns = columns.filter((column) => column !== color.value);
   if (shape) {
-    shape.innerHTML = ['none'].concat(shapeColumns).map((c) => `<option value="${c}">${c === 'none' ? 'None' : c}</option>`).join('');
+    shape.innerHTML = ['none'].concat(shapeColumns).map((c) => `<option value="${c}">${c === 'none' ? 'None' : metadataTypeOptionLabel(c)}</option>`).join('');
     shape.value = shapeColumns[0] || 'none';
     shape.disabled = columns.length <= 1;
   }
@@ -499,7 +587,7 @@ function populateCountBoxplotGroups() {
   select.replaceChildren(...eligibleColumns.map((column) => {
     const option = document.createElement('option');
     option.value = column;
-    option.textContent = column;
+    option.textContent = metadataTypeOptionLabel(column);
     return option;
   }));
   if (eligibleColumns.includes(previous)) select.value = previous;
@@ -526,7 +614,7 @@ function populateCountBoxplotSplitOptions(eligibleColumns = eligibleCountMetadat
   const options = splitColumns.map((column) => {
     const option = document.createElement('option');
     option.value = column;
-    option.textContent = column;
+    option.textContent = metadataTypeOptionLabel(column);
     return option;
   });
   select.replaceChildren(noneOption, ...options);
@@ -534,7 +622,7 @@ function populateCountBoxplotSplitOptions(eligibleColumns = eligibleCountMetadat
 }
 
 function eligibleCountMetadataColumns() {
-  return metadataColumns().filter((column) => countMetadataLevels(column).length > 1);
+  return discreteMetadataColumns().filter((column) => countMetadataLevels(column).length > 1);
 }
 
 function countMetadataLevels(column) {
@@ -585,10 +673,10 @@ function syncPcaShapeOptions() {
   const shape = document.getElementById('pca-shape');
   const shapeLabel = document.getElementById('pca-shape-label');
   if (!shape) return;
-  const columns = metadataColumns();
+  const columns = discreteMetadataColumns();
   const previous = shape.value;
   const shapeColumns = columns.filter((column) => column !== color?.value);
-  shape.innerHTML = ['none'].concat(shapeColumns).map((c) => `<option value="${c}">${c === 'none' ? 'None' : c}</option>`).join('');
+  shape.innerHTML = ['none'].concat(shapeColumns).map((c) => `<option value="${c}">${c === 'none' ? 'None' : metadataTypeOptionLabel(c)}</option>`).join('');
   shape.value = shapeColumns.includes(previous) ? previous : (shapeColumns[0] || 'none');
   shape.disabled = columns.length <= 1;
   if (shapeLabel) shapeLabel.hidden = columns.length <= 1;

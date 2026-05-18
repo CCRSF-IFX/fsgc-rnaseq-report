@@ -6,6 +6,46 @@ import {
   inferContrastsFromSamples,
 } from './analysis.js';
 import { normalizeQcMetrics } from './qc.js';
+import { refreshMetadataSchema } from './metadataSchema.js';
+
+const DE_NUMERIC_COLUMNS = new Set([
+  'baseMean',
+  'log2FoldChange',
+  'lfcSE',
+  'stat',
+  'statistic',
+  'pvalue',
+  'padj',
+  'mean_numerator',
+  'mean_denominator',
+]);
+
+const ENRICHMENT_NUMERIC_COLUMNS = new Set([
+  'pvalue',
+  'padj',
+  'ES',
+  'NES',
+  'size',
+  'rank',
+  'score',
+  'runningScore',
+  'nMoreExtreme',
+  'log2err',
+]);
+
+const QC_NUMERIC_COLUMN_PATTERNS = [
+  /^sample_yield/i,
+  /^percent/i,
+  /^pct_/i,
+  /^total_/i,
+  /^uniquely_/i,
+  /^mapped_/i,
+  /^median_/i,
+  /^q30_/i,
+  /_rate$/i,
+  /_reads$/i,
+  /_bases$/i,
+];
 
 function getEmbeddedAsset(path) {
   const assets = globalThis.REPORT_EMBEDDED_ASSETS;
@@ -50,21 +90,76 @@ export async function loadText(path, required = false) {
   }
 }
 
-export function parseCsv(text) {
-  return parseDelimited(text, ',');
+export function parseCsv(text, options = {}) {
+  return parseDelimited(text, ',', options);
 }
 
-export function parseTsv(text) {
-  return parseDelimited(text, '\t');
+export function parseTsv(text, options = {}) {
+  return parseDelimited(text, '\t', options);
 }
 
-function parseDelimited(text, delimiter) {
+export function parseDeCsv(text) {
+  return parseCsv(text, { numericColumns: DE_NUMERIC_COLUMNS });
+}
+
+export function parseEnrichmentCsv(text) {
+  return parseCsv(text, { numericColumns: ENRICHMENT_NUMERIC_COLUMNS });
+}
+
+export function parseQcCsv(text) {
+  return parseCsv(text, { numericColumnPredicate: isKnownQcNumericColumn });
+}
+
+export function parseQcTsv(text) {
+  return parseTsv(text, { numericColumnPredicate: isKnownQcNumericColumn });
+}
+
+export function normalizeStringRows(rows) {
+  const sourceRows = Array.isArray(rows) ? rows : (Array.isArray(rows?.samples) ? rows.samples : []);
+  return sourceRows.map((row) => Object.fromEntries(
+    Object.entries(row || {}).map(([key, value]) => [normalizeHeader(key), normalizeStringValue(value)]),
+  ));
+}
+
+export function parseCountCell(value) {
+  const text = normalizeStringValue(value).replace(/,/g, '');
+  if (text === '') return null;
+  const number = Number(text);
+  if (!Number.isFinite(number) || number < 0) return null;
+  return number;
+}
+
+export function validateCountMatrix(counts, sampleIds) {
+  if (!Array.isArray(counts) || counts.length === 0) throw new Error('counts.csv must contain at least one gene row.');
+  const ids = Array.from(new Set((sampleIds || []).filter(Boolean).map(String)));
+  if (ids.length < 2) throw new Error('At least two sample columns are required to validate the count matrix.');
+  const problems = [];
+  counts.forEach((row, rowIndex) => {
+    const gene = row.gene_id || row.gene_symbol || row.gene_name || `row ${rowIndex + 1}`;
+    ids.forEach((sampleId) => {
+      if (!Object.prototype.hasOwnProperty.call(row, sampleId)) return;
+      const value = parseCountCell(row[sampleId]);
+      if (value === null) {
+        problems.push(`${gene}/${sampleId}="${row[sampleId] ?? ''}"`);
+      }
+    });
+  });
+  if (problems.length) {
+    const preview = problems.slice(0, 5).join('; ');
+    const extra = problems.length > 5 ? `; ${problems.length - 5} more` : '';
+    throw new Error(`Count matrix has non-numeric, negative, or missing count values: ${preview}${extra}. Fractional expected counts are allowed and rounded for DESeq2.`);
+  }
+}
+
+function parseDelimited(text, delimiter, options = {}) {
   if (!text) return [];
-  const lines = text.trim().split(/\r?\n/).filter(Boolean);
-  const headers = splitDelimitedLine(lines.shift(), delimiter);
+  const body = stripUtf8Bom(String(text));
+  if (!body.trim()) return [];
+  const lines = body.split(/\r?\n/).filter((line) => line.trim() !== '');
+  const headers = splitDelimitedLine(lines.shift(), delimiter).map(normalizeHeader);
   return lines.map((line) => {
     const values = splitDelimitedLine(line, delimiter);
-    return Object.fromEntries(headers.map((header, i) => [header, parseValue(values[i])]));
+    return Object.fromEntries(headers.map((header, i) => [header, parseValue(values[i], header, options)]));
   });
 }
 
@@ -83,10 +178,34 @@ function splitDelimitedLine(line, delimiter) {
   return out;
 }
 
-function parseValue(value) {
-  if (value === undefined || value === '') return '';
-  const n = Number(value);
-  return Number.isFinite(n) && String(value).trim() !== '' ? n : value;
+function parseValue(value, header, options = {}) {
+  const text = normalizeStringValue(value);
+  if (text === '') return '';
+  const numericColumns = options.numericColumns instanceof Set ? options.numericColumns : new Set(options.numericColumns || []);
+  const numericPredicate = typeof options.numericColumnPredicate === 'function' ? options.numericColumnPredicate : null;
+  if (numericColumns.has(header) || numericPredicate?.(header)) {
+    const n = Number(text.replace(/,/g, ''));
+    return Number.isFinite(n) ? n : text;
+  }
+  return text;
+}
+
+function normalizeStringValue(value) {
+  if (value === undefined || value === null) return '';
+  return stripUtf8Bom(String(value)).trim();
+}
+
+function normalizeHeader(value, index = 0) {
+  const header = normalizeStringValue(value);
+  return header || `column_${index + 1}`;
+}
+
+function stripUtf8Bom(value) {
+  return String(value ?? '').replace(/^\uFEFF/, '');
+}
+
+function isKnownQcNumericColumn(column) {
+  return QC_NUMERIC_COLUMN_PATTERNS.some((pattern) => pattern.test(String(column || '').trim()));
 }
 
 export async function loadCoreAssets() {
@@ -103,11 +222,13 @@ export async function loadCoreAssets() {
   state.provenance = await loadJson(`${dataRoot}/logs/pipeline_provenance.json`, false);
   state.software = await loadJson(`${dataRoot}/logs/software_versions.json`, false);
 
+  state.samples = normalizeStringRows(state.samples);
+  refreshMetadataSchema({ preserveUser: false });
   validateSamples(state.samples);
   validateCounts(state.counts);
   if (!state.pca) state.pca = computePcaFromCounts(state.counts, state.samples, state.config);
   if (!state.distance) state.distance = computeSampleDistanceFromCounts(state.counts, state.samples, state.config);
-  if (state.contrasts.length === 0) state.contrasts = inferContrastsFromSamples(state.samples, state.config);
+  if (state.contrasts.length === 0) state.contrasts = inferContrastsFromSamples(state.samples, state.config, state.metadataSchema);
   validatePca(state.pca);
   if (state.distance) validateDistance(state.distance);
 }
@@ -137,7 +258,7 @@ async function loadSampleMetadata(dataRoot, counts) {
 async function loadQcMetrics(dataRoot) {
   const candidates = ['qc_metrics.json', 'qc_metrics.csv', 'qc_metrics.tsv'];
   for (const candidate of candidates) {
-    const rows = await loadSampleFile(`${dataRoot}/${candidate}`, false);
+    const rows = await loadQcFile(`${dataRoot}/${candidate}`, false);
     if (rows) return normalizeQcMetrics(rows);
   }
   return [];
@@ -182,10 +303,20 @@ function isLikelyCountColumn(counts, column) {
 }
 
 async function loadSampleFile(path, required) {
-  if (path.endsWith('.json')) return loadJsonQuiet(path, required);
+  if (path.endsWith('.json')) {
+    const rows = await loadJsonQuiet(path, required);
+    return rows === null ? null : normalizeStringRows(rows);
+  }
   const text = await loadTextQuiet(path, required);
   if (text === null) return null;
   return path.endsWith('.tsv') ? parseTsv(text) : parseCsv(text);
+}
+
+async function loadQcFile(path, required) {
+  if (path.endsWith('.json')) return loadJsonQuiet(path, required);
+  const text = await loadTextQuiet(path, required);
+  if (text === null) return null;
+  return path.endsWith('.tsv') ? parseQcTsv(text) : parseQcCsv(text);
 }
 
 async function loadJsonQuiet(path, required = false) {
@@ -227,7 +358,7 @@ export async function loadDeForContrast(contrast) {
   if (!contrast) return [];
   if (state.deResults.has(contrast.id)) return state.deResults.get(contrast.id);
   const dataRoot = state.config.dataRoot || 'assets/data';
-  let rows = contrast.de_file ? parseCsv(await loadText(`${dataRoot}/${contrast.de_file}`, false)) : [];
+  let rows = contrast.de_file ? parseDeCsv(await loadText(`${dataRoot}/${contrast.de_file}`, false)) : [];
   if (rows.length === 0 && contrast.column && contrast.numerator !== undefined && contrast.denominator !== undefined) {
     rows = computeDifferentialExpression(state.counts, state.samples, contrast, state.config);
   }
@@ -241,7 +372,7 @@ export async function loadEnrichmentForContrast(contrast) {
   if (cached) return enrichmentRows(cached);
   if (!contrast.enrichment_file) return [];
   const dataRoot = state.config.dataRoot || 'assets/data';
-  const rows = parseCsv(await loadText(`${dataRoot}/${contrast.enrichment_file}`, false));
+  const rows = parseEnrichmentCsv(await loadText(`${dataRoot}/${contrast.enrichment_file}`, false));
   state.enrichmentResults.set(`${contrast.id}::pipeline`, {
     result_id: `${contrast.id}::pipeline`,
     contrast_id: contrast.id,
@@ -280,6 +411,7 @@ function validateCounts(counts) {
   if (!first.gene_id && !first.gene_symbol && !first.gene_name) throw new Error('counts.csv should include gene_id, gene_symbol, or gene_name.');
   const matched = state.samples.filter((sample) => Object.prototype.hasOwnProperty.call(first, sample.sample_id));
   if (matched.length < 2) throw new Error('counts.csv must include at least two columns matching sample_id values in the sample metadata.');
+  validateCountMatrix(counts, matched.map((sample) => sample.sample_id));
 }
 
 function validatePca(pca) {

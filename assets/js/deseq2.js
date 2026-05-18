@@ -1,6 +1,7 @@
-import { state, logAnalysis, metadataColumns, createProgressReporter, runWithProgressPulse } from './state.js';
+import { state, logAnalysis, createProgressReporter, runWithProgressPulse } from './state.js';
 import { sampleIdsInCounts } from './analysis.js';
-import { loadGeneAnnotation, parseCsv } from './dataLoader.js';
+import { loadGeneAnnotation, parseDeCsv, parseCountCell } from './dataLoader.js';
+import { adjustmentMetadataColumns, analysisFactorColumns, metadataColumnType, metadataTypeOptionLabel } from './metadataSchema.js';
 import { ensureRPackages } from './packageManager.js';
 import { evalR } from './webrManager.js';
 import { markAnalysisCacheDirty } from './analysisCache.js';
@@ -14,12 +15,12 @@ export function setupDeseqControls(callbacks = {}) {
   if (!designSelect) return;
   const status = document.getElementById('deseq-status');
 
-  const eligibleColumns = metadataColumns().filter((column) => deseqUniqueValues(column).length >= 2);
+  const eligibleColumns = analysisFactorColumns().filter((column) => deseqUniqueValues(column).length >= 2);
   designSelect.disabled = eligibleColumns.length === 0;
   const runButton = document.getElementById('deseq-run');
   if (runButton) runButton.disabled = eligibleColumns.length === 0;
   const previousDesign = designSelect.value;
-  designSelect.innerHTML = eligibleColumns.map((column) => `<option value="${deseqEscapeHtml(column)}">${deseqEscapeHtml(column)}</option>`).join('');
+  designSelect.innerHTML = eligibleColumns.map((column) => `<option value="${deseqEscapeHtml(column)}">${deseqEscapeHtml(metadataTypeOptionLabel(column))}</option>`).join('');
   if (eligibleColumns.includes(previousDesign)) {
     designSelect.value = previousDesign;
   } else if (eligibleColumns.includes(state.config?.analysis?.conditionColumn)) {
@@ -79,12 +80,14 @@ function updateDeseqAdjustControls() {
   if (!adjustSelect) return;
   const primary = document.getElementById('deseq-design-column')?.value;
   const previous = new Set(Array.from(adjustSelect.selectedOptions || []).map((option) => option.value));
-  const candidates = metadataColumns()
+  const candidates = adjustmentMetadataColumns()
     .filter((column) => column !== primary)
-    .filter((column) => deseqUniqueValues(column).length >= 2);
+    .filter((column) => metadataColumnType(column) === 'continuous' || deseqUniqueValues(column).length >= 2);
   adjustSelect.innerHTML = candidates.map((column) => {
     const levels = deseqUniqueValues(column).length;
-    return `<option value="${deseqEscapeHtml(column)}"${previous.has(column) ? ' selected' : ''}>${deseqEscapeHtml(column)} (${levels})</option>`;
+    const type = metadataColumnType(column);
+    const suffix = type === 'continuous' ? 'continuous' : `${levels} levels`;
+    return `<option value="${deseqEscapeHtml(column)}"${previous.has(column) ? ' selected' : ''}>${deseqEscapeHtml(column)} (${suffix})</option>`;
   }).join('');
   adjustSelect.disabled = candidates.length === 0;
 }
@@ -194,18 +197,25 @@ async function deseqRunInWebR(sampleIds, column, adjustColumns, reference, numer
   const countsCsv = deseqCountsCsv(sampleIds);
   const metadataColumns = [column].concat(adjustColumns);
   const metadataCsv = deseqMetadataCsv(sampleIds, metadataColumns);
+  const adjustTypeVector = deseqRNamedStringVector(adjustColumns.map((adjustColumn) => [adjustColumn, metadataColumnType(adjustColumn)]));
   const code = `
 suppressPackageStartupMessages(library(DESeq2))
 count_text <- ${deseqRString(countsCsv)}
 metadata_text <- ${deseqRString(metadataCsv)}
 primary_col_raw <- ${deseqRString(column)}
 adjust_cols_raw <- c(${adjustColumns.map(deseqRString).join(', ')})
+adjust_types_raw <- ${adjustTypeVector}
 reference_level <- ${deseqRString(reference)}
 numerator_level <- ${deseqRString(numerator)}
 denominator_level <- ${deseqRString(denominator)}
 countData <- read.csv(text = count_text, row.names = 1, check.names = FALSE)
 rownames(countData) <- make.unique(rownames(countData))
-countData <- as.matrix(round(countData))
+countData <- as.matrix(countData)
+countData <- matrix(suppressWarnings(as.numeric(countData)), nrow = nrow(countData), dimnames = dimnames(countData))
+if (any(!is.finite(countData)) || any(countData < 0)) {
+  stop("Count matrix contains non-numeric, negative, or missing values.")
+}
+countData <- round(countData)
 storage.mode(countData) <- "integer"
 colData <- read.csv(text = metadata_text, row.names = 1, check.names = FALSE, stringsAsFactors = FALSE)
 countData <- countData[, rownames(colData), drop = FALSE]
@@ -214,22 +224,29 @@ safe_names <- make.names(raw_names, unique = TRUE)
 colnames(colData) <- safe_names
 safe_lookup <- setNames(safe_names, raw_names)
 design_col <- unname(safe_lookup[[primary_col_raw]])
-adjust_cols <- unname(safe_lookup[adjust_cols_raw])
-adjust_cols <- adjust_cols[!is.na(adjust_cols)]
-coerce_design_term <- function(value) {
-  value <- trimws(as.character(value))
-  numeric_value <- suppressWarnings(as.numeric(value))
-  if (all(nzchar(value)) && all(is.finite(numeric_value)) && length(unique(numeric_value)) > 2) {
-    numeric_value
-  } else {
-    factor(value)
+adjust_cols <- character(0)
+for (adjust_col_raw in adjust_cols_raw) {
+  adjust_col <- unname(safe_lookup[[adjust_col_raw]])
+  if (is.na(adjust_col) || !nzchar(adjust_col)) next
+  adjust_type <- adjust_types_raw[[adjust_col_raw]]
+  if (is.null(adjust_type) || is.na(adjust_type) || !nzchar(adjust_type)) adjust_type <- "categorical"
+  value <- trimws(as.character(colData[[adjust_col]]))
+  if (any(!nzchar(value))) {
+    stop(paste("Adjustment column has missing values:", adjust_col_raw))
   }
-}
-for (adjust_col in adjust_cols) {
-  colData[[adjust_col]] <- coerce_design_term(colData[[adjust_col]])
+  if (identical(adjust_type, "continuous")) {
+    numeric_value <- suppressWarnings(as.numeric(value))
+    if (any(!is.finite(numeric_value))) {
+      stop(paste("Continuous adjustment column contains non-numeric values:", adjust_col_raw))
+    }
+    colData[[adjust_col]] <- numeric_value
+  } else {
+    colData[[adjust_col]] <- factor(value)
+  }
   if (is.factor(colData[[adjust_col]]) && nlevels(colData[[adjust_col]]) < 2) {
     stop(paste("Adjustment factor has fewer than two levels:", adjust_col))
   }
+  adjust_cols <- c(adjust_cols, adjust_col)
 }
 colData[[design_col]] <- relevel(factor(trimws(as.character(colData[[design_col]]))), ref = reference_level)
 design_terms <- c(adjust_cols, design_col)
@@ -254,17 +271,26 @@ paste(capture.output(write.csv(out, row.names = FALSE, na = "")), collapse = "\\
   const text = deseqResultText(result);
   await loadGeneAnnotation(false);
   const geneSymbols = deseqGeneSymbolLookup();
-  return parseCsv(text).map((row) => ({
+  return parseDeCsv(text).map((row) => ({
     ...row,
     gene_symbol: row.gene_symbol || geneSymbols.get(deseqGeneKey(row.gene_id)) || '',
     method: `DESeq2 webR ${deseqDesignLabel(column, adjustColumns)}`,
-  })).sort((a, b) => Number(a.padj || 1) - Number(b.padj || 1));
+  })).sort((a, b) => deseqSortPValue(a.padj) - deseqSortPValue(b.padj));
+}
+
+function deseqSortPValue(value) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : 1;
 }
 
 function deseqCountsCsv(sampleIds) {
   const rows = state.counts.map((row, index) => {
     const geneId = row.gene_id || row.gene_symbol || row.gene_name || `gene_${index + 1}`;
-    return [geneId].concat(sampleIds.map((sampleId) => Math.round(Math.max(0, Number(row[sampleId]) || 0))));
+    return [geneId].concat(sampleIds.map((sampleId) => {
+      const value = parseCountCell(row[sampleId]);
+      if (value === null) throw new Error(`Invalid count value for ${geneId}/${sampleId}: ${row[sampleId] ?? ''}`);
+      return value;
+    }));
   });
   return deseqCsv([['gene_id'].concat(sampleIds)].concat(rows));
 }
@@ -343,16 +369,21 @@ function validateDeseqDesign(sampleIds, primaryColumn, adjustColumns) {
     if (term.values.some((value) => value === '')) {
       throw new Error(`Selected adjustment column "${term.column}" has missing values in the selected samples.`);
     }
-    if (new Set(term.values).size < 2) {
+    if (metadataColumnType(term.column) !== 'continuous' && new Set(term.values).size < 2) {
       throw new Error(`Selected adjustment column "${term.column}" has fewer than two levels in the selected samples.`);
+    }
+    if (metadataColumnType(term.column) === 'continuous' && term.values.some((value) => !Number.isFinite(Number(value)))) {
+      throw new Error(`Selected continuous adjustment column "${term.column}" contains non-numeric values.`);
+    }
+    if (metadataColumnType(term.column) === 'continuous' && new Set(term.values).size < 2) {
+      throw new Error(`Selected continuous adjustment column "${term.column}" has no variation in the selected samples.`);
     }
   });
 
   const approximateCoefficientCount = 1
     + 1
     + modelTerms.reduce((sum, term) => {
-      const numericValues = term.values.map(Number);
-      const isContinuous = numericValues.every((value) => Number.isFinite(value)) && new Set(numericValues).size > 2;
+      const isContinuous = metadataColumnType(term.column) === 'continuous';
       return sum + (isContinuous ? 1 : Math.max(1, new Set(term.values).size - 1));
     }, 0);
   if (sampleIds.length <= approximateCoefficientCount) {
@@ -375,6 +406,11 @@ function deseqSetStatus(element, message) {
 
 function deseqRString(value) {
   return JSON.stringify(String(value));
+}
+
+function deseqRNamedStringVector(entries) {
+  if (!entries.length) return 'c()';
+  return `c(${entries.map(([name, value]) => `${deseqRString(name)} = ${deseqRString(value)}`).join(', ')})`;
 }
 
 function deseqSlug(value) {

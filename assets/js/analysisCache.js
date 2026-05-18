@@ -1,9 +1,10 @@
 import { state, logAnalysis, setStatus, yieldToBrowser } from './state.js';
 import { sampleIdsInCounts } from './analysis.js';
 import { gseaResultCurves } from './enrichment.js';
+import { metadataSchemaForCache, restoreMetadataSchemaFromCache } from './metadataSchema.js';
 
 const CACHE_KIND = 'rnaseq-report-analysis-cache';
-const CACHE_VERSION = 4;
+const CACHE_VERSION = 5;
 const CACHE_CLOSE_GUIDE = 'Unsaved DESeq2/GSEA results are stored only in this browser tab. To keep them, stay on the page, open Methods & Export, click Export cache, and save the .analysis-cache JSON file before closing.';
 
 let cacheControlsWired = false;
@@ -145,7 +146,7 @@ function parseAnalysisCache(value) {
   if (!value || typeof value !== 'object') throw new Error('Cache file is not a JSON object.');
   if (value.cache_kind !== CACHE_KIND) throw new Error('Cache file is not an RNA-seq report analysis cache.');
   const version = Number(value.cache_version);
-  if (![1, 2, 3, CACHE_VERSION].includes(version)) {
+  if (![1, 2, 3, 4, CACHE_VERSION].includes(version)) {
     throw new Error(`Unsupported cache version: ${value.cache_version || 'unknown'}.`);
   }
   if (!Array.isArray(value.de_results) || !Array.isArray(value.gsea_results)) {
@@ -331,6 +332,7 @@ function sampleMetadataCacheEntry() {
   if (!rows.length || !hasMetadataColumns(rows)) return null;
   return {
     source: state.provenance?.sample_manifest || state.provenance?.samples_file || 'current report sample metadata',
+    schema: metadataSchemaForCache(),
     rows,
   };
 }
@@ -346,6 +348,7 @@ function parseSampleMetadataCache(value) {
   if (!normalizedRows.length) return null;
   return {
     source: typeof value?.source === 'string' ? value.source : 'analysis cache',
+    schema: value?.schema && typeof value.schema === 'object' ? value.schema : {},
     rows: normalizedRows,
   };
 }
@@ -358,6 +361,7 @@ function restoreCachedSampleMetadata(sampleMetadata) {
     return { sampleMetadata: false, sampleMetadataRows: 0 };
   }
   state.samples = sampleMetadata.rows;
+  restoreMetadataSchemaFromCache(sampleMetadata.schema || {});
   state.provenance = {
     ...(state.provenance || {}),
     sample_manifest: sampleMetadata.source || 'analysis cache',
