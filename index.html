@@ -425,7 +425,16 @@
           <div id="enrichment-plot" class="plot tall"></div>
           <div class="gsea-detail-panel">
             <div class="toolbar">
-              <label>Enrichment plot pathway <select id="gsea-pathway-select"></select></label>
+              <div class="gsea-pathway-field">
+                <span class="gsea-pathway-label-text">
+                  <label for="gsea-pathway-select">Running Enrichment-Score Plot</label>
+                  <span class="tip-wrap">
+                    <span class="tip-icon" tabindex="0" aria-describedby="gsea-pathway-tip" aria-label="Running enrichment-score plot help">?</span>
+                    <span id="gsea-pathway-tip" class="tip-bubble" role="tooltip">Choose which pathway to draw as a running enrichment-score plot. The menu is populated from the top pathways retained by the current GSEA result cache.</span>
+                  </span>
+                </span>
+                <select id="gsea-pathway-select" aria-describedby="gsea-pathway-tip"></select>
+              </div>
             </div>
             <p class="note" id="gsea-pathway-status">Run fgsea to generate pathway-level enrichment plots.</p>
             <div id="gsea-running-plot" class="plot tall"></div>

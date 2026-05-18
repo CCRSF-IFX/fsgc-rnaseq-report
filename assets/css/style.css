@@ -121,6 +121,10 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .gsea-detail-panel { border-top: 1px solid var(--line); margin-top: 18px; padding-top: 14px; }
 .gsea-detail-panel .toolbar { margin-bottom: 8px; }
 .gsea-top-n-label input { width: 92px; }
+.gsea-pathway-field { display: grid; gap: 6px; min-width: min(440px, 100%); }
+.gsea-pathway-label-text { display: inline-flex; align-items: center; gap: 6px; width: max-content; max-width: 100%; font-weight: 700; }
+.gsea-pathway-label-text label { padding: 0; border: 0; border-radius: 0; background: transparent; }
+.gsea-pathway-label-text .tip-bubble { left: 0; transform: none; }
 .gsea-control-note { max-width: 720px; margin: -8px 0 12px; }
 #gsea-pathway-status { min-height: 1.4em; margin: 0 0 10px; }
 .pca-layout { display: grid; grid-template-columns: minmax(0, 1.75fr) minmax(300px, 0.9fr); gap: 16px; align-items: stretch; }
