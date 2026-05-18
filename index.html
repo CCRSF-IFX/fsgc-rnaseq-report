@@ -95,7 +95,7 @@
           <h3>Input files</h3>
           <div class="guide-grid">
             <div>
-              <h4>Count matrix CSV</h4>
+              <h4>Count matrix CSV/TSV</h4>
               <p>Required for a build. Include <code>gene_id</code>, <code>gene_symbol</code>, or <code>gene_name</code>, plus one numeric count column per sample.</p>
             </div>
             <div>
@@ -199,7 +199,7 @@
           <h3>Data setup</h3>
           <p class="note">Upload a sample manifest for the embedded count matrix, or upload a new count matrix with its matching manifest.</p>
           <div class="toolbar upload-toolbar">
-            <label>Count matrix CSV <input id="user-counts-file" type="file" accept=".csv,text/csv" /></label>
+            <label>Count matrix CSV/TSV <input id="user-counts-file" type="file" accept=".csv,.tsv,text/csv,text/tab-separated-values" /></label>
             <label>Sample manifest <input id="user-manifest-file" type="file" accept=".csv,.tsv,.txt,application/json" /></label>
             <button id="user-data-apply">Use uploaded data</button>
           </div>

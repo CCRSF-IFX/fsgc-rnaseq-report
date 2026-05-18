@@ -130,7 +130,7 @@ export function parseCountCell(value) {
 }
 
 export function validateCountMatrix(counts, sampleIds) {
-  if (!Array.isArray(counts) || counts.length === 0) throw new Error('counts.csv must contain at least one gene row.');
+  if (!Array.isArray(counts) || counts.length === 0) throw new Error('Count matrix must contain at least one gene row.');
   const ids = Array.from(new Set((sampleIds || []).filter(Boolean).map(String)));
   if (ids.length < 2) throw new Error('At least two sample columns are required to validate the count matrix.');
   const problems = [];
@@ -211,7 +211,7 @@ function isKnownQcNumericColumn(column) {
 export async function loadCoreAssets() {
   state.config = await loadJson('assets/report_config.json', true);
   const dataRoot = state.config.dataRoot || 'assets/data';
-  state.counts = parseCsv(await loadText(`${dataRoot}/counts.csv`, true));
+  state.counts = await loadCountMatrix(dataRoot);
   state.samples = await loadSampleMetadata(dataRoot, state.counts);
   state.qc = await loadQcMetrics(dataRoot);
   state.pca = await loadJson(`${dataRoot}/pca.json`, false);
@@ -284,7 +284,7 @@ function inferSamplesFromCounts(counts) {
   if (!Array.isArray(counts) || counts.length === 0) return [];
   const sampleIds = Object.keys(counts[0]).filter((column) => isLikelyCountColumn(counts, column));
   if (sampleIds.length < 2) {
-    throw new Error('No sample manifest was found, and counts.csv did not include at least two numeric sample columns.');
+    throw new Error('No sample manifest was found, and the count matrix did not include at least two numeric sample columns.');
   }
   return sampleIds.map((sample_id) => ({ sample_id }));
 }
@@ -300,6 +300,24 @@ function isLikelyCountColumn(counts, column) {
     if (!Number.isFinite(numeric)) return false;
   }
   return observed;
+}
+
+async function loadCountMatrix(dataRoot) {
+  const configured = state.config.countMatrix || state.config.countsFile;
+  if (configured) return loadCountFile(`${dataRoot}/${configured}`, true);
+
+  const candidates = ['counts.csv', 'counts.tsv'];
+  for (const candidate of candidates) {
+    const rows = await loadCountFile(`${dataRoot}/${candidate}`, false);
+    if (rows) return rows;
+  }
+  throw new Error(`Required count matrix asset failed: ${dataRoot}/counts.csv or ${dataRoot}/counts.tsv was not found.`);
+}
+
+async function loadCountFile(path, required) {
+  const text = await loadTextQuiet(path, required);
+  if (text === null) return null;
+  return path.toLowerCase().endsWith('.tsv') ? parseTsv(text) : parseCsv(text);
 }
 
 async function loadSampleFile(path, required) {
@@ -406,11 +424,11 @@ function validateSamples(samples) {
 }
 
 function validateCounts(counts) {
-  if (!Array.isArray(counts) || counts.length === 0) throw new Error('counts.csv must contain at least one gene row.');
+  if (!Array.isArray(counts) || counts.length === 0) throw new Error('Count matrix must contain at least one gene row.');
   const first = counts[0];
-  if (!first.gene_id && !first.gene_symbol && !first.gene_name) throw new Error('counts.csv should include gene_id, gene_symbol, or gene_name.');
+  if (!first.gene_id && !first.gene_symbol && !first.gene_name) throw new Error('Count matrix should include gene_id, gene_symbol, or gene_name.');
   const matched = state.samples.filter((sample) => Object.prototype.hasOwnProperty.call(first, sample.sample_id));
-  if (matched.length < 2) throw new Error('counts.csv must include at least two columns matching sample_id values in the sample metadata.');
+  if (matched.length < 2) throw new Error('Count matrix must include at least two columns matching sample_id values in the sample metadata.');
   validateCountMatrix(counts, matched.map((sample) => sample.sample_id));
 }
 

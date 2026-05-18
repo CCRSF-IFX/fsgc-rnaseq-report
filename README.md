@@ -202,13 +202,16 @@ The smallest buildable report needs:
 assets/
   report_config.json
   data/
-    counts.csv
+    counts.csv OR counts.tsv
 ```
 
-With `counts.csv` alone, the report infers `sample_id` values from numeric count
-columns and can render count-derived PCA, sample distances, and expression
-heatmaps. Add a sample manifest to enable metadata annotations, PCA color/shape
-controls, browser-generated DE contrasts, DESeq2, and fgsea.
+With `counts.csv` or `counts.tsv` alone, the report infers `sample_id` values
+from numeric count columns and can render count-derived PCA, sample distances,
+and expression heatmaps. The report checks `counts.csv` first, then
+`counts.tsv`. To use a different count-matrix path, set `countMatrix` or
+`countsFile` in `assets/report_config.json`. Add a sample manifest to enable
+metadata annotations, PCA color/shape controls, browser-generated DE contrasts,
+DESeq2, and fgsea.
 
 The optional sample manifest may be any one of these files:
 
@@ -221,8 +224,8 @@ samples.tsv
 ```
 
 The report checks those names in that order. If none is present, it falls back
-to inferred sample IDs from `counts.csv`. To use a different manifest name, set
-it in `assets/report_config.json`:
+to inferred sample IDs from the count matrix. To use a different manifest name,
+set it in `assets/report_config.json`:
 
 ```json
 {
@@ -260,7 +263,7 @@ assets/
     qc_metrics.json OR qc_metrics.csv OR qc_metrics.tsv OR qc_metrics.xlsx
     pca.json
     sample_distance_matrix.json
-    counts.csv
+    counts.csv OR counts.tsv
     gene_annotation.json
     contrast_list.json
     differential_expression/
@@ -277,7 +280,7 @@ Conventions:
 - `sample_id` is the primary key for sample-level files.
 - If a sample manifest is supplied, it must include `sample_id`; metadata values are preserved as strings so IDs like `001` and timepoint labels like `6h` remain intact.
 - The report infers a metadata schema for each sample column and lets the user override it in Data Setup. Primary DE factors should be `categorical` or `ordered`; optional adjustment/blocking terms can also be `continuous`. Identifier columns such as `sample_id`, `donor_id`, and `pair_id` are excluded from model controls unless reclassified.
-- `counts.csv` must include at least one gene identifier column, such as `gene_id`, `gene_symbol`, or `gene_name`.
+- `counts.csv` or `counts.tsv` must include at least one gene identifier column, such as `gene_id`, `gene_symbol`, or `gene_name`.
 - Count matrix sample columns must match `sample_id` values when a sample manifest is supplied. Without a manifest, sample IDs are inferred from numeric count columns.
 - Count values must be nonnegative numeric values. Fractional expected counts from tools such as RSEM are accepted; browser summaries use them as numeric counts and the DESeq2 webR runner rounds them to integers immediately before creating the DESeq2 dataset.
 - `gene_id` and `gene_symbol` identify gene-level records.

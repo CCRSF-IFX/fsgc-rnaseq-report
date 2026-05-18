@@ -29,6 +29,11 @@ QC_CANDIDATES = (
     ('qc_metrics.xlsm', 'xlsx'),
 )
 
+COUNT_CANDIDATES = (
+    ('counts.csv', ','),
+    ('counts.tsv', '\t'),
+)
+
 QC_SAMPLE_ID_ALIASES = {'sample_id', 'sample_id_', 'sample', 'sampleid'}
 
 COUNT_METADATA_COLUMNS = {
@@ -78,38 +83,48 @@ def main(root: str) -> int:
     validate_optional_pca(data_root, errors)
     validate_optional_distance(data_root, errors)
 
-    counts = data_root / 'counts.csv'
-    if counts.exists():
+    count_source = ''
+    counts, count_delimiter = find_count_matrix(data_root)
+    if counts:
         with counts.open(newline='') as handle:
-            reader = csv.DictReader(handle)
+            reader = csv.DictReader(handle, delimiter=count_delimiter)
+            count_source = counts.name
             count_fieldnames = reader.fieldnames or []
             count_fieldset = set(count_fieldnames)
             count_rows = list(reader)
             if not count_fieldset & {'gene_id', 'gene_symbol', 'gene_name'}:
-                errors.append('counts.csv missing a gene identifier column: gene_id, gene_symbol, or gene_name')
+                errors.append(f'{count_source} missing a gene identifier column: gene_id, gene_symbol, or gene_name')
             if not count_rows:
-                errors.append('counts.csv must contain at least one gene row')
+                errors.append(f'{count_source} must contain at least one gene row')
     else:
-        errors.append('Missing counts.csv')
+        errors.append('Missing count matrix: expected counts.csv or counts.tsv')
 
     samples, sample_source = load_samples(data_root, errors, count_fieldnames, count_rows)
-    if counts.exists() and samples:
+    if counts and samples:
         fieldnames = set(count_fieldnames)
         sample_ids = {str(row.get('sample_id', '')) for row in samples if isinstance(row, dict)}
         matched_samples = sorted(sample_ids & fieldnames)
         if len(matched_samples) < 2:
-            errors.append(f'counts.csv must include at least two columns matching sample_id values in {sample_source or "sample metadata"}')
+            errors.append(f'{count_source or "count matrix"} must include at least two columns matching sample_id values in {sample_source or "sample metadata"}')
 
     if errors:
         print('Validation failed:')
         for err in errors:
             print(f'  - {err}')
         return 1
-    if sample_source == 'counts.csv inferred sample columns':
-        print(f'Asset validation passed. No sample manifest found; inferred {len(samples)} samples from counts.csv.')
+    if sample_source and sample_source.endswith('inferred sample columns'):
+        print(f'Asset validation passed. No sample manifest found; inferred {len(samples)} samples from {count_source or "count matrix"}.')
     else:
         print('Asset validation passed.')
     return 0
+
+
+def find_count_matrix(data_root: Path):
+    for filename, delimiter in COUNT_CANDIDATES:
+        path = data_root / filename
+        if path.exists():
+            return path, delimiter
+    return None, ','
 
 
 def load_samples(data_root: Path, errors: list[str], count_fieldnames: list[str], count_rows: list[dict[str, str]]):
@@ -132,9 +147,9 @@ def load_samples(data_root: Path, errors: list[str], count_fieldnames: list[str]
 
     inferred = infer_samples_from_counts(count_fieldnames, count_rows)
     if inferred:
-        return inferred, 'counts.csv inferred sample columns'
+        return inferred, 'count matrix inferred sample columns'
     if count_fieldnames:
-        errors.append('No sample manifest was found, and counts.csv did not include at least two numeric sample columns.')
+        errors.append('No sample manifest was found, and the count matrix did not include at least two numeric sample columns.')
     return [], None
 
 

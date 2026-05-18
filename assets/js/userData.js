@@ -27,7 +27,7 @@ async function applyUploadedUserData() {
     if (!manifestFile) throw new Error('Provide a sample manifest.');
 
     setUserDataStatus(status, 'Reading uploaded files...');
-    const counts = countFile ? parseCsv(await countFile.text()) : state.counts;
+    const counts = countFile ? parseCountMatrixUpload(await countFile.text(), countFile.name) : state.counts;
     const samples = normalizeStringRows(parseSampleManifest(await manifestFile.text(), manifestFile.name));
     validateUploadedData(samples, counts);
 
@@ -76,6 +76,10 @@ function parseSampleManifest(text, filename) {
   return filename.toLowerCase().endsWith('.tsv') || filename.toLowerCase().endsWith('.txt')
     ? parseTsv(text)
     : parseCsv(text);
+}
+
+function parseCountMatrixUpload(text, filename) {
+  return filename.toLowerCase().endsWith('.tsv') ? parseTsv(text) : parseCsv(text);
 }
 
 function validateUploadedData(samples, counts) {
