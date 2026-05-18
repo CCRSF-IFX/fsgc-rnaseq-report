@@ -453,6 +453,29 @@ For time-series metadata, keep raw values in the manifest. Numeric columns named
 labels such as `0h`, `6h`, and `24h` are inferred as ordered timepoints. Users
 can override either interpretation before running DESeq2.
 
+### GSEA Ranking
+
+Browser fgsea runs use the selected DE contrast as a preranked gene list. The
+ranking input is built from the full in-memory DE result, not from the filtered
+table under the volcano plot.
+
+Gene identifiers are matched by `gene_symbol` when available; otherwise the
+report falls back to `gene_id`. If duplicate gene identifiers are present, the
+gene with the largest absolute ranking statistic is retained before fgsea is
+called.
+
+The ranking statistic is chosen as follows:
+
+- If the DE table has a finite `statistic` column, fgsea uses that value
+  directly. Browser-run DESeq2 produces the Wald statistic in this column.
+- If no finite `statistic` values are available, the report falls back to
+  `sign(log2FoldChange) * -log10(pvalue)`.
+- If `pvalue` is unavailable for the fallback, `padj` is used.
+- True zero p-values are replaced with a tiny floor below the smallest positive
+  p-value in the DE table, so they rank as very strong evidence instead of zero.
+- Missing, non-numeric, or negative p-values are excluded from the fallback
+  ranked list.
+
 ### Browser Analysis Cache
 
 The **Methods & Export** tab can export a JSON analysis cache after browser-side

@@ -181,7 +181,15 @@ stat <- suppressWarnings(as.numeric(de$statistic))
 if (!any(is.finite(stat)) && "log2FoldChange" %in% names(de)) {
   lfc <- suppressWarnings(as.numeric(de$log2FoldChange))
   pvalue <- suppressWarnings(as.numeric(de$pvalue))
-  pvalue[!is.finite(pvalue) | pvalue <= 0] <- 1
+  if (!any(is.finite(pvalue) & pvalue >= 0) && "padj" %in% names(de)) {
+    pvalue <- suppressWarnings(as.numeric(de$padj))
+  }
+  positive_pvalue <- pvalue[is.finite(pvalue) & pvalue > 0]
+  pvalue_floor <- if (length(positive_pvalue)) min(positive_pvalue) * 0.1 else .Machine$double.xmin
+  pvalue_floor <- max(.Machine$double.xmin, pvalue_floor)
+  pvalue[is.finite(pvalue) & pvalue == 0] <- pvalue_floor
+  pvalue[!is.finite(pvalue) | pvalue < 0] <- NA_real_
+  pvalue[pvalue > 1] <- 1
   stat <- sign(lfc) * -log10(pvalue)
 }
 keep <- !empty_gene(genes) & is.finite(stat)
