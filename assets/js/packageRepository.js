@@ -224,7 +224,7 @@ function packageRepoBundleUrl() {
 function packageRepoLibraryBundleConfig() {
   const cfg = state.config?.webr || {};
   const bundle = cfg.libraryBundle || {};
-  const version = bundle.artifactVersion || bundle.version || cfg.packageRepoVersion || 'library';
+  const version = bundle.version || bundle.artifactVersion || cfg.packageRepoVersion || 'library';
   const artifactStem = bundle.artifactStem || 'rnaseq-report-webr-library';
   return {
     archiveFile: bundle.archiveFile || `${artifactStem}-${version}.zip`,

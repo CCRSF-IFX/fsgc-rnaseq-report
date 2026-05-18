@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       force_overwrite:
-        description: Overwrite an existing webR package snapshot version
+        description: Overwrite an existing webR package snapshot and refresh release assets
         required: true
         default: "false"
         type: choice
@@ -57,13 +57,13 @@ jobs:
           cfg = json.load(open("assets/report_config.json", encoding="utf-8")).get("webr", {})
           bundle = cfg.get("libraryBundle") or {}
           snapshot_version = Path("webr-packages/VERSION").read_text(encoding="utf-8").strip()
-          version = str(bundle.get("artifactVersion") or bundle.get("version") or snapshot_version).strip()
+          version = str(bundle.get("version") or bundle.get("artifactVersion") or snapshot_version).strip()
           artifact_stem = str(bundle.get("artifactStem") or "rnaseq-report-webr-library").strip()
           release_tag = str(bundle.get("releaseTag") or f"{artifact_stem}-{version}").strip()
 
           safe = re.compile(r"^[A-Za-z0-9._-]+$")
           for label, value in {
-              "libraryBundle.artifactVersion": version,
+              "libraryBundle.version": version,
               "libraryBundle.artifactStem": artifact_stem,
               "libraryBundle.releaseTag": release_tag,
           }.items():
@@ -96,7 +96,7 @@ jobs:
               echo "Refusing to overwrite. Bump webr-packages/VERSION or run the workflow manually with force_overwrite=true." >&2
               exit 1
             fi
-            echo "::warning::Force overwrite enabled for existing webR package snapshot $version"
+            echo "::warning::Force overwrite enabled for existing webR package snapshot $version; release assets will be refreshed with --clobber"
           else
             echo "No existing webR package snapshot found for $version"
           fi

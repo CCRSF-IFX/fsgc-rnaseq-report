@@ -203,7 +203,7 @@ function packageFallbackDismissKey() {
     cfg.projectTitle || cfg.reportTitle || 'report',
     cfg.reportVersion || 'template',
     webr.packageRepoVersion || 'snapshot',
-    bundle.artifactVersion || bundle.version || bundle.releaseTag || bundle.archiveFile || 'library',
+    bundle.version || bundle.artifactVersion || bundle.releaseTag || bundle.archiveFile || 'library',
   ].map((part) => String(part || '').trim().replace(/\s+/g, '-'));
   return `rnaseq-report:package-fallback-dismissed:${parts.join(':')}`;
 }

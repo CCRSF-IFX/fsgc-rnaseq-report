@@ -191,8 +191,8 @@ load a prebuilt package library from a local file instead of downloading and
 installing every `.tgz` package in the browser session.
 The user-facing package and browser-loadable library snapshot version is the same:
 `webr-packages/VERSION` and `webr.packageRepoVersion` identify the package/library
-snapshot. `webr.libraryBundle.artifactVersion` is only an internal artifact label
-used for release file names.
+snapshot. `webr.libraryBundle.version` is used for the browser-loadable library
+release asset names and should normally match that package/library snapshot.
 
 ## Data Model
 
@@ -400,11 +400,11 @@ views remain usable from the standalone file.
     "packageArchiveUrl": "https://github.com/omicsreporthub/rnaseq-report/releases/download/rnaseq-report-webr-packages-v0.1.0/rnaseq-report-webr-packages-v0.1.0.zip",
     "libraryBundle": {
       "enabled": true,
-      "artifactVersion": "deseq2-fgsea-v1",
+      "version": "v0.1.0",
       "artifactStem": "rnaseq-report-webr-library",
-      "archiveFile": "rnaseq-report-webr-library-deseq2-fgsea-v1.zip",
-      "releaseTag": "rnaseq-report-webr-library-deseq2-fgsea-v1",
-      "releaseUrl": "https://github.com/omicsreporthub/rnaseq-report/releases/tag/rnaseq-report-webr-library-deseq2-fgsea-v1"
+      "archiveFile": "rnaseq-report-webr-library-v0.1.0.zip",
+      "releaseTag": "rnaseq-report-webr-library-v0.1.0",
+      "releaseUrl": "https://github.com/omicsreporthub/rnaseq-report/releases/tag/rnaseq-report-webr-library-v0.1.0"
     },
     "modules": {
       "deseq2": {
@@ -546,7 +546,7 @@ before enabling Install/load packages. If the snapshot cannot be reached, the
 report shows the failure in Runtime & Packages and keeps package installation
 disabled until the snapshot is available or a local webR library bundle is
 mounted. The first snapshot failure also opens a recovery modal with actions to
-download `rnaseq-report-webr-library-deseq2-fgsea-v1.zip`, choose the downloaded
+download `rnaseq-report-webr-library-v0.1.0.zip`, choose the downloaded
 bundle, continue in report-only mode, or retry the online snapshot. If the user
 selects "don't show again", that choice is stored in browser `localStorage` for
 that report and package/library snapshot version.
@@ -564,16 +564,17 @@ before building the standalone HTML.
 
 The workflow also publishes a prebuilt webR library bundle to a separate GitHub
 Release. The report presents this as part of the same package/library snapshot
-version configured by `webr.packageRepoVersion`. The bundle can still use a
-separate `webr.libraryBundle.artifactVersion` for release asset names:
+version configured by `webr.packageRepoVersion`. The bundle release assets use
+`webr.libraryBundle.version`, which should normally match the same snapshot
+version:
 
 ```text
-rnaseq-report-webr-library-deseq2-fgsea-v1.zip
-rnaseq-report-webr-library-deseq2-fgsea-v1.data.gz
-rnaseq-report-webr-library-deseq2-fgsea-v1.js.metadata
+rnaseq-report-webr-library-v0.1.0.zip
+rnaseq-report-webr-library-v0.1.0.data.gz
+rnaseq-report-webr-library-v0.1.0.js.metadata
 ```
 
-Users can download `rnaseq-report-webr-library-deseq2-fgsea-v1.zip`, open the
+Users can download `rnaseq-report-webr-library-v0.1.0.zip`, open the
 report, go to **Optional Analysis**, choose the bundle, and click **Mount
 bundle**. The report mounts the library image into webR and prepends it to
 `.libPaths()`, so DESeq2 and fgsea can be loaded without reinstalling the whole
@@ -589,7 +590,7 @@ When the optional R package set changes:
 2. Update `webr-packages/VERSION`.
 3. Update `webr-packages/packages`.
 4. Update `assets/report_config.json` so `packageRepo`, `packageRepoVersion`, and `packageArchiveUrl` match the new package snapshot version.
-5. Update `webr.libraryBundle.artifactVersion`, `archiveFile`, `releaseTag`, and `releaseUrl` only when the browser-loadable library bundle artifact itself changes.
+5. Update `webr.libraryBundle.version`, `archiveFile`, `releaseTag`, and `releaseUrl` only when the browser-loadable library bundle artifact itself changes.
 6. Enable or disable optional modules in `assets/report_config.json` to match the available packages.
 7. Add previously published versions that must remain available to `webr-packages/published_versions`.
 8. Run the validation checklist below.
