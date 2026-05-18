@@ -5,7 +5,7 @@ import { metadataSchemaForCache, restoreMetadataSchemaFromCache } from './metada
 
 const CACHE_KIND = 'rnaseq-report-analysis-cache';
 const CACHE_VERSION = 5;
-const CACHE_CLOSE_GUIDE = 'Unsaved DESeq2/GSEA results are stored only in this browser tab. To keep them, stay on the page, open Methods & Export, click Export cache, and save the .analysis-cache JSON file before closing.';
+const CACHE_CLOSE_GUIDE = 'If the browser says "Changes you made may not be saved.", stay on this page and export your analysis cache before closing. Open Methods & Export, click Export cache, and save the .analysis-cache JSON file.';
 
 let cacheControlsWired = false;
 let cacheDirty = false;
