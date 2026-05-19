@@ -4,7 +4,7 @@ import { gseaResultCurves } from './enrichment.js';
 import { metadataSchemaForCache, restoreMetadataSchemaFromCache } from './metadataSchema.js';
 
 const CACHE_KIND = 'rnaseq-report-analysis-cache';
-const CACHE_VERSION = 5;
+const CACHE_VERSION = 6;
 const CACHE_CLOSE_GUIDE = 'If the browser says "Changes you made may not be saved.", stay on this page and export your analysis cache before closing. Open Methods & Export, click Export cache, and save the .analysis-cache JSON file.';
 
 let cacheControlsWired = false;
@@ -133,7 +133,9 @@ function buildAnalysisCache() {
     run_id: state.config?.runId || '',
     data_root: state.config?.dataRoot || 'assets/data',
     sample_metadata: sampleMetadataCacheEntry(),
+    analysis_scopes: plainRows(state.analysisScopes || []),
     contrasts,
+    de_analyses: contrasts.map(deAnalysisCacheEntry).filter(Boolean),
     de_results: Array.from(state.deResults.entries()).map(([contrast_id, rows]) => ({
       contrast_id,
       rows: plainRows(rows),
@@ -146,7 +148,7 @@ function parseAnalysisCache(value) {
   if (!value || typeof value !== 'object') throw new Error('Cache file is not a JSON object.');
   if (value.cache_kind !== CACHE_KIND) throw new Error('Cache file is not an RNA-seq report analysis cache.');
   const version = Number(value.cache_version);
-  if (![1, 2, 3, 4, CACHE_VERSION].includes(version)) {
+  if (![1, 2, 3, 4, 5, CACHE_VERSION].includes(version)) {
     throw new Error(`Unsupported cache version: ${value.cache_version || 'unknown'}.`);
   }
   if (!Array.isArray(value.de_results) || !Array.isArray(value.gsea_results)) {
@@ -156,18 +158,31 @@ function parseAnalysisCache(value) {
     ...value,
     cache_version: version,
     contrasts: Array.isArray(value.contrasts) ? value.contrasts : [],
+    analysis_scopes: Array.isArray(value.analysis_scopes) ? value.analysis_scopes : [],
+    de_analyses: Array.isArray(value.de_analyses) ? value.de_analyses : [],
     sample_metadata: parseSampleMetadataCache(value.sample_metadata),
   };
 }
 
 function restoreAnalysisCache(cache) {
   const restored = restoreCachedSampleMetadata(cache.sample_metadata);
+  restoreAnalysisScopes(cache.analysis_scopes);
   const contrastById = new Map(state.contrasts.map((contrast) => [contrast.id, contrast]));
   cache.contrasts.forEach((contrast) => {
     if (!contrast?.id) return;
     contrastById.set(contrast.id, {
       ...contrastById.get(contrast.id),
       ...plainObject(contrast),
+      cached: true,
+    });
+  });
+  cache.de_analyses.forEach((analysis) => {
+    const id = analysis?.contrast_id;
+    if (!id) return;
+    contrastById.set(id, {
+      ...contrastById.get(id),
+      ...plainObject(analysis),
+      id,
       cached: true,
     });
   });
@@ -215,6 +230,19 @@ function restoreAnalysisCache(cache) {
 
   state.contrasts = Array.from(contrastById.values());
   return restored;
+}
+
+function restoreAnalysisScopes(scopes = []) {
+  if (!Array.isArray(scopes) || !scopes.length) return;
+  const byId = new Map((state.analysisScopes || []).map((scope) => [scope.id, scope]));
+  scopes.forEach((scope) => {
+    if (!scope?.id) return;
+    byId.set(scope.id, {
+      ...scope,
+      cached: true,
+    });
+  });
+  state.analysisScopes = Array.from(byId.values());
 }
 
 async function refreshImportedAnalysis(cache, restored = {}) {
@@ -327,6 +355,39 @@ function plainRows(rows) {
 
 function plainObject(value) {
   return Object.fromEntries(Object.entries(value || {}).map(([key, item]) => [key, item ?? '']));
+}
+
+function deAnalysisCacheEntry(contrast) {
+  if (!contrast?.id) return null;
+  const hasPhaseOneMetadata = [
+    'question_type',
+    'scope_id',
+    'full_model',
+    'contrast_label',
+    'sample_count',
+    'group_balance',
+  ].some((key) => contrast[key] !== undefined && contrast[key] !== '');
+  if (!hasPhaseOneMetadata) return null;
+  return {
+    contrast_id: contrast.id,
+    question_type: contrast.question_type || '',
+    result_family: contrast.result_family || '',
+    scope_id: contrast.scope_id || '',
+    scope_label: contrast.scope_label || '',
+    full_model: contrast.full_model || contrast.design || '',
+    reduced_model: contrast.reduced_model || '',
+    contrast_label: contrast.contrast_label || '',
+    sample_count: contrast.sample_count || '',
+    primary_factor: contrast.primary_factor || contrast.column || '',
+    numerator: contrast.numerator || '',
+    denominator: contrast.denominator || '',
+    adjust_columns: contrast.adjust_columns || contrast.adjustColumns || [],
+    model_kind: contrast.model_kind || '',
+    result_mode: contrast.result_mode || '',
+    group_factors: contrast.group_factors || [],
+    group_balance: contrast.group_balance || {},
+    method: contrast.method || '',
+  };
 }
 
 function sampleMetadataCacheEntry() {

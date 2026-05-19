@@ -8,6 +8,7 @@ import { renderCurrentEnrichment } from './enrichment.js';
 import { renderDownstreamCards } from './downstreamPlugins.js';
 import { renderPackageRepositoryPanel } from './packageRepository.js';
 import { setupDeseqControls } from './deseq2.js';
+import { readDeseqFormValues, safeBuildDeseqQuestionSpec } from './deQuestionBuilder.js';
 import { setupFgseaControls } from './fgsea.js';
 import { renderActiveExpressionHeatmap, resizeExpressionHeatmap, setupCanvasXpressHeatmapControls, setupExpressionHeatmapControls } from './heatmap.js?v=20260517-canvasxpress-production';
 import { setupUserDataControls } from './userData.js';
@@ -323,21 +324,14 @@ function analysisReadinessItems() {
   const sampleIds = sampleIdsInCounts(state.samples, state.counts);
   const metadata = metadataColumns();
   const factorColumns = analysisFactorColumns().filter((column) => metadataLevels(column).length >= 2);
-  const primary = document.getElementById('deseq-design-column')?.value
-    || state.config?.analysis?.conditionColumn
-    || factorColumns[0]
-    || '';
-  const numerator = document.getElementById('deseq-numerator-level')?.value || '';
-  const denominator = document.getElementById('deseq-denominator-level')?.value || '';
-  const adjustColumns = selectedValues('deseq-adjust-columns');
+  const deSpecStatus = safeBuildDeseqQuestionSpec(readDeseqFormValues());
+  const deSpec = deSpecStatus.spec;
+  const adjustColumns = deSpec?.adjustColumns || selectedValues('deseq-adjust-columns');
   const gmtUploaded = (document.getElementById('gsea-gmt-file')?.files?.length || 0) > 0;
   const packageStatuses = ['DESeq2', 'fgsea'].map((pkg) => `${pkg}: ${getPackageStatus(pkg)}`);
   const packagesReady = ['DESeq2', 'fgsea'].every((pkg) => packageReadyStatus(getPackageStatus(pkg)));
   const webREnabled = state.config?.webr?.enabled !== false;
-  const designCounts = groupCounts(sampleIds, primary, numerator, denominator);
-  const designReady = primary && numerator && denominator && numerator !== denominator
-    && designCounts.numerator >= 2 && designCounts.denominator >= 2;
-  const covariateIssues = covariateReadinessIssues(sampleIds, primary, numerator, denominator, adjustColumns);
+  const designReady = Boolean(deSpec && !deSpecStatus.errors.length);
   const countMatrixReady = sampleIds.length >= 2 && state.counts.length > 0;
   const countMatrixWarnings = state.countMatrixWarnings || [];
   const countMatrixNote = countMatrixReadinessNote();
@@ -361,14 +355,14 @@ function analysisReadinessItems() {
       tone: designReady ? 'ok' : 'fail',
       title: 'DESeq2 design',
       message: designReady
-        ? `${primary}: ${numerator} (${designCounts.numerator}) vs ${denominator} (${designCounts.denominator}).`
-        : 'Choose a primary factor with two different levels and at least two samples per group.',
+        ? `${deSpec.label}; ${deSpec.sampleIds.length} samples; model ${deSpec.fullModel}.`
+        : (deSpecStatus.errors[0] || 'Choose a biological question with two valid groups and at least two samples per group.'),
     },
     {
-      tone: covariateIssues.length ? 'warn' : 'ok',
+      tone: deSpec?.warnings?.length ? 'warn' : 'ok',
       title: 'Covariates/blocking',
       message: adjustColumns.length
-        ? (covariateIssues.length ? covariateIssues.join(' ') : `Selected: ${adjustColumns.join(', ')}.`)
+        ? `Selected: ${adjustColumns.join(', ')}.${deSpec?.warnings?.length ? ` ${deSpec.warnings.join(' ')}` : ''}`
         : 'No optional covariates selected.',
     },
     {
@@ -626,12 +620,27 @@ function wireControls() {
   document.getElementById('de-apply')?.addEventListener('click', renderCurrentContrast);
   document.getElementById('de-show-all-genes')?.addEventListener('change', renderCurrentContrast);
   document.getElementById('contrast-select')?.addEventListener('change', renderCurrentContrast);
+  document.getElementById('contrast-family-select')?.addEventListener('change', () => {
+    populateContrastSelectors();
+    renderCurrentContrast();
+  });
   document.getElementById('enrichment-contrast-select')?.addEventListener('change', renderCurrentEnrichment);
   document.getElementById('gsea-result-select')?.addEventListener('change', renderCurrentEnrichment);
-  document.getElementById('deseq-design-column')?.addEventListener('change', renderAnalysisReadiness);
-  document.getElementById('deseq-numerator-level')?.addEventListener('change', renderAnalysisReadiness);
-  document.getElementById('deseq-denominator-level')?.addEventListener('change', renderAnalysisReadiness);
-  document.getElementById('deseq-adjust-columns')?.addEventListener('change', renderAnalysisReadiness);
+  [
+    'deseq-question-type',
+    'deseq-scope-column',
+    'deseq-scope-level',
+    'deseq-exclude-samples',
+    'deseq-design-column',
+    'deseq-numerator-level',
+    'deseq-denominator-level',
+    'deseq-adjust-columns',
+    'deseq-group-factor-a',
+    'deseq-group-factor-b',
+    'deseq-group-one',
+    'deseq-group-two',
+  ].forEach((id) => document.getElementById(id)?.addEventListener('change', renderAnalysisReadiness));
+  document.querySelectorAll('input[name="deseq-scope-mode"]').forEach((radio) => radio.addEventListener('change', renderAnalysisReadiness));
   document.getElementById('gsea-gmt-file')?.addEventListener('change', renderAnalysisReadiness);
   wirePackageEvents();
   document.getElementById('count-gene-button')?.addEventListener('click', () => renderCountExplorerPlot());

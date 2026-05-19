@@ -5,88 +5,281 @@ import { adjustmentMetadataColumns, analysisFactorColumns, metadataColumnType, m
 import { ensureRPackages } from './packageManager.js';
 import { evalR } from './webrManager.js';
 import { markAnalysisCacheDirty } from './analysisCache.js';
+import {
+  DESEQ_GROUP_COLUMN,
+  DESEQ_QUESTION_TYPES,
+  analysisScopeOptions,
+  buildAnalysisScope,
+  buildDeseqQuestionSpec,
+  directGroupOptions,
+  groupBalanceRows,
+  levelsForColumn,
+  previewDeseqModel,
+  readDeseqFormValues,
+  registerAnalysisScope,
+  safeBuildDeseqQuestionSpec,
+} from './deQuestionBuilder.js';
 
 let deseqCallbacks = {};
 let deseqControlsWired = false;
 
 export function setupDeseqControls(callbacks = {}) {
   deseqCallbacks = callbacks;
+  const questionSelect = document.getElementById('deseq-question-type');
   const designSelect = document.getElementById('deseq-design-column');
-  if (!designSelect) return;
-  const status = document.getElementById('deseq-status');
+  if (!questionSelect || !designSelect) return;
 
-  const eligibleColumns = analysisFactorColumns().filter((column) => deseqUniqueValues(column).length >= 2);
-  designSelect.disabled = eligibleColumns.length === 0;
-  const runButton = document.getElementById('deseq-run');
-  if (runButton) runButton.disabled = eligibleColumns.length === 0;
-  const previousDesign = designSelect.value;
-  designSelect.innerHTML = eligibleColumns.map((column) => `<option value="${deseqEscapeHtml(column)}">${deseqEscapeHtml(metadataTypeOptionLabel(column))}</option>`).join('');
-  if (eligibleColumns.includes(previousDesign)) {
-    designSelect.value = previousDesign;
-  } else if (eligibleColumns.includes(state.config?.analysis?.conditionColumn)) {
-    designSelect.value = state.config.analysis.conditionColumn;
-  } else if (eligibleColumns.includes('condition')) {
-    designSelect.value = 'condition';
-  }
+  populateQuestionTypes();
+  populateScopeControls();
+  syncDeseqQuestionUi();
+  populateFactorControls();
+  populateDirectGroupControls();
   updateDeseqAdjustControls();
-  if (status && eligibleColumns.length === 0) {
-    status.textContent = 'Upload a sample manifest with a grouping column to run DESeq2.';
-  } else if (status?.textContent?.startsWith('Upload a sample manifest')) {
-    status.textContent = 'DESeq2 uses webR and the configured package snapshot for small exploratory runs.';
-  }
+  populateExcludedSamples();
+  renderDeseqPreview();
 
   if (!deseqControlsWired) {
     deseqControlsWired = true;
-    designSelect.addEventListener('change', () => {
-      updateDeseqLevelControls();
-      updateDeseqAdjustControls();
-    });
+    wireDeseqBuilderControls();
     document.getElementById('deseq-run')?.addEventListener('click', runDeseq2Analysis);
   }
+}
+
+function wireDeseqBuilderControls() {
+  [
+    'deseq-question-type',
+    'deseq-scope-column',
+    'deseq-scope-level',
+    'deseq-exclude-samples',
+    'deseq-design-column',
+    'deseq-numerator-level',
+    'deseq-denominator-level',
+    'deseq-adjust-columns',
+    'deseq-group-factor-a',
+    'deseq-group-factor-b',
+    'deseq-group-one',
+    'deseq-group-two',
+  ].forEach((id) => {
+    document.getElementById(id)?.addEventListener('change', refreshDeseqBuilder);
+  });
+  document.querySelectorAll('input[name="deseq-scope-mode"]').forEach((radio) => {
+    radio.addEventListener('change', refreshDeseqBuilder);
+  });
+}
+
+function refreshDeseqBuilder(event = null) {
+  const changedId = event?.currentTarget?.id || '';
+  if (changedId === 'deseq-question-type') {
+    syncDeseqQuestionUi();
+    populateFactorControls({ preferQuestionDefault: true });
+    populateDirectGroupControls({ preferDefaults: true });
+  } else if (changedId === 'deseq-scope-column') {
+    populateScopeLevels();
+    populateFactorControls();
+    populateDirectGroupControls();
+    updateDeseqAdjustControls();
+    populateExcludedSamples();
+  } else if (changedId === 'deseq-scope-level' || changedId === 'deseq-exclude-samples' || event?.currentTarget?.name === 'deseq-scope-mode') {
+    syncDeseqScopeControls();
+    populateFactorControls();
+    populateDirectGroupControls();
+    updateDeseqAdjustControls();
+    populateExcludedSamples();
+  } else if (changedId === 'deseq-design-column') {
+    updateDeseqLevelControls();
+    updateDeseqAdjustControls();
+  } else if (changedId === 'deseq-group-factor-a' || changedId === 'deseq-group-factor-b') {
+    populateDirectGroupControls();
+    updateDeseqAdjustControls();
+  }
+  renderDeseqPreview();
+  deseqCallbacks.renderAnalysisReadiness?.();
+}
+
+function populateQuestionTypes() {
+  const select = document.getElementById('deseq-question-type');
+  if (!select) return;
+  const previous = select.value;
+  select.innerHTML = DESEQ_QUESTION_TYPES
+    .map((type) => `<option value="${deseqEscapeHtml(type.id)}">${deseqEscapeHtml(type.label)}</option>`)
+    .join('');
+  select.value = DESEQ_QUESTION_TYPES.some((type) => type.id === previous) ? previous : DESEQ_QUESTION_TYPES[0].id;
+}
+
+function populateScopeControls() {
+  const columnSelect = document.getElementById('deseq-scope-column');
+  if (!columnSelect) return;
+  const previous = columnSelect.value;
+  const columns = analysisScopeOptions();
+  columnSelect.innerHTML = columns
+    .map((column) => `<option value="${deseqEscapeHtml(column)}">${deseqEscapeHtml(metadataTypeOptionLabel(column))}</option>`)
+    .join('');
+  columnSelect.disabled = columns.length === 0;
+  columnSelect.value = columns.includes(previous)
+    ? previous
+    : (columns.includes('tissue') ? 'tissue' : (columns.includes('condition') ? 'condition' : columns[0] || ''));
+  const subsetRadio = document.querySelector('input[name="deseq-scope-mode"][value="subset"]');
+  if (subsetRadio) subsetRadio.disabled = columns.length === 0;
+  populateScopeLevels();
+  syncDeseqScopeControls();
+}
+
+function populateScopeLevels() {
+  const levelSelect = document.getElementById('deseq-scope-level');
+  if (!levelSelect) return;
+  const column = document.getElementById('deseq-scope-column')?.value || '';
+  const previous = levelSelect.value;
+  const levels = levelsForColumn(column);
+  levelSelect.innerHTML = levels.map((level) => `<option value="${deseqEscapeHtml(level)}">${deseqEscapeHtml(level)}</option>`).join('');
+  levelSelect.disabled = levels.length === 0;
+  levelSelect.value = levels.includes(previous) ? previous : (levels[0] || '');
+}
+
+function syncDeseqScopeControls() {
+  const subset = document.querySelector('input[name="deseq-scope-mode"]:checked')?.value === 'subset';
+  const filter = document.getElementById('deseq-scope-filter');
+  if (filter) filter.hidden = !subset;
+}
+
+function populateExcludedSamples() {
+  const select = document.getElementById('deseq-exclude-samples');
+  if (!select) return;
+  const previous = new Set(Array.from(select.selectedOptions || []).map((option) => option.value));
+  const formValues = readDeseqFormValues();
+  const withoutExclusions = buildAnalysisScope({ ...formValues, excludedSampleIds: [] });
+  const options = withoutExclusions.sampleIds.map((sampleId) => {
+    const sample = state.samples.find((item) => item.sample_id === sampleId) || {};
+    const title = sample.title || sample.condition || sample.tissue || '';
+    const selected = previous.has(sampleId) ? ' selected' : '';
+    return `<option value="${deseqEscapeHtml(sampleId)}"${selected}>${deseqEscapeHtml(title ? `${sampleId} (${title})` : sampleId)}</option>`;
+  });
+  select.innerHTML = options.join('');
+  select.disabled = options.length === 0;
+}
+
+function syncDeseqQuestionUi() {
+  const questionType = document.getElementById('deseq-question-type')?.value || '';
+  const direct = questionType === 'direct_group_comparison';
+  const factorControls = document.getElementById('deseq-factor-controls');
+  const directControls = document.getElementById('deseq-direct-group-controls');
+  if (factorControls) factorControls.hidden = direct;
+  if (directControls) directControls.hidden = !direct;
+}
+
+function populateFactorControls(options = {}) {
+  const designSelect = document.getElementById('deseq-design-column');
+  if (!designSelect) return;
+  const formValues = readDeseqFormValues();
+  const scope = buildAnalysisScope(formValues);
+  const eligibleColumns = analysisFactorColumns().filter((column) => levelsForColumn(column, scope.sampleIds).length >= 2);
+  const previous = designSelect.value;
+  const forcedColumn = forcedPrimaryFactor(formValues.questionType, eligibleColumns);
+  const defaultColumn = defaultPrimaryFactor(formValues.questionType, eligibleColumns);
+  designSelect.disabled = eligibleColumns.length === 0;
+  designSelect.innerHTML = eligibleColumns
+    .map((column) => `<option value="${deseqEscapeHtml(column)}">${deseqEscapeHtml(metadataTypeOptionLabel(column))}</option>`)
+    .join('');
+  designSelect.value = forcedColumn
+    || (!options.preferQuestionDefault && eligibleColumns.includes(previous)
+    ? previous
+    : defaultColumn);
   updateDeseqLevelControls();
 }
 
+function forcedPrimaryFactor(questionType, columns) {
+  if (questionType === 'tissue_within_subset' && columns.includes('tissue')) return 'tissue';
+  if (questionType === 'condition_within_subset' && columns.includes('condition')) return 'condition';
+  return '';
+}
+
+function defaultPrimaryFactor(questionType, columns) {
+  if (questionType === 'tissue_within_subset' && columns.includes('tissue')) return 'tissue';
+  if (columns.includes(state.config?.analysis?.conditionColumn)) return state.config.analysis.conditionColumn;
+  if (columns.includes('condition')) return 'condition';
+  if (columns.includes('tissue')) return 'tissue';
+  return columns[0] || '';
+}
+
 function updateDeseqLevelControls() {
+  const formValues = readDeseqFormValues();
+  const scope = buildAnalysisScope(formValues);
   const column = document.getElementById('deseq-design-column')?.value;
-  const levels = deseqUniqueValues(column);
+  const levels = levelsForColumn(column, scope.sampleIds);
   const levelOptions = levels.map((level) => `<option value="${deseqEscapeHtml(level)}">${deseqEscapeHtml(level)}</option>`).join('');
 
-  const referenceSelect = document.getElementById('deseq-reference-level');
   const numeratorSelect = document.getElementById('deseq-numerator-level');
   const denominatorSelect = document.getElementById('deseq-denominator-level');
   if (!numeratorSelect || !denominatorSelect) return;
-  const hasLevels = levels.length > 0;
 
-  const configuredReference = state.config?.analysis?.referenceLevel;
-  const previousDenominator = denominatorSelect.value || referenceSelect?.value;
+  const previousDenominator = denominatorSelect.value;
   const previousNumerator = numeratorSelect.value;
-  if (referenceSelect) referenceSelect.innerHTML = levelOptions;
   numeratorSelect.innerHTML = levelOptions;
   denominatorSelect.innerHTML = levelOptions;
-  if (referenceSelect) referenceSelect.disabled = true;
-  numeratorSelect.disabled = !hasLevels;
-  denominatorSelect.disabled = !hasLevels;
+  numeratorSelect.disabled = levels.length < 2;
+  denominatorSelect.disabled = levels.length < 2;
 
+  const configuredReference = state.config?.analysis?.referenceLevel;
   const denominator = levels.includes(previousDenominator)
     ? previousDenominator
-    : (levels.includes(configuredReference) ? configuredReference : levels[0]);
+    : (levels.includes(configuredReference) ? configuredReference : (levels.includes('control') ? 'control' : levels[0]));
   denominatorSelect.value = denominator || '';
-  if (referenceSelect) referenceSelect.value = denominator || '';
   numeratorSelect.value = levels.includes(previousNumerator) && previousNumerator !== denominator
     ? previousNumerator
     : (levels.find((level) => level !== denominator) || levels[0] || '');
 }
 
+function populateDirectGroupControls(options = {}) {
+  const factorA = document.getElementById('deseq-group-factor-a');
+  const factorB = document.getElementById('deseq-group-factor-b');
+  if (!factorA || !factorB) return;
+  const formValues = readDeseqFormValues();
+  const scope = buildAnalysisScope(formValues);
+  const columns = analysisFactorColumns().filter((column) => levelsForColumn(column, scope.sampleIds).length >= 2);
+  populateSelect(factorA, columns, options.preferDefaults ? (columns.includes('condition') ? 'condition' : columns[0]) : factorA.value, metadataTypeOptionLabel);
+  const bDefault = columns.find((column) => column !== factorA.value && column === 'tissue')
+    || columns.find((column) => column !== factorA.value)
+    || '';
+  populateSelect(factorB, columns.filter((column) => column !== factorA.value), options.preferDefaults ? bDefault : factorB.value, metadataTypeOptionLabel);
+  populateDirectGroupLevels();
+}
+
+function populateDirectGroupLevels() {
+  const groupOne = document.getElementById('deseq-group-one');
+  const groupTwo = document.getElementById('deseq-group-two');
+  if (!groupOne || !groupTwo) return;
+  const formValues = readDeseqFormValues();
+  const scope = buildAnalysisScope(formValues);
+  const factors = [
+    document.getElementById('deseq-group-factor-a')?.value || '',
+    document.getElementById('deseq-group-factor-b')?.value || '',
+  ].filter(Boolean);
+  const groups = directGroupOptions(factors, scope.sampleIds);
+  const previousOne = groupOne.value;
+  const previousTwo = groupTwo.value;
+  const options = groups.map((group) => `<option value="${deseqEscapeHtml(group.value)}">${deseqEscapeHtml(`${group.label} (${group.sampleIds.length})`)}</option>`).join('');
+  groupOne.innerHTML = options;
+  groupTwo.innerHTML = options;
+  groupOne.disabled = groups.length < 2;
+  groupTwo.disabled = groups.length < 2;
+  groupOne.value = groups.some((group) => group.value === previousOne) ? previousOne : (groups[0]?.value || '');
+  groupTwo.value = groups.some((group) => group.value === previousTwo) && previousTwo !== groupOne.value
+    ? previousTwo
+    : (groups.find((group) => group.value !== groupOne.value)?.value || groups[1]?.value || '');
+}
+
 function updateDeseqAdjustControls() {
   const adjustSelect = document.getElementById('deseq-adjust-columns');
   if (!adjustSelect) return;
-  const primary = document.getElementById('deseq-design-column')?.value;
+  const formValues = readDeseqFormValues();
+  const scope = buildAnalysisScope(formValues);
+  const direct = formValues.questionType === 'direct_group_comparison';
+  const blocked = new Set(direct ? formValues.groupFactors : [document.getElementById('deseq-design-column')?.value || '']);
   const previous = new Set(Array.from(adjustSelect.selectedOptions || []).map((option) => option.value));
   const candidates = adjustmentMetadataColumns()
-    .filter((column) => column !== primary)
-    .filter((column) => metadataColumnType(column) === 'continuous' || deseqUniqueValues(column).length >= 2);
+    .filter((column) => !blocked.has(column))
+    .filter((column) => columnVariesInScope(column, scope.sampleIds));
   adjustSelect.innerHTML = candidates.map((column) => {
-    const levels = deseqUniqueValues(column).length;
+    const levels = levelsForColumn(column, scope.sampleIds).length;
     const type = metadataColumnType(column);
     const suffix = type === 'continuous' ? 'continuous' : `${levels} levels`;
     return `<option value="${deseqEscapeHtml(column)}"${previous.has(column) ? ' selected' : ''}>${deseqEscapeHtml(column)} (${suffix})</option>`;
@@ -94,12 +287,66 @@ function updateDeseqAdjustControls() {
   adjustSelect.disabled = candidates.length === 0;
 }
 
+function columnVariesInScope(column, sampleIds) {
+  const values = sampleIds
+    .map((sampleId) => state.samples.find((sample) => sample.sample_id === sampleId)?.[column])
+    .map((value) => String(value ?? '').trim())
+    .filter(Boolean);
+  if (metadataColumnType(column) === 'continuous') return values.length > 1 && values.every((value) => Number.isFinite(Number(value))) && new Set(values).size > 1;
+  return new Set(values).size > 1;
+}
+
+function populateSelect(select, values, preferred = '', labeler = (value) => value) {
+  const previous = select.value;
+  select.innerHTML = values.map((value) => `<option value="${deseqEscapeHtml(value)}">${deseqEscapeHtml(labeler(value))}</option>`).join('');
+  select.disabled = values.length === 0;
+  select.value = values.includes(preferred)
+    ? preferred
+    : (values.includes(previous) ? previous : (values[0] || ''));
+}
+
+function renderDeseqPreview() {
+  const status = document.getElementById('deseq-status');
+  const preview = document.getElementById('deseq-model-preview');
+  const balance = document.getElementById('deseq-group-balance');
+  const scopeStatus = document.getElementById('deseq-scope-status');
+  const runButton = document.getElementById('deseq-run');
+  const { spec, errors, warnings } = safeBuildDeseqQuestionSpec(readDeseqFormValues());
+
+  if (runButton) runButton.disabled = errors.length > 0;
+  if (scopeStatus) {
+    const scope = spec?.scope || buildAnalysisScope(readDeseqFormValues());
+    scopeStatus.textContent = `${scope.sampleIds.length} matched sample${scope.sampleIds.length === 1 ? '' : 's'} selected from ${sampleIdsInCounts(state.samples, state.counts).length}.`;
+  }
+  if (!preview) return;
+
+  if (errors.length) {
+    preview.innerHTML = `<p class="deseq-error">${deseqEscapeHtml(errors[0])}</p>`;
+    if (balance) balance.innerHTML = '';
+    if (status) status.textContent = `DESeq2 setup needs attention: ${errors[0]}`;
+    return;
+  }
+
+  preview.innerHTML = previewDeseqModel(spec).map(([label, value]) => `
+    <div class="deseq-preview-row"><span>${deseqEscapeHtml(label)}</span><strong>${deseqEscapeHtml(value)}</strong></div>
+  `).join('');
+  if (warnings.length) {
+    preview.innerHTML += `<ul class="deseq-warning-list">${warnings.map((warning) => `<li>${deseqEscapeHtml(warning)}</li>`).join('')}</ul>`;
+  }
+  if (balance) {
+    const rows = groupBalanceRows(spec);
+    balance.innerHTML = rows.length ? `
+      <div class="deseq-balance-title">Group balance</div>
+      <div class="deseq-balance-grid">
+        ${rows.map((row) => `<span>${deseqEscapeHtml(row.group)}</span><strong>${row.samples}</strong>`).join('')}
+      </div>` : '';
+  }
+  if (status && !status.textContent.startsWith('DESeq2 complete') && !status.textContent.startsWith('DESeq2 failed')) {
+    status.textContent = 'DESeq2 uses webR and the configured package snapshot. The preview shows the model before execution.';
+  }
+}
+
 export async function runDeseq2Analysis() {
-  const column = document.getElementById('deseq-design-column')?.value;
-  const adjustColumns = deseqSelectedAdjustColumns(column);
-  const numerator = document.getElementById('deseq-numerator-level')?.value;
-  const denominator = document.getElementById('deseq-denominator-level')?.value;
-  const reference = denominator;
   const status = document.getElementById('deseq-status');
   const runButton = document.getElementById('deseq-run');
   const runButtonLabel = runButton?.textContent || 'Run DESeq2';
@@ -111,35 +358,23 @@ export async function runDeseq2Analysis() {
   }
 
   try {
-    deseqSetStatus(status, 'Validating DESeq2 contrast and design...');
-    await progress.step('Validating contrast and design', 1);
-    if (!column || !numerator || !denominator || numerator === denominator) {
-      throw new Error('Choose two different levels for the DESeq2 contrast.');
-    }
+    deseqSetStatus(status, 'Validating DESeq2 question and design...');
+    await progress.step('Validating question and design', 1);
+    const spec = buildDeseqQuestionSpec(readDeseqFormValues());
+    registerAnalysisScope(spec.scope);
 
-    const sampleIds = sampleIdsInCounts(state.samples, state.counts)
-      .filter((sampleId) => {
-        const value = String(state.samples.find((sample) => sample.sample_id === sampleId)?.[column] ?? '');
-        return value === numerator || value === denominator;
-      });
-    if (sampleIds.length < 2) throw new Error('At least two samples are required for this contrast.');
-    const numeratorCount = sampleIds.filter((sampleId) => String(state.samples.find((sample) => sample.sample_id === sampleId)?.[column] ?? '') === numerator).length;
-    const denominatorCount = sampleIds.filter((sampleId) => String(state.samples.find((sample) => sample.sample_id === sampleId)?.[column] ?? '') === denominator).length;
-    if (numeratorCount < 2 || denominatorCount < 2) throw new Error('DESeq2 requires at least two samples per group for this browser runner.');
-    validateDeseqDesign(sampleIds, column, adjustColumns);
-
-    await progress.step(`Using ${sampleIds.length} samples for ${numerator} vs ${denominator}`, 2);
+    await progress.step(`Using ${spec.sampleIds.length} samples for ${spec.contrastLabel}`, 2);
     deseqSetStatus(status, 'Loading DESeq2 package in webR. First run can take a few minutes.');
     await progress.step('Loading DESeq2 package in webR', 3);
     await ensureRPackages(deseqPackageSet(), { load: ['DESeq2'] });
 
-    const modelMessage = `Running DESeq2 in webR for ${state.counts.length} genes and ${sampleIds.length} samples`;
+    const modelMessage = `Running DESeq2 in webR for ${state.counts.length} genes and ${spec.sampleIds.length} samples`;
     deseqSetStatus(status, `${modelMessage}. Keep this tab open.`);
     await progress.step(modelMessage, 4);
     const rows = await runWithProgressPulse(
       progress,
       `${modelMessage}; still working`,
-      () => deseqRunInWebR(sampleIds, column, adjustColumns, reference, numerator, denominator),
+      () => deseqRunInWebR(spec),
       {
         intervalMs: 10000,
         onPulse: (message) => deseqSetStatus(status, `${message}. Keep this tab open.`),
@@ -148,36 +383,26 @@ export async function runDeseq2Analysis() {
     if (rows.length === 0) throw new Error('DESeq2 returned no result rows.');
 
     await progress.step('Registering contrast and updating plots', 5);
-    const designLabel = deseqDesignLabel(column, adjustColumns);
-    const contrastId = `deseq2_${deseqSlug(numerator)}_vs_${deseqSlug(denominator)}${adjustColumns.length ? `_adj_${deseqSlug(adjustColumns.join('_'))}` : ''}`;
-    const contrast = {
-      id: contrastId,
-      label: `DESeq2 ${numerator} vs ${denominator}${adjustColumns.length ? ' adjusted' : ''}`,
-      column,
-      numerator,
-      denominator,
-      adjustColumns,
-      design: designLabel,
-      generated: true,
-      method: 'DESeq2 webR',
-    };
-    const existingIndex = state.contrasts.findIndex((item) => item.id === contrastId);
+    const contrast = contrastFromSpec(spec);
+    const existingIndex = state.contrasts.findIndex((item) => item.id === contrast.id);
     if (existingIndex >= 0) state.contrasts[existingIndex] = contrast;
     else state.contrasts.push(contrast);
-    state.deResults.set(contrastId, rows);
-    markAnalysisCacheDirty(`DESeq2 ${numerator} vs ${denominator}`);
+    state.deResults.set(contrast.id, rows);
+    markAnalysisCacheDirty(`DESeq2 ${contrast.label}`);
 
     deseqCallbacks.populateContrastSelectors?.();
     deseqCallbacks.renderOverviewMetrics?.();
     deseqCallbacks.renderAnalysisReadiness?.();
     const contrastSelect = document.getElementById('contrast-select');
-    if (contrastSelect) contrastSelect.value = contrastId;
+    const familySelect = document.getElementById('contrast-family-select');
+    if (familySelect) familySelect.value = contrast.result_family || 'all';
+    if (contrastSelect) contrastSelect.value = contrast.id;
     await progress.step('Rendering DE table and volcano/MA plots', 6);
     await deseqCallbacks.renderCurrentContrast?.();
 
-    logAnalysis(`DESeq2 completed for ${numerator} vs ${denominator} with ${designLabel}: ${rows.length} genes.`);
-    deseqSetStatus(status, `DESeq2 complete: ${rows.length} genes. Design ${designLabel}.`);
-    await progress.done(`Complete: ${rows.length} genes. Design ${designLabel}`);
+    logAnalysis(`DESeq2 completed for ${contrast.label} with ${spec.fullModel}: ${rows.length} genes.`);
+    deseqSetStatus(status, `DESeq2 complete: ${rows.length} genes. Model ${spec.fullModel}.`);
+    await progress.done(`Complete: ${rows.length} genes. Model ${spec.fullModel}`);
   } catch (error) {
     logAnalysis(`DESeq2 failed: ${error.message}`);
     deseqSetStatus(status, `DESeq2 failed: ${error.message}`);
@@ -187,29 +412,61 @@ export async function runDeseq2Analysis() {
       runButton.disabled = false;
       runButton.textContent = runButtonLabel;
       runButton.removeAttribute('aria-busy');
+      renderDeseqPreview();
     }
   }
+}
+
+function contrastFromSpec(spec) {
+  return {
+    id: spec.id,
+    label: spec.label,
+    question_type: spec.questionType,
+    question_label: spec.questionLabel,
+    result_family: spec.resultFamily,
+    scope_id: spec.scopeId,
+    scope_label: spec.scope.label,
+    sample_count: spec.sampleIds.length,
+    primary_factor: spec.primaryFactor === DESEQ_GROUP_COLUMN ? '' : spec.primaryFactor,
+    column: spec.primaryFactor === DESEQ_GROUP_COLUMN ? '' : spec.primaryFactor,
+    numerator: spec.numerator,
+    denominator: spec.denominator,
+    adjust_columns: spec.adjustColumns,
+    adjustColumns: spec.adjustColumns,
+    full_model: spec.fullModel,
+    reduced_model: spec.reducedModel || '',
+    contrast_label: spec.contrastLabel,
+    design: spec.fullModel,
+    model_kind: spec.modelKind,
+    result_mode: spec.resultMode,
+    group_factors: spec.groupFactors || [],
+    group_one_label: spec.groupOneLabel || '',
+    group_two_label: spec.groupTwoLabel || '',
+    group_balance: spec.groupBalance,
+    warnings: spec.warnings || [],
+    generated: true,
+    method: 'DESeq2 webR',
+  };
 }
 
 function deseqPackageSet() {
   return state.config?.webr?.modules?.deseq2?.packages || ['DESeq2'];
 }
 
-async function deseqRunInWebR(sampleIds, column, adjustColumns, reference, numerator, denominator) {
-  const countsCsv = deseqCountsCsv(sampleIds);
-  const metadataColumns = [column].concat(adjustColumns);
-  const metadataCsv = deseqMetadataCsv(sampleIds, metadataColumns);
-  const adjustTypeVector = deseqRNamedStringVector(adjustColumns.map((adjustColumn) => [adjustColumn, metadataColumnType(adjustColumn)]));
+async function deseqRunInWebR(spec) {
+  const countsCsv = deseqCountsCsv(spec.sampleIds);
+  const metadataCsv = deseqMetadataCsv(spec);
+  const adjustTypeVector = deseqRNamedStringVector(spec.adjustColumns.map((adjustColumn) => [adjustColumn, metadataColumnType(adjustColumn)]));
   const code = `
 suppressPackageStartupMessages(library(DESeq2))
 count_text <- ${deseqRString(countsCsv)}
 metadata_text <- ${deseqRString(metadataCsv)}
-primary_col_raw <- ${deseqRString(column)}
-adjust_cols_raw <- c(${adjustColumns.map(deseqRString).join(', ')})
+primary_col_raw <- ${deseqRString(spec.primaryFactor)}
+adjust_cols_raw <- c(${spec.adjustColumns.map(deseqRString).join(', ')})
 adjust_types_raw <- ${adjustTypeVector}
-reference_level <- ${deseqRString(reference)}
-numerator_level <- ${deseqRString(numerator)}
-denominator_level <- ${deseqRString(denominator)}
+reference_level <- ${deseqRString(spec.reference)}
+numerator_level <- ${deseqRString(spec.numerator)}
+denominator_level <- ${deseqRString(spec.denominator)}
 countData <- read.csv(text = count_text, row.names = 1, check.names = FALSE)
 rownames(countData) <- make.unique(rownames(countData))
 countData <- as.matrix(countData)
@@ -226,6 +483,9 @@ safe_names <- make.names(raw_names, unique = TRUE)
 colnames(colData) <- safe_names
 safe_lookup <- setNames(safe_names, raw_names)
 design_col <- unname(safe_lookup[[primary_col_raw]])
+if (is.na(design_col) || !nzchar(design_col)) {
+  stop("Primary design column is missing from metadata.")
+}
 adjust_cols <- character(0)
 for (adjust_col_raw in adjust_cols_raw) {
   adjust_col <- unname(safe_lookup[[adjust_col_raw]])
@@ -246,11 +506,18 @@ for (adjust_col_raw in adjust_cols_raw) {
     colData[[adjust_col]] <- factor(value)
   }
   if (is.factor(colData[[adjust_col]]) && nlevels(colData[[adjust_col]]) < 2) {
-    stop(paste("Adjustment factor has fewer than two levels:", adjust_col))
+    stop(paste("Adjustment factor has fewer than two levels:", adjust_col_raw))
   }
   adjust_cols <- c(adjust_cols, adjust_col)
 }
-colData[[design_col]] <- relevel(factor(trimws(as.character(colData[[design_col]]))), ref = reference_level)
+primary_value <- trimws(as.character(colData[[design_col]]))
+if (any(!nzchar(primary_value))) {
+  stop("Primary design column has missing values.")
+}
+colData[[design_col]] <- relevel(factor(primary_value), ref = reference_level)
+if (!all(c(numerator_level, denominator_level) %in% levels(colData[[design_col]]))) {
+  stop("Selected numerator or denominator level was not found after subsetting samples.")
+}
 design_terms <- c(adjust_cols, design_col)
 design_formula <- reformulate(design_terms)
 design_matrix <- model.matrix(design_formula, colData)
@@ -276,7 +543,7 @@ paste(capture.output(write.csv(out, row.names = FALSE, na = "")), collapse = "\\
   return parseDeCsv(text).map((row) => ({
     ...row,
     gene_symbol: row.gene_symbol || geneSymbols.get(deseqGeneKey(row.gene_id)) || '',
-    method: `DESeq2 webR ${deseqDesignLabel(column, adjustColumns)}`,
+    method: `DESeq2 webR ${spec.fullModel}`,
   })).sort((a, b) => deseqSortPValue(a.padj) - deseqSortPValue(b.padj));
 }
 
@@ -297,12 +564,16 @@ function deseqCountsCsv(sampleIds) {
   return deseqCsv([['gene_id'].concat(sampleIds)].concat(rows));
 }
 
-function deseqMetadataCsv(sampleIds, columns) {
-  const rows = sampleIds.map((sampleId) => {
+function deseqMetadataCsv(spec) {
+  const metadataColumns = uniqueStrings(spec.adjustColumns.concat(spec.primaryFactor));
+  const rows = spec.sampleIds.map((sampleId) => {
     const sample = state.samples.find((item) => item.sample_id === sampleId) || {};
-    return [sampleId].concat(columns.map((column) => sample[column] ?? ''));
+    return [sampleId].concat(metadataColumns.map((column) => {
+      if (spec.syntheticColumns?.[column]) return spec.syntheticColumns[column][sampleId] ?? '';
+      return sample[column] ?? '';
+    }));
   });
-  return deseqCsv([['sample_id'].concat(columns)].concat(rows));
+  return deseqCsv([['sample_id'].concat(metadataColumns)].concat(rows));
 }
 
 function deseqCsv(rows) {
@@ -349,59 +620,6 @@ function deseqResultText(result) {
   return String(result ?? '');
 }
 
-function deseqUniqueValues(column) {
-  if (!column) return [];
-  return Array.from(new Set(state.samples.map((sample) => sample[column]).filter((value) => value !== undefined && value !== null && value !== '').map(String)));
-}
-
-function deseqSelectedAdjustColumns(primaryColumn) {
-  const selected = Array.from(document.getElementById('deseq-adjust-columns')?.selectedOptions || [])
-    .map((option) => option.value)
-    .filter((column) => column && column !== primaryColumn);
-  return Array.from(new Set(selected));
-}
-
-function validateDeseqDesign(sampleIds, primaryColumn, adjustColumns) {
-  const modelTerms = adjustColumns.map((column) => ({
-    column,
-    values: sampleIds.map((sampleId) => deseqSampleValue(sampleId, column)),
-  }));
-
-  modelTerms.forEach((term) => {
-    if (term.values.some((value) => value === '')) {
-      throw new Error(`Selected adjustment column "${term.column}" has missing values in the selected samples.`);
-    }
-    if (metadataColumnType(term.column) !== 'continuous' && new Set(term.values).size < 2) {
-      throw new Error(`Selected adjustment column "${term.column}" has fewer than two levels in the selected samples.`);
-    }
-    if (metadataColumnType(term.column) === 'continuous' && term.values.some((value) => !Number.isFinite(Number(value)))) {
-      throw new Error(`Selected continuous adjustment column "${term.column}" contains non-numeric values.`);
-    }
-    if (metadataColumnType(term.column) === 'continuous' && new Set(term.values).size < 2) {
-      throw new Error(`Selected continuous adjustment column "${term.column}" has no variation in the selected samples.`);
-    }
-  });
-
-  const approximateCoefficientCount = 1
-    + 1
-    + modelTerms.reduce((sum, term) => {
-      const isContinuous = metadataColumnType(term.column) === 'continuous';
-      return sum + (isContinuous ? 1 : Math.max(1, new Set(term.values).size - 1));
-    }, 0);
-  if (sampleIds.length <= approximateCoefficientCount) {
-    throw new Error(`The DESeq2 design ${deseqDesignLabel(primaryColumn, adjustColumns)} has too many terms for ${sampleIds.length} selected samples.`);
-  }
-}
-
-function deseqSampleValue(sampleId, column) {
-  const value = state.samples.find((sample) => sample.sample_id === sampleId)?.[column];
-  return value === undefined || value === null ? '' : String(value);
-}
-
-function deseqDesignLabel(primaryColumn, adjustColumns) {
-  return `~ ${adjustColumns.concat(primaryColumn).join(' + ')}`;
-}
-
 function deseqSetStatus(element, message) {
   if (element) element.textContent = message;
 }
@@ -415,10 +633,10 @@ function deseqRNamedStringVector(entries) {
   return `c(${entries.map(([name, value]) => `${deseqRString(name)} = ${deseqRString(value)}`).join(', ')})`;
 }
 
-function deseqSlug(value) {
-  return String(value).trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || 'group';
-}
-
 function deseqEscapeHtml(value) {
   return String(value).replace(/[&<>'"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[ch]));
+}
+
+function uniqueStrings(values) {
+  return Array.from(new Set((values || []).map((value) => String(value || '').trim()).filter(Boolean)));
 }

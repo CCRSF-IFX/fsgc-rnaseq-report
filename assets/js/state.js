@@ -10,6 +10,8 @@ export const state = {
   countMatrixInfo: null,
   geneAnnotation: [],
   geneAnnotationLoaded: false,
+  analysisScopes: [],
+  activeAnalysisScopeId: 'all_samples',
   contrasts: [],
   deResults: new Map(),
   enrichmentResults: new Map(),

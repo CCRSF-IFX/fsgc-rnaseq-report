@@ -86,7 +86,7 @@
             <li><strong>Review the run</strong><span>Use Overview and QC to confirm sample count, contrasts, warnings, genome, annotation, and pipeline provenance.</span></li>
             <li><strong>Check the data setup</strong><span>Use Data Setup to confirm count/sample matching. Upload a sample manifest for the embedded count matrix, or upload a new count matrix with its matching manifest.</span></li>
             <li><strong>Explore sample structure</strong><span>Use PCA, Heatmap & Clustering, and Gene Counts to inspect grouping, batch effects, outliers, and marker-gene behavior.</span></li>
-            <li><strong>Run browser DESeq2 when needed</strong><span>Choose one primary factor, set numerator and denominator levels, and optionally adjust or block by batch, sex, subject, or pairing columns.</span></li>
+            <li><strong>Run browser DESeq2 when needed</strong><span>Choose a biological question, set the analysis scope, review the model preview, and optionally adjust or block by batch, sex, subject, or pairing columns.</span></li>
             <li><strong>Run fgsea from a DE result</strong><span>Select the DE contrast, upload one or more GMT pathway files, set pathway size limits, and run fgsea in the browser.</span></li>
             <li><strong>Export or reload results</strong><span>Use table CSV exports for individual result tables. For browser-run DESeq2/GSEA results, export the Methods & Export analysis cache before closing the tab.</span></li>
           </ol>
@@ -158,7 +158,7 @@
             </div>
             <div>
               <h4>DESeq2</h4>
-              <p>The browser runner supports one primary factor with optional additive covariates or blocking factors. It checks for at least two samples per group and guards against over-specified designs.</p>
+              <p>The browser runner uses a question builder for subset-aware condition effects, tissue effects, additive adjusted effects, and direct combined-group comparisons. It checks for at least two samples per compared group and guards against over-specified designs.</p>
             </div>
             <div>
               <h4>Runtime packages</h4>
@@ -210,7 +210,7 @@
           <h3>Analysis setup</h3>
           <div class="setup-flow">
             <div><strong>1. Load data</strong><p>Use the embedded count matrix or upload a replacement with a matching manifest.</p></div>
-            <div><strong>2. Check design</strong><p>Confirm sample matching, primary factor, denominator/reference level, and optional covariates before DESeq2.</p></div>
+            <div><strong>2. Check design</strong><p>Confirm sample matching, analysis scope, question type, denominator/reference level, and optional covariates before DESeq2.</p></div>
             <div><strong>3. Run analysis</strong><p>Use DESeq2 first, then fgsea with one or more uploaded GMT pathway files.</p></div>
           </div>
           <div id="analysis-readiness" class="readiness-list"></div>
@@ -389,12 +389,14 @@
       <section class="tab-panel" id="tab-de">
         <article class="card">
           <div class="toolbar">
+            <label>Result category <select id="contrast-family-select"></select></label>
             <label>Contrast <select id="contrast-select"></select></label>
             <label>padj <= <input id="padj-threshold" type="number" step="0.01" value="0.05" /></label>
             <label>|log2FC| >= <input id="lfc-threshold" type="number" step="0.25" value="1" /></label>
             <label class="check-label"><input id="de-show-all-genes" type="checkbox" /> Show all genes</label>
             <button id="de-apply">Apply</button>
           </div>
+          <div id="de-contrast-tags" class="contrast-tags"></div>
           <div class="grid two">
             <div id="volcano-plot" class="plot tall"></div>
             <div id="ma-plot" class="plot tall"></div>
@@ -403,27 +405,68 @@
           <div id="de-table"></div>
         </article>
         <article class="card">
-          <h3>DESeq2 in browser</h3>
-          <div class="toolbar">
-            <label>Primary factor <select id="deseq-design-column"></select></label>
-            <label>Numerator <select id="deseq-numerator-level"></select></label>
-            <label>
-              <span class="field-label-with-tip">
-                Denominator
-                <span class="tip-wrap">
-                  <span class="tip-icon" tabindex="0" aria-describedby="deseq-denominator-tip" aria-label="Denominator reference help">?</span>
-                  <span id="deseq-denominator-tip" class="tip-bubble" role="tooltip">The denominator is used as the DESeq2 reference level for this contrast.</span>
-                </span>
-              </span>
-              <select id="deseq-denominator-level"></select>
-            </label>
+          <div class="de-run-header">
+            <div>
+              <h3>DESeq2 question builder</h3>
+              <p class="note">Choose the biological question first. The report builds the sample scope, model formula, contrast, and result label.</p>
+            </div>
             <button id="deseq-run">Run DESeq2</button>
           </div>
-          <div class="toolbar deseq-adjust-toolbar">
-            <label>Adjust/block by <select id="deseq-adjust-columns" multiple size="4"></select></label>
-            <p class="note">Choose optional batch, sex, subject, or paired-sample columns. The primary factor is tested after these terms.</p>
+          <div class="deseq-builder-grid">
+            <section class="deseq-panel">
+              <h4>1. Analysis scope</h4>
+              <div class="deseq-radio-row" role="radiogroup" aria-label="DESeq2 analysis scope">
+                <label class="check-label"><input name="deseq-scope-mode" type="radio" value="all" checked /> All matched samples</label>
+                <label class="check-label"><input name="deseq-scope-mode" type="radio" value="subset" /> Subset samples</label>
+              </div>
+              <div id="deseq-scope-filter" class="deseq-control-row" hidden>
+                <label>Filter column <select id="deseq-scope-column"></select></label>
+                <label>Filter level <select id="deseq-scope-level"></select></label>
+              </div>
+              <label class="deseq-wide-label">Manual sample exclusions <select id="deseq-exclude-samples" multiple size="5"></select></label>
+              <p class="note" id="deseq-scope-status">All matched samples are eligible.</p>
+            </section>
+            <section class="deseq-panel">
+              <h4>2. Biological question</h4>
+              <label>Question type <select id="deseq-question-type"></select></label>
+              <div id="deseq-factor-controls" class="deseq-control-row">
+                <label>Primary factor <select id="deseq-design-column"></select></label>
+                <label>Numerator <select id="deseq-numerator-level"></select></label>
+                <label>
+                  <span class="field-label-with-tip">
+                    Denominator
+                    <span class="tip-wrap">
+                      <span class="tip-icon" tabindex="0" aria-describedby="deseq-denominator-tip" aria-label="Denominator reference help">?</span>
+                      <span id="deseq-denominator-tip" class="tip-bubble" role="tooltip">The denominator is used as the DESeq2 reference level for this run.</span>
+                    </span>
+                  </span>
+                  <select id="deseq-denominator-level"></select>
+                </label>
+              </div>
+              <div id="deseq-direct-group-controls" class="deseq-direct-panel" hidden>
+                <div class="deseq-control-row">
+                  <label>Group factor 1 <select id="deseq-group-factor-a"></select></label>
+                  <label>Group factor 2 <select id="deseq-group-factor-b"></select></label>
+                </div>
+                <div class="deseq-control-row">
+                  <label>Group 1 <select id="deseq-group-one"></select></label>
+                  <label>Group 2/reference <select id="deseq-group-two"></select></label>
+                </div>
+                <p class="note">Direct group comparisons can mix effects from multiple factors. Use them only when the combined groups are the intended comparison.</p>
+              </div>
+            </section>
+            <section class="deseq-panel">
+              <h4>3. Adjustment variables</h4>
+              <label class="deseq-wide-label">Adjust/block by <select id="deseq-adjust-columns" multiple size="5"></select></label>
+              <p class="note">Choose optional batch, sex, subject, paired-sample, or numeric covariate columns. Constant columns inside the selected scope are excluded.</p>
+            </section>
+            <section class="deseq-panel deseq-preview-panel">
+              <h4>4. Model preview</h4>
+              <div id="deseq-model-preview" class="deseq-model-preview"></div>
+              <div id="deseq-group-balance" class="deseq-group-balance"></div>
+            </section>
           </div>
-          <p class="note" id="deseq-status">DESeq2 uses webR and the configured package snapshot. The denominator is used as the DESeq2 reference level.</p>
+          <p class="note" id="deseq-status">DESeq2 uses webR and the configured package snapshot. The preview shows the model before execution.</p>
         </article>
       </section>
 

@@ -57,6 +57,8 @@ async function applyUploadedUserData() {
     state.pca = computePcaFromCounts(state.counts, state.samples, state.config);
     state.distance = computeSampleDistanceFromCounts(state.counts, state.samples, state.config);
     state.contrasts = inferContrastsFromSamples(state.samples, state.config, state.metadataSchema);
+    state.analysisScopes = [];
+    state.activeAnalysisScopeId = 'all_samples';
     state.deResults = new Map();
     state.enrichmentResults = new Map();
     state.provenance = {

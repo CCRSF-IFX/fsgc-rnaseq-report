@@ -505,26 +505,40 @@ views remain usable from the standalone file.
 ```
 
 `analysis.referenceLevel` sets the default denominator in the browser DESeq2
-controls. For each browser-run contrast, the selected denominator is used as the
-DESeq2 reference level.
+question builder. For each browser-run contrast, the selected denominator is
+used as the DESeq2 reference level.
 
 The built-in browser DE fallback uses Welch t-tests on log2(CPM + 1) values and
 Benjamini-Hochberg adjusted p-values. Treat those results as exploratory. Use
 pipeline-generated DESeq2 or another mature RNA-seq method for final analysis.
 
-The browser DESeq2 runner supports one primary contrast factor plus optional
-additive adjustment or blocking columns from the sample manifest. For example,
-choosing `condition` as the primary factor and `batch` plus `sex` as adjustment
-columns runs a model equivalent to:
+The browser DESeq2 runner uses a biological question builder. Phase 1 supports:
+
+- condition effects within all samples or a selected metadata subset
+- tissue/factor effects within all samples or a selected metadata subset
+- additive covariate-adjusted factor effects
+- direct comparisons between two combined metadata groups
+
+For subset-aware condition or tissue effects, the app first selects the sample
+scope, then runs a simple additive DESeq2 model on the selected samples. For
+example, choosing `condition` as the primary factor inside a `tissue = liver`
+scope with `batch` plus `sex` adjustment columns runs a model equivalent to:
 
 ```r
 ~ batch + sex + condition
 ```
 
+Direct group comparisons create a temporary combined group factor from two
+metadata columns, such as `condition` and `tissue`, then compare two selected
+combined groups. This is useful for explicit comparisons such as treated liver
+vs control brain, but it can mix condition and tissue effects; use it only when
+those combined groups are the intended biological contrast.
+
 For paired designs, choose the treatment/group column as the primary factor and
 mark the subject or pair ID column as `categorical` before selecting it as an
 adjustment/blocking column. The runner does not currently support arbitrary
-interaction terms such as `genotype:treatment`.
+interaction terms such as `genotype:treatment`; those belong to the planned
+interaction/LRT phase.
 
 For time-series metadata, keep raw values in the manifest. Numeric columns named
 `time`, `dose`, `RIN`, or `age` are inferred as continuous covariates, while
@@ -560,9 +574,10 @@ The **Methods & Export** tab can export a JSON analysis cache after browser-side
 DESeq2 or fgsea runs. The cache includes:
 
 - sample metadata rows when a manifest is available
+- analysis scopes used for browser-run DESeq2
 - browser-generated DESeq2 result tables
 - browser-generated fgsea result sets, including the configured top-N pathway enrichment-curve data when available
-- contrast metadata needed to repopulate selectors
+- contrast/model metadata needed to repopulate grouped selectors and explain each result
 
 If the browser shows **"Changes you made may not be saved."**, it means
 browser-run DESeq2/GSEA results are still only in the current tab. Stay on the
