@@ -1,15 +1,16 @@
 # RNA-seq Report
 
-RNA-seq Report is a static, portable report viewer for RNA-seq pipeline
+RNA-seq Report is a portable, client-side report viewer for RNA-seq pipeline
 outputs. It turns a count matrix, optional sample metadata, and optional
 pipeline-generated result files into an interactive browser report that can be
-hosted on GitHub Pages or delivered as a single HTML file.
+delivered as a single HTML file or hosted on a static web server.
 
-The tool is designed for genomics cores and analysis teams that need a
-shareable report without running a backend service. Static QC plots, sample
-tables, PCA, distance matrices, expression heatmaps, differential-expression
-tables, and enrichment summaries load directly in the browser. Optional
-browser-side R modules use webR for small exploratory DESeq2 and fgsea runs.
+The tool is designed for sequencing facilities and analysis teams that need a
+shareable report without running a backend service. It is static in deployment
+but dynamic in the browser: QC plots, sample tables, PCA, distance matrices,
+expression heatmaps, differential-expression tables, and enrichment summaries
+load and update client-side. Optional webR modules run exploratory DESeq2 and
+fgsea analyses in the browser.
 Pipeline-generated statistics should remain the source of truth for production
 analysis.
 
@@ -32,7 +33,7 @@ analysis.
 
 The report has three main layers:
 
-- **Static report application**: `index.html`, `assets/css/`, and `assets/js/`
+- **Client-side report application**: `index.html`, `assets/css/`, and `assets/js/`
   provide the browser UI, data loading, plotting, tables, tab wiring, user file
   uploads, and standalone-report behavior.
 - **Browser R runtime**: optional downstream modules run through
@@ -90,7 +91,7 @@ data.
 
 ## Repository Layout
 
-- `index.html` - modular static report shell for development and hosted use.
+- `index.html` - modular browser report shell for development and hosted use.
 - `assets/css/` - report styling.
 - `assets/js/` - data loading, count-derived analysis, plotting, tables, tab
   wiring, user uploads, analysis cache, and optional webR managers.
@@ -137,7 +138,7 @@ scripts and update `assets/js/heatmap.js`.
 The standalone file also keeps the configured webR and package-repository URLs.
 Users can run the browser DESeq2 and fgsea modules when the browser can reach
 those URLs. The Optional Analysis tab includes install/load controls and a link
-to download the compiled package snapshot ZIP. Static plots and tables are
+to download the compiled package snapshot ZIP. Core plots and tables are
 designed to work from a double-clicked standalone file, but webR creates browser
 workers and is most reliable from an `http://` or `https://` origin. If a
 browser blocks webR from a local `file://` page, host the same HTML on GitHub
@@ -739,18 +740,3 @@ If `index.html` loads locally but data fetches fail, run
 If a delivered standalone report opens but plots do not appear, rebuild with
 `--embed-plotly` or confirm the user's browser can reach the configured Plotly
 CDN URL.
-
-## Security And Privacy
-
-Do not publish patient identifiers, protected health information,
-controlled-access genomes, or licensed annotation files to public GitHub Pages.
-Keep published demo data synthetic or de-identified.
-
-## Adding A New Report Tab
-
-1. Add a tab button and panel in `index.html`.
-2. Add loader code in `assets/js/dataLoader.js` if new files are needed.
-3. Add rendering logic in `assets/js/plots.js` or a new module.
-4. Wire the tab in `assets/js/app.js`.
-5. Document expected input schema in `schemas/`.
-6. Regenerate the standalone report and rerun validation.
