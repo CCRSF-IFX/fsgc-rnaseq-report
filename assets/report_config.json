@@ -13,6 +13,13 @@
     "conditionColumn": "condition",
     "referenceLevel": "control"
   },
+  "ai": {
+    "enabled": false,
+    "provider": "openai-oauth-local",
+    "baseUrl": "http://127.0.0.1:10531/v1",
+    "model": "",
+    "maxTokens": 900
+  },
   "qcThresholds": {
     "mapping_rate": {
       "min_warn": 0.9,

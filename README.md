@@ -195,6 +195,11 @@ expected counts in the generated report config and provenance. Use it for FSGC
 RSEM outputs where the count matrix may store gene symbols inside `gene_id`
 values such as `ENSG00000004777.18_ARHGAP33`.
 
+The AI Assistant is disabled by default in `assets/report_config.json`. When
+enabled there, it calls an OpenAI-compatible local endpoint such as the
+`openai-oauth` proxy at `http://127.0.0.1:10531/v1`. OAuth tokens stay in the
+separately running local proxy, not in the report HTML.
+
 ## Publish With GitHub Pages
 
 This repository is configured to publish the hosted report with GitHub Actions:
@@ -460,6 +465,13 @@ views remain usable from the standalone file.
     "conditionColumn": "condition",
     "referenceLevel": "control"
   },
+  "ai": {
+    "enabled": false,
+    "provider": "openai-oauth-local",
+    "baseUrl": "http://127.0.0.1:10531/v1",
+    "model": "",
+    "maxTokens": 900
+  },
   "webr": {
     "enabled": true,
     "baseUrl": "https://webr.r-wasm.org/v0.5.9/",
@@ -709,6 +721,7 @@ python3 -m json.tool assets/report_config.json >/dev/null
 python3 -m py_compile scripts/build_report_bundle.py scripts/validate_assets.py scripts/qc_excel.py
 node --check assets/js/app.js
 node --check assets/js/analysis.js
+node --check assets/js/aiAssistant.js
 node --check assets/js/dataLoader.js
 node --check assets/js/downstreamPlugins.js
 node --check assets/js/deseq2.js

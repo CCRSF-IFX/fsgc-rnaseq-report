@@ -13,6 +13,7 @@ import { renderActiveExpressionHeatmap, resizeExpressionHeatmap, setupCanvasXpre
 import { setupUserDataControls } from './userData.js';
 import { setupAnalysisCacheControls } from './analysisCache.js';
 import { setupPackageFallbackModal } from './packageFallbackModal.js';
+import { refreshAiAssistant, setupAiAssistant } from './aiAssistant.js';
 import { sampleIdsInCounts } from './analysis.js';
 import { getPackageStatus } from './packageManager.js';
 import {
@@ -57,6 +58,7 @@ async function main() {
     renderDownstreamCards();
     renderPackageRepositoryPanel();
     setupUserDataControls({ refresh: refreshReportFromState });
+    setupAiAssistant();
     setupCountExplorerControls();
     wireControls();
     renderQC();
@@ -826,6 +828,7 @@ async function refreshReportFromState() {
   renderAnalysisReadiness();
   renderDownstreamCards();
   renderPackageRepositoryPanel();
+  refreshAiAssistant();
   renderQC();
   setupPcaControls();
   setupExpressionHeatmapControls();

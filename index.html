@@ -32,6 +32,7 @@
         <span class="nav-section">Analyze</span>
         <button class="tab-button" data-tab="de">Differential Expression</button>
         <button class="tab-button" data-tab="enrichment">GSEA</button>
+        <button class="tab-button" data-tab="ai" data-ai-feature hidden>AI Assistant</button>
         <span class="nav-section">Export</span>
         <button class="tab-button" data-tab="provenance">Methods & Export</button>
         <button class="tab-button" data-tab="downstream">Runtime & Packages</button>
@@ -465,6 +466,50 @@
         </article>
       </section>
 
+      <section class="tab-panel" id="tab-ai" data-ai-feature hidden>
+        <article class="card">
+          <div class="ai-panel-header">
+            <div>
+              <h3>AI Assistant</h3>
+              <p class="note">Connect through a local OpenAI-compatible ChatGPT OAuth proxy. The report never stores OAuth tokens.</p>
+            </div>
+            <span class="ai-status-pill" id="ai-connection-state">Not connected</span>
+          </div>
+          <div class="ai-config-grid">
+            <label>Base URL <input id="ai-base-url" type="url" placeholder="http://127.0.0.1:10531/v1" /></label>
+            <label>Model <select id="ai-model-select"></select></label>
+            <label>Custom model <input id="ai-model-input" placeholder="gpt-5.4" /></label>
+            <div class="ai-config-actions">
+              <button id="ai-connect" type="button">Connect</button>
+              <button id="ai-refresh-models" class="secondary" type="button">Refresh models</button>
+            </div>
+          </div>
+          <p class="note" id="ai-connection-note">Start the local proxy separately, then connect. Requests send only the prompt and optional compact report context to the configured endpoint.</p>
+        </article>
+
+        <article class="card">
+          <h3>Ask about this report</h3>
+          <div class="ai-prompt-layout">
+            <label class="ai-prompt-field">
+              <span>Prompt</span>
+              <textarea id="ai-prompt" rows="7" placeholder="Summarize the most important QC and differential-expression findings."></textarea>
+            </label>
+            <div class="ai-side-panel">
+              <label class="check-label"><input id="ai-include-context" type="checkbox" checked /> Attach report context</label>
+              <button id="ai-ask" type="button">Ask</button>
+              <button id="ai-clear" class="secondary" type="button">Clear</button>
+            </div>
+          </div>
+          <div class="ai-quick-prompts" aria-label="Prompt shortcuts">
+            <button class="secondary" type="button" data-ai-prompt="Summarize the strongest findings in this RNA-seq report for a project scientist.">Findings summary</button>
+            <button class="secondary" type="button" data-ai-prompt="What QC concerns should I review before trusting downstream interpretation?">QC review</button>
+            <button class="secondary" type="button" data-ai-prompt="Suggest focused follow-up plots or checks based on the current report context.">Follow-up checks</button>
+          </div>
+          <p class="note" id="ai-status">AI assistant is ready once the local endpoint is connected.</p>
+          <div id="ai-response" class="ai-response" role="region" aria-live="polite"></div>
+        </article>
+      </section>
+
       <section class="tab-panel" id="tab-provenance">
         <article class="card">
           <h3>Analysis cache</h3>
@@ -507,6 +552,6 @@
       </section>
     </main>
   </div>
-  <script type="module" src="assets/js/app.js?v=20260518-plotly-resilience"></script>
+  <script type="module" src="assets/js/app.js?v=20260519-ai-assistant"></script>
 </body>
 </html>

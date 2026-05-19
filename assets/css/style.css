@@ -140,6 +140,25 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .gsea-pathway-label-text .tip-bubble { left: 0; transform: none; }
 .gsea-control-note { max-width: 720px; margin: -8px 0 12px; }
 #gsea-pathway-status { min-height: 1.4em; margin: 0 0 10px; }
+.ai-panel-header { display: flex; justify-content: space-between; gap: 14px; align-items: flex-start; margin-bottom: 16px; }
+.ai-panel-header h3 { margin-bottom: 4px; }
+.ai-panel-header .note { margin: 0; max-width: 760px; line-height: 1.45; }
+.ai-status-pill { display: inline-flex; align-items: center; min-height: 28px; border: 1px solid var(--line); border-radius: 999px; padding: 4px 9px; background: #f8fafc; color: var(--muted); font-size: 12px; font-weight: 800; white-space: nowrap; }
+.ai-status-pill.ok { border-color: #bbf7d0; background: #dcfce7; color: var(--ok); }
+.ai-status-pill.warn { border-color: #fde68a; background: #fef3c7; color: var(--warn); }
+.ai-status-pill.fail { border-color: #fecaca; background: #fee2e2; color: var(--fail); }
+.ai-config-grid { display: grid; grid-template-columns: minmax(220px, 1.1fr) minmax(180px, 0.9fr) minmax(180px, 0.9fr) auto; gap: 12px; align-items: end; margin-bottom: 10px; }
+.ai-config-grid label, .ai-prompt-field { display: grid; gap: 6px; color: var(--muted); font-size: 12px; font-weight: 800; }
+.ai-config-grid input, .ai-config-grid select { width: 100%; min-width: 0; color: var(--ink); font-size: 14px; font-weight: 500; }
+.ai-config-actions { display: flex; gap: 8px; align-items: center; justify-content: flex-end; }
+.ai-prompt-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(170px, 220px); gap: 14px; align-items: stretch; margin-bottom: 12px; }
+.ai-prompt-field textarea { width: 100%; min-height: 170px; color: var(--ink); font-size: 14px; font-weight: 500; line-height: 1.45; }
+.ai-side-panel { display: grid; gap: 10px; align-content: start; border: 1px solid var(--line); border-radius: 8px; padding: 12px; background: #f8fafc; }
+.ai-side-panel button { width: 100%; }
+.ai-side-panel .check-label { align-items: flex-start; color: var(--ink); font-size: 13px; font-weight: 700; line-height: 1.35; }
+.ai-quick-prompts { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 12px; }
+.ai-response { min-height: 180px; border: 1px solid var(--line); border-radius: 8px; padding: 14px; background: #f8fafc; color: var(--ink); line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
+.ai-response:empty::before { content: "Responses will appear here."; color: var(--muted); }
 .pca-layout { display: grid; grid-template-columns: minmax(0, 1.75fr) minmax(300px, 0.9fr); gap: 16px; align-items: stretch; }
 .pca-layout .plot { min-width: 0; border: 1px solid var(--line); border-radius: 8px; background: white; }
 .pca-plot-main, .pca-plot-side { min-height: 520px; }
@@ -445,6 +464,9 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   .package-local-bundle { grid-template-columns: 1fr; }
   .pca-layout { grid-template-columns: 1fr; }
   .pca-plot-main, .pca-plot-side { min-height: 420px; }
+  .ai-panel-header, .ai-config-actions { align-items: flex-start; flex-direction: column; }
+  .ai-config-grid, .ai-prompt-layout { grid-template-columns: 1fr; }
+  .ai-config-actions, .ai-config-actions button { width: 100%; }
   .guide-grid { grid-template-columns: 1fr; }
   .setup-flow { grid-template-columns: 1fr; }
   .metadata-schema-row { grid-template-columns: 1fr; align-items: stretch; }
