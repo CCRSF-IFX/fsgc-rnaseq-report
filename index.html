@@ -388,23 +388,6 @@
 
       <section class="tab-panel" id="tab-de">
         <article class="card">
-          <div class="toolbar">
-            <label>Result category <select id="contrast-family-select"></select></label>
-            <label>Contrast <select id="contrast-select"></select></label>
-            <label>padj <= <input id="padj-threshold" type="number" step="0.01" value="0.05" /></label>
-            <label>|log2FC| >= <input id="lfc-threshold" type="number" step="0.25" value="1" /></label>
-            <label class="check-label"><input id="de-show-all-genes" type="checkbox" /> Show all genes</label>
-            <button id="de-apply">Apply</button>
-          </div>
-          <div id="de-contrast-tags" class="contrast-tags"></div>
-          <div class="grid two">
-            <div id="volcano-plot" class="plot tall"></div>
-            <div id="ma-plot" class="plot tall"></div>
-          </div>
-          <p class="note" id="de-table-status"></p>
-          <div id="de-table"></div>
-        </article>
-        <article class="card">
           <div class="de-run-header">
             <div>
               <h3>DESeq2 question builder</h3>
@@ -467,6 +450,23 @@
             </section>
           </div>
           <p class="note" id="deseq-status">DESeq2 uses webR and the configured package snapshot. The preview shows the model before execution.</p>
+        </article>
+        <article class="card">
+          <div class="toolbar">
+            <label>Result category <select id="contrast-family-select"></select></label>
+            <label>Contrast <select id="contrast-select"></select></label>
+            <label>padj <= <input id="padj-threshold" type="number" step="0.01" value="0.05" /></label>
+            <label>|log2FC| >= <input id="lfc-threshold" type="number" step="0.25" value="1" /></label>
+            <label class="check-label"><input id="de-show-all-genes" type="checkbox" /> Show all genes</label>
+            <button id="de-apply">Apply</button>
+          </div>
+          <div id="de-contrast-tags" class="contrast-tags"></div>
+          <div class="grid two">
+            <div id="volcano-plot" class="plot tall"></div>
+            <div id="ma-plot" class="plot tall"></div>
+          </div>
+          <p class="note" id="de-table-status"></p>
+          <div id="de-table"></div>
         </article>
       </section>
 
