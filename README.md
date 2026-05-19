@@ -1,40 +1,58 @@
 # RNA-seq Report
 
-A static, portable RNA-seq report application for pipeline outputs. The minimum
-buildable input is a count matrix; when a sample manifest is present, the
-browser can also drive metadata-aware PCA, heatmap annotations, DESeq2, and
-fgsea. From the count matrix, the browser can compute PCA coordinates, a
-sample-distance matrix, and an expression heatmap, then visualize the results
-without running a backend server.
+RNA-seq Report is a static, portable report viewer for RNA-seq pipeline
+outputs. It turns a count matrix, optional sample metadata, and optional
+pipeline-generated result files into an interactive browser report that can be
+hosted on GitHub Pages or delivered as a single HTML file.
 
-Precomputed pipeline outputs are still preferred when available. If files such
-as `pca.json`, `sample_distance_matrix.json`, or differential-expression CSVs
-are present, the report displays those instead of recomputing them.
+The tool is designed for genomics cores and analysis teams that need a
+shareable report without running a backend service. Static QC plots, sample
+tables, PCA, distance matrices, expression heatmaps, differential-expression
+tables, and enrichment summaries load directly in the browser. Optional
+browser-side R modules use webR for small exploratory DESeq2 and fgsea runs.
+Pipeline-generated statistics should remain the source of truth for production
+analysis.
 
-Optional browser-side R analysis is available through a small plugin layer. The
-default optional backend is webR, intended only for small exploratory analyses.
-The report can install/load DESeq2 and fgsea from the configured wasm package
-snapshot, run a basic two-group DESeq2 contrast in the browser, and run
-preranked GSEA from that contrast. For production statistics, keep DESeq2 or
-another mature RNA-seq method in the pipeline and export the final results into
-this report.
+## What It Does
 
-## Repository Contents
+- Builds from a count matrix alone, then infers sample IDs from count columns.
+- Uses a sample manifest, when present, to drive metadata-aware PCA controls,
+  heatmap annotations, DESeq2 contrasts, and fgsea setup.
+- Displays precomputed pipeline outputs when available, including `pca.json`,
+  `sample_distance_matrix.json`, differential-expression CSVs, enrichment CSVs,
+  QC metrics, provenance, and software-version logs.
+- Computes useful browser fallbacks from counts, including PCA coordinates,
+  sample distances, gene-level count summaries, and Clustergrammer heatmaps.
+- Bundles the report into a standalone HTML artifact for delivery to users who
+  should not run a local server.
+- Publishes a hosted report and versioned webR package snapshots through GitHub
+  Actions and GitHub Pages.
 
-- `index.html` - modular static report shell for development and hosted use.
-- `assets/css/` - report styling.
-- `assets/js/` - data loading, count-derived analysis, plotting, tables, tab wiring, and optional webR managers.
-- `assets/data/` - demo report data assets.
-- `assets/report_config.json` - report title, data root, analysis settings, QC thresholds, and webR package configuration.
-- `schemas/` - documented JSON structures.
-- `scripts/validate_assets.py` - lightweight asset validator.
-- `scripts/build_report_bundle.py` - bundles the report app, config, data assets, and optional profiles into a double-clickable single-file HTML report.
-- `webr-packages/` - versioned package snapshot definition for optional webR modules.
-- `.github/workflows/deploy-pages.yml` - GitHub Pages deployment plus report-scoped webR package repo build.
+## Architecture & Build Pipeline
 
-## Local Preview
+The report has three main layers:
 
-Use a local static server while developing:
+- **Static report application**: `index.html`, `assets/css/`, and `assets/js/`
+  provide the browser UI, data loading, plotting, tables, tab wiring, user file
+  uploads, and standalone-report behavior.
+- **Browser R runtime**: optional downstream modules run through
+  [webR](https://docs.r-wasm.org/webr/), which brings R into the browser by
+  compiling the R runtime and package binaries to WebAssembly. The app currently
+  uses webR for exploratory DESeq2 and fgsea workflows.
+- **Package snapshot build**: `.github/workflows/deploy-pages.yml` uses
+  `r-wasm/actions` to build the configured R packages and dependencies as a
+  report-scoped WebAssembly package repository. The workflow publishes that
+  repository under `webr-packages/<VERSION>/` and uploads release assets for
+  users who need to mirror the repository or mount a prebuilt webR library
+  bundle.
+
+The webR runtime URL in `assets/report_config.json` and the workflow
+`webr-image` are pinned to the same webR release so the browser runtime and the
+compiled package binaries stay compatible.
+
+## Quick Start
+
+Preview the development report from a local static server:
 
 ```bash
 python3 -m http.server 8000
@@ -49,22 +67,72 @@ http://localhost:8000/
 Do not rely on double-clicking `index.html`. Browsers commonly block local
 `fetch()` calls and JavaScript modules from `file://` pages.
 
-## End-User Delivery
+Validate the bundled demo assets:
 
-For users who should not run a local server, build a single HTML file:
+```bash
+python3 scripts/validate_assets.py assets/data
+```
+
+Build a shareable standalone report:
 
 ```bash
 python3 scripts/build_report_bundle.py
 ```
 
-Send the generated file:
+The default output is:
 
 ```text
 dist/rnaseq-report.html
 ```
 
-That file embeds the report data, CSS, and application JavaScript. By default it
-still loads Plotly from the public CDN, which keeps the file small.
+`dist/` is ignored by git because generated reports can contain run-specific
+data.
+
+## Repository Layout
+
+- `index.html` - modular static report shell for development and hosted use.
+- `assets/css/` - report styling.
+- `assets/js/` - data loading, count-derived analysis, plotting, tables, tab
+  wiring, user uploads, analysis cache, and optional webR managers.
+- `assets/data/` - demo report data assets.
+- `assets/report_config.json` - report title, data root, analysis settings, QC
+  thresholds, and webR package configuration.
+- `schemas/` - documented JSON structures for pipeline-produced assets.
+- `scripts/validate_assets.py` - lightweight asset validator.
+- `scripts/build_report_bundle.py` - standalone HTML report builder.
+- `scripts/qc_excel.py` - helper for converting supported QC Excel summaries
+  into report-ready metrics during standalone builds.
+- `webr-packages/` - versioned webR/WebAssembly package snapshot definition.
+- `.github/workflows/deploy-pages.yml` - GitHub Pages deployment and webR
+  package build workflow.
+
+## Standalone Report Delivery
+
+For users who should not run a local server, build a single HTML file and
+deliver the generated artifact:
+
+```bash
+python3 scripts/build_report_bundle.py
+```
+
+The generated artifact is:
+
+```text
+dist/rnaseq-report.html
+```
+
+The standalone file embeds report data, CSS, and application JavaScript. By
+default it still loads Plotly from the public CDN, which keeps the file smaller.
+For a larger report that can render Plotly charts without internet access,
+inline Plotly:
+
+```bash
+python3 scripts/build_report_bundle.py --embed-plotly
+```
+
+`--embed-plotly` only inlines Plotly. The Clustergrammer heatmap still loads
+Clustergrammer-JS and its browser dependencies from CDN unless you vendor those
+scripts and update `assets/js/heatmap.js`.
 
 The standalone file also keeps the configured webR and package-repository URLs.
 Users can run the browser DESeq2 and fgsea modules when the browser can reach
@@ -83,17 +151,7 @@ uploads a new count matrix, it must be uploaded with a matching manifest because
 DESeq2, PCA coloring, heatmap annotations, and fgsea contrast setup all depend
 on sample-level metadata.
 
-For a larger report that can render plots without internet access, inline Plotly:
-
-```bash
-python3 scripts/build_report_bundle.py --embed-plotly
-```
-
-`--embed-plotly` only inlines Plotly. The Clustergrammer heatmap still loads
-Clustergrammer-JS and its browser dependencies from CDN unless you vendor those
-scripts and update `assets/js/heatmap.js`.
-
-Useful builder options:
+Common builder options:
 
 ```bash
 python3 scripts/build_report_bundle.py --data-root path/to/data
@@ -136,12 +194,9 @@ expected counts in the generated report config and provenance. Use it for FSGC
 RSEM outputs where the count matrix may store gene symbols inside `gene_id`
 values such as `ENSG00000004777.18_ARHGAP33`.
 
-`dist/` is ignored by git because generated report files can contain run-specific
-data.
+## Publish With GitHub Pages
 
-## GitHub Pages
-
-This repository is configured to publish with GitHub Actions:
+This repository is configured to publish the hosted report with GitHub Actions:
 
 1. Push to `main` or `master`, or run the workflow manually.
 2. In repository settings, set Pages source to **GitHub Actions**.
@@ -159,15 +214,13 @@ https://omicsreporthub.github.io/rnaseq-report/webr-packages/v0.1.0/
 
 The workflow reads package refs from `webr-packages/packages` using Bash/`awk`.
 It does not require `Rscript` to be present on the runner for that parsing step.
-The actual package repo build is delegated to `r-wasm/actions`.
+The package repository build is delegated to `r-wasm/actions`.
 
 The package list includes DESeq2, fgsea, and their hard dependency closure.
 This keeps compiled wasm dependencies in the same snapshot as the top-level
 Bioconductor packages, which avoids ABI mismatches when packages such as
 `fastmatch` or `data.table` are loaded by fgsea.
-The webR runtime URL in `assets/report_config.json` and the workflow
-`webr-image` are pinned to the same webR release so the runtime and package
-builder move together.
+
 At runtime, the app passes the report snapshot through webR's
 `webr_pkg_repos`/`webr::install(..., repos = ...)` path; setting only the
 standard R `repos` option is not enough for webR package installation.
