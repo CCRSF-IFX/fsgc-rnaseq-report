@@ -14,6 +14,7 @@ Source files:
 - Counts: https://www.ncbi.nlm.nih.gov/geo/download/?type=rnaseq_counts&acc=GSE164073&format=file&file=GSE164073_raw_counts_GRCh38.p13_NCBI.tsv.gz
 - Metadata: https://ftp.ncbi.nlm.nih.gov/geo/series/GSE164nnn/GSE164073/soft/GSE164073_family.soft.gz
 - Gene symbols: https://ftp.ncbi.nlm.nih.gov/gene/DATA/GENE_INFO/Mammalia/Homo_sapiens.gene_info.gz
+- QC metrics: synthetic demo workbook in `qc_metrics.xlsx`, generated for report UI testing only.
 
 Regenerate this fixture with:
 
