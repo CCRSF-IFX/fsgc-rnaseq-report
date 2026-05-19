@@ -3,6 +3,7 @@ import { sampleIdsInCounts } from './analysis.js';
 import { adjustmentMetadataColumns, analysisFactorColumns, metadataColumnType } from './metadataSchema.js';
 
 export const DESEQ_GROUP_COLUMN = '__rnaseq_report_group';
+export const DESEQ_ADVANCED_QUESTION_TYPE = 'advanced_interaction_lrt';
 
 export const DESEQ_QUESTION_TYPES = [
   {
@@ -30,6 +31,15 @@ export const DESEQ_QUESTION_TYPES = [
     help: 'Compare any two combined metadata groups directly.',
   },
   {
+    id: DESEQ_ADVANCED_QUESTION_TYPE,
+    label: 'Advanced: interaction / LRT',
+    resultFamily: 'advanced',
+    help: 'Open interaction and likelihood-ratio test options for multi-factor questions.',
+  },
+];
+
+export const DESEQ_ADVANCED_QUESTION_TYPES = [
+  {
     id: 'pairwise_interaction',
     label: 'Pairwise interaction effect',
     resultFamily: 'interaction_effect',
@@ -44,8 +54,12 @@ export const DESEQ_QUESTION_TYPES = [
 ];
 
 export function readDeseqFormValues(root = document) {
+  const questionMode = root.getElementById('deseq-question-type')?.value || 'condition_within_subset';
+  const advancedQuestionType = root.getElementById('deseq-advanced-question-type')?.value || DESEQ_ADVANCED_QUESTION_TYPES[0].id;
   return {
-    questionType: root.getElementById('deseq-question-type')?.value || 'condition_within_subset',
+    questionMode,
+    advancedQuestionType,
+    questionType: questionMode === DESEQ_ADVANCED_QUESTION_TYPE ? advancedQuestionType : questionMode,
     scopeMode: root.querySelector('input[name="deseq-scope-mode"]:checked')?.value || 'all',
     scopeColumn: root.getElementById('deseq-scope-column')?.value || '',
     scopeLevel: root.getElementById('deseq-scope-level')?.value || '',
@@ -79,21 +93,22 @@ export function safeBuildDeseqQuestionSpec(formValues = readDeseqFormValues()) {
 }
 
 export function buildDeseqQuestionSpec(formValues = readDeseqFormValues()) {
-  const question = questionTypeById(formValues.questionType);
-  const scope = buildAnalysisScope(formValues);
-  const adjustColumns = uniqueStrings(formValues.adjustColumns)
+  const normalizedFormValues = normalizeQuestionFormValues(formValues);
+  const question = questionTypeById(normalizedFormValues.questionType);
+  const scope = buildAnalysisScope(normalizedFormValues);
+  const adjustColumns = uniqueStrings(normalizedFormValues.adjustColumns)
     .filter((column) => adjustmentMetadataColumns().includes(column));
 
   if (question.id === 'direct_group_comparison') {
-    return buildDirectGroupSpec(formValues, scope, adjustColumns, question);
+    return buildDirectGroupSpec(normalizedFormValues, scope, adjustColumns, question);
   }
   if (question.id === 'pairwise_interaction') {
-    return buildPairwiseInteractionSpec(formValues, scope, adjustColumns, question);
+    return buildPairwiseInteractionSpec(normalizedFormValues, scope, adjustColumns, question);
   }
   if (question.id === 'omnibus_interaction_lrt') {
-    return buildOmnibusInteractionLrtSpec(formValues, scope, adjustColumns, question);
+    return buildOmnibusInteractionLrtSpec(normalizedFormValues, scope, adjustColumns, question);
   }
-  return buildFactorContrastSpec(formValues, scope, adjustColumns, question);
+  return buildFactorContrastSpec(normalizedFormValues, scope, adjustColumns, question);
 }
 
 export function registerAnalysisScope(scope) {
@@ -575,7 +590,16 @@ function formulaLabel(terms) {
 }
 
 function questionTypeById(id) {
-  return DESEQ_QUESTION_TYPES.find((type) => type.id === id) || DESEQ_QUESTION_TYPES[0];
+  return DESEQ_QUESTION_TYPES.concat(DESEQ_ADVANCED_QUESTION_TYPES)
+    .find((type) => type.id === id) || DESEQ_QUESTION_TYPES[0];
+}
+
+function normalizeQuestionFormValues(formValues) {
+  if (formValues.questionType !== DESEQ_ADVANCED_QUESTION_TYPE) return formValues;
+  return {
+    ...formValues,
+    questionType: formValues.advancedQuestionType || DESEQ_ADVANCED_QUESTION_TYPES[0].id,
+  };
 }
 
 function sampleValue(sampleId, column) {

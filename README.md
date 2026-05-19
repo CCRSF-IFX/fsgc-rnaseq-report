@@ -512,15 +512,17 @@ The built-in browser DE fallback uses Welch t-tests on log2(CPM + 1) values and
 Benjamini-Hochberg adjusted p-values. Treat those results as exploratory. Use
 pipeline-generated DESeq2 or another mature RNA-seq method for final analysis.
 
-The browser DESeq2 runner uses a biological question builder. It supports:
+The browser DESeq2 runner uses a biological question builder. The default path
+is a simple two-level comparison, with interaction and LRT workflows tucked
+behind the `Advanced: interaction / LRT` question type. It supports:
 
 - condition effects within all samples or a selected metadata subset
 - tissue/factor effects within all samples or a selected metadata subset
 - additive covariate-adjusted factor effects
 - direct comparisons between two combined metadata groups
-- pairwise interaction effects, such as asking whether a treatment response
+- advanced pairwise interaction effects, such as asking whether a treatment response
   differs between two tissue or genotype levels
-- omnibus interaction likelihood-ratio tests, such as asking whether adding
+- advanced omnibus interaction likelihood-ratio tests, such as asking whether adding
   `condition:tissue` improves the model over an additive model
 
 For subset-aware condition or tissue effects, the app first selects the sample

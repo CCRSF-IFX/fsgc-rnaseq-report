@@ -86,7 +86,7 @@
             <li><strong>Review the run</strong><span>Use Overview and QC to confirm sample count, contrasts, warnings, genome, annotation, and pipeline provenance.</span></li>
             <li><strong>Check the data setup</strong><span>Use Data Setup to confirm count/sample matching. Upload a sample manifest for the embedded count matrix, or upload a new count matrix with its matching manifest.</span></li>
             <li><strong>Explore sample structure</strong><span>Use PCA, Heatmap & Clustering, and Gene Counts to inspect grouping, batch effects, outliers, and marker-gene behavior.</span></li>
-            <li><strong>Run browser DESeq2 when needed</strong><span>Choose a biological question, including simple effects, direct group comparisons, or interaction/LRT tests. Set the sample scope, review the model preview, and optionally adjust or block by batch, sex, subject, or pairing columns.</span></li>
+            <li><strong>Run browser DESeq2 when needed</strong><span>Start with a simple group comparison, or open Advanced for interaction/LRT tests. Set the sample scope, review the model preview, and optionally adjust or block by batch, sex, subject, or pairing columns.</span></li>
             <li><strong>Run fgsea from a DE result</strong><span>Select the DE contrast, upload one or more GMT pathway files, set pathway size limits, and run fgsea in the browser.</span></li>
             <li><strong>Export or reload results</strong><span>Use table CSV exports for individual result tables. For browser-run DESeq2/GSEA results, export the Methods & Export analysis cache before closing the tab.</span></li>
           </ol>
@@ -412,6 +412,10 @@
             <section class="deseq-panel">
               <h4>2. Biological question</h4>
               <label>Question type <select id="deseq-question-type"></select></label>
+              <div id="deseq-advanced-question-row" class="deseq-direct-panel" hidden>
+                <label>Advanced analysis <select id="deseq-advanced-question-type"></select></label>
+                <p class="note">Use advanced analysis when the biological question depends on two factors, such as whether treatment response changes by tissue, genotype, or sex.</p>
+              </div>
               <div id="deseq-factor-controls" class="deseq-control-row">
                 <label>Primary factor <select id="deseq-design-column"></select></label>
                 <label>Numerator <select id="deseq-numerator-level"></select></label>

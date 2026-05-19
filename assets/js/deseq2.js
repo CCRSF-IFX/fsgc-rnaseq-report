@@ -6,6 +6,8 @@ import { ensureRPackages } from './packageManager.js';
 import { evalR } from './webrManager.js';
 import { markAnalysisCacheDirty } from './analysisCache.js';
 import {
+  DESEQ_ADVANCED_QUESTION_TYPE,
+  DESEQ_ADVANCED_QUESTION_TYPES,
   DESEQ_GROUP_COLUMN,
   DESEQ_QUESTION_TYPES,
   analysisScopeOptions,
@@ -30,6 +32,7 @@ export function setupDeseqControls(callbacks = {}) {
   if (!questionSelect || !designSelect) return;
 
   populateQuestionTypes();
+  populateAdvancedQuestionTypes();
   populateScopeControls();
   syncDeseqQuestionUi();
   populateFactorControls();
@@ -49,6 +52,7 @@ export function setupDeseqControls(callbacks = {}) {
 function wireDeseqBuilderControls() {
   [
     'deseq-question-type',
+    'deseq-advanced-question-type',
     'deseq-scope-column',
     'deseq-scope-level',
     'deseq-exclude-samples',
@@ -76,7 +80,7 @@ function wireDeseqBuilderControls() {
 
 function refreshDeseqBuilder(event = null) {
   const changedId = event?.currentTarget?.id || '';
-  if (changedId === 'deseq-question-type') {
+  if (changedId === 'deseq-question-type' || changedId === 'deseq-advanced-question-type') {
     syncDeseqQuestionUi();
     populateFactorControls({ preferQuestionDefault: true });
     populateDirectGroupControls({ preferDefaults: true });
@@ -119,7 +123,22 @@ function populateQuestionTypes() {
   select.innerHTML = DESEQ_QUESTION_TYPES
     .map((type) => `<option value="${deseqEscapeHtml(type.id)}">${deseqEscapeHtml(type.label)}</option>`)
     .join('');
-  select.value = DESEQ_QUESTION_TYPES.some((type) => type.id === previous) ? previous : DESEQ_QUESTION_TYPES[0].id;
+  const previousWasAdvanced = DESEQ_ADVANCED_QUESTION_TYPES.some((type) => type.id === previous);
+  select.value = DESEQ_QUESTION_TYPES.some((type) => type.id === previous)
+    ? previous
+    : (previousWasAdvanced ? DESEQ_ADVANCED_QUESTION_TYPE : DESEQ_QUESTION_TYPES[0].id);
+}
+
+function populateAdvancedQuestionTypes() {
+  const select = document.getElementById('deseq-advanced-question-type');
+  if (!select) return;
+  const previous = select.value;
+  select.innerHTML = DESEQ_ADVANCED_QUESTION_TYPES
+    .map((type) => `<option value="${deseqEscapeHtml(type.id)}">${deseqEscapeHtml(type.label)}</option>`)
+    .join('');
+  select.value = DESEQ_ADVANCED_QUESTION_TYPES.some((type) => type.id === previous)
+    ? previous
+    : DESEQ_ADVANCED_QUESTION_TYPES[0].id;
 }
 
 function populateScopeControls() {
@@ -174,19 +193,23 @@ function populateExcludedSamples() {
 }
 
 function syncDeseqQuestionUi() {
-  const questionType = document.getElementById('deseq-question-type')?.value || '';
+  const questionMode = document.getElementById('deseq-question-type')?.value || '';
+  const questionType = currentEffectiveQuestionType();
+  const advanced = questionMode === DESEQ_ADVANCED_QUESTION_TYPE;
   const direct = questionType === 'direct_group_comparison';
   const interaction = questionType === 'pairwise_interaction' || questionType === 'omnibus_interaction_lrt';
   const lrt = questionType === 'omnibus_interaction_lrt';
   const factorControls = document.getElementById('deseq-factor-controls');
   const directControls = document.getElementById('deseq-direct-group-controls');
   const interactionControls = document.getElementById('deseq-interaction-controls');
+  const advancedRow = document.getElementById('deseq-advanced-question-row');
   const interactionConditionLevels = document.getElementById('deseq-interaction-condition-levels');
   const interactionModifierLevels = document.getElementById('deseq-interaction-modifier-levels');
   const interactionHelp = document.getElementById('deseq-interaction-help');
-  if (factorControls) factorControls.hidden = direct || interaction;
+  if (advancedRow) advancedRow.hidden = !advanced;
+  if (factorControls) factorControls.hidden = direct || interaction || advanced;
   if (directControls) directControls.hidden = !direct;
-  if (interactionControls) interactionControls.hidden = !interaction;
+  if (interactionControls) interactionControls.hidden = !advanced || !interaction;
   if (interactionConditionLevels) interactionConditionLevels.hidden = lrt;
   if (interactionModifierLevels) interactionModifierLevels.hidden = lrt;
   if (interactionHelp) {
@@ -194,6 +217,12 @@ function syncDeseqQuestionUi() {
       ? 'LRT tests whether adding all condition-by-modifier interaction terms improves the additive model. The p-value is omnibus; the log2FC column is representative.'
       : 'Pairwise interaction tests whether the condition effect differs between two modifier levels using the denominators as DESeq2 reference levels.';
   }
+}
+
+function currentEffectiveQuestionType() {
+  const questionMode = document.getElementById('deseq-question-type')?.value || '';
+  if (questionMode !== DESEQ_ADVANCED_QUESTION_TYPE) return questionMode;
+  return document.getElementById('deseq-advanced-question-type')?.value || DESEQ_ADVANCED_QUESTION_TYPES[0].id;
 }
 
 function populateFactorControls(options = {}) {
