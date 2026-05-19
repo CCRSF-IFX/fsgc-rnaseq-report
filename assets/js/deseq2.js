@@ -34,6 +34,7 @@ export function setupDeseqControls(callbacks = {}) {
   syncDeseqQuestionUi();
   populateFactorControls();
   populateDirectGroupControls();
+  populateInteractionControls();
   updateDeseqAdjustControls();
   populateExcludedSamples();
   renderDeseqPreview();
@@ -59,6 +60,12 @@ function wireDeseqBuilderControls() {
     'deseq-group-factor-b',
     'deseq-group-one',
     'deseq-group-two',
+    'deseq-interaction-condition',
+    'deseq-interaction-modifier',
+    'deseq-interaction-condition-numerator',
+    'deseq-interaction-condition-denominator',
+    'deseq-interaction-modifier-numerator',
+    'deseq-interaction-modifier-denominator',
   ].forEach((id) => {
     document.getElementById(id)?.addEventListener('change', refreshDeseqBuilder);
   });
@@ -73,16 +80,20 @@ function refreshDeseqBuilder(event = null) {
     syncDeseqQuestionUi();
     populateFactorControls({ preferQuestionDefault: true });
     populateDirectGroupControls({ preferDefaults: true });
+    populateInteractionControls({ preferDefaults: true });
+    updateDeseqAdjustControls();
   } else if (changedId === 'deseq-scope-column') {
     populateScopeLevels();
     populateFactorControls();
     populateDirectGroupControls();
+    populateInteractionControls();
     updateDeseqAdjustControls();
     populateExcludedSamples();
   } else if (changedId === 'deseq-scope-level' || changedId === 'deseq-exclude-samples' || event?.currentTarget?.name === 'deseq-scope-mode') {
     syncDeseqScopeControls();
     populateFactorControls();
     populateDirectGroupControls();
+    populateInteractionControls();
     updateDeseqAdjustControls();
     populateExcludedSamples();
   } else if (changedId === 'deseq-design-column') {
@@ -91,6 +102,11 @@ function refreshDeseqBuilder(event = null) {
   } else if (changedId === 'deseq-group-factor-a' || changedId === 'deseq-group-factor-b') {
     populateDirectGroupControls();
     updateDeseqAdjustControls();
+  } else if (changedId === 'deseq-interaction-condition' || changedId === 'deseq-interaction-modifier') {
+    populateInteractionControls();
+    updateDeseqAdjustControls();
+  } else if (changedId.startsWith('deseq-interaction-')) {
+    populateInteractionLevels();
   }
   renderDeseqPreview();
   deseqCallbacks.renderAnalysisReadiness?.();
@@ -160,10 +176,24 @@ function populateExcludedSamples() {
 function syncDeseqQuestionUi() {
   const questionType = document.getElementById('deseq-question-type')?.value || '';
   const direct = questionType === 'direct_group_comparison';
+  const interaction = questionType === 'pairwise_interaction' || questionType === 'omnibus_interaction_lrt';
+  const lrt = questionType === 'omnibus_interaction_lrt';
   const factorControls = document.getElementById('deseq-factor-controls');
   const directControls = document.getElementById('deseq-direct-group-controls');
-  if (factorControls) factorControls.hidden = direct;
+  const interactionControls = document.getElementById('deseq-interaction-controls');
+  const interactionConditionLevels = document.getElementById('deseq-interaction-condition-levels');
+  const interactionModifierLevels = document.getElementById('deseq-interaction-modifier-levels');
+  const interactionHelp = document.getElementById('deseq-interaction-help');
+  if (factorControls) factorControls.hidden = direct || interaction;
   if (directControls) directControls.hidden = !direct;
+  if (interactionControls) interactionControls.hidden = !interaction;
+  if (interactionConditionLevels) interactionConditionLevels.hidden = lrt;
+  if (interactionModifierLevels) interactionModifierLevels.hidden = lrt;
+  if (interactionHelp) {
+    interactionHelp.textContent = lrt
+      ? 'LRT tests whether adding all condition-by-modifier interaction terms improves the additive model. The p-value is omnibus; the log2FC column is representative.'
+      : 'Pairwise interaction tests whether the condition effect differs between two modifier levels using the denominators as DESeq2 reference levels.';
+  }
 }
 
 function populateFactorControls(options = {}) {
@@ -267,13 +297,94 @@ function populateDirectGroupLevels() {
     : (groups.find((group) => group.value !== groupOne.value)?.value || groups[1]?.value || '');
 }
 
+function populateInteractionControls(options = {}) {
+  const conditionSelect = document.getElementById('deseq-interaction-condition');
+  const modifierSelect = document.getElementById('deseq-interaction-modifier');
+  if (!conditionSelect || !modifierSelect) return;
+  const formValues = readDeseqFormValues();
+  const scope = buildAnalysisScope(formValues);
+  const columns = analysisFactorColumns().filter((column) => levelsForColumn(column, scope.sampleIds).length >= 2);
+  const previousCondition = conditionSelect.value;
+  const defaultCondition = defaultInteractionCondition(columns);
+  populateSelect(
+    conditionSelect,
+    columns,
+    options.preferDefaults ? defaultCondition : previousCondition,
+    metadataTypeOptionLabel,
+  );
+
+  const modifierColumns = columns.filter((column) => column !== conditionSelect.value);
+  const previousModifier = modifierSelect.value;
+  const defaultModifier = defaultInteractionModifier(modifierColumns);
+  populateSelect(
+    modifierSelect,
+    modifierColumns,
+    options.preferDefaults ? defaultModifier : previousModifier,
+    metadataTypeOptionLabel,
+  );
+  populateInteractionLevels();
+}
+
+function defaultInteractionCondition(columns) {
+  if (columns.includes(state.config?.analysis?.conditionColumn)) return state.config.analysis.conditionColumn;
+  if (columns.includes('condition')) return 'condition';
+  if (columns.includes('treatment')) return 'treatment';
+  return columns[0] || '';
+}
+
+function defaultInteractionModifier(columns) {
+  if (columns.includes('tissue')) return 'tissue';
+  if (columns.includes('genotype')) return 'genotype';
+  if (columns.includes('sex')) return 'sex';
+  return columns[0] || '';
+}
+
+function populateInteractionLevels() {
+  const conditionNumerator = document.getElementById('deseq-interaction-condition-numerator');
+  const conditionDenominator = document.getElementById('deseq-interaction-condition-denominator');
+  const modifierNumerator = document.getElementById('deseq-interaction-modifier-numerator');
+  const modifierDenominator = document.getElementById('deseq-interaction-modifier-denominator');
+  if (!conditionNumerator || !conditionDenominator || !modifierNumerator || !modifierDenominator) return;
+
+  const formValues = readDeseqFormValues();
+  const scope = buildAnalysisScope(formValues);
+  const conditionColumn = document.getElementById('deseq-interaction-condition')?.value || '';
+  const modifierColumn = document.getElementById('deseq-interaction-modifier')?.value || '';
+  const conditionLevels = levelsForColumn(conditionColumn, scope.sampleIds);
+  const modifierLevels = levelsForColumn(modifierColumn, scope.sampleIds);
+  populateLevelPair(conditionNumerator, conditionDenominator, conditionLevels, state.config?.analysis?.referenceLevel);
+  populateLevelPair(modifierNumerator, modifierDenominator, modifierLevels, '');
+}
+
+function populateLevelPair(numeratorSelect, denominatorSelect, levels, preferredDenominator = '') {
+  const previousNumerator = numeratorSelect.value;
+  const previousDenominator = denominatorSelect.value;
+  const levelOptions = levels.map((level) => `<option value="${deseqEscapeHtml(level)}">${deseqEscapeHtml(level)}</option>`).join('');
+  numeratorSelect.innerHTML = levelOptions;
+  denominatorSelect.innerHTML = levelOptions;
+  numeratorSelect.disabled = levels.length < 2;
+  denominatorSelect.disabled = levels.length < 2;
+  const denominator = levels.includes(previousDenominator)
+    ? previousDenominator
+    : (levels.includes(preferredDenominator) ? preferredDenominator : (levels.includes('control') ? 'control' : levels[0]));
+  denominatorSelect.value = denominator || '';
+  numeratorSelect.value = levels.includes(previousNumerator) && previousNumerator !== denominator
+    ? previousNumerator
+    : (levels.find((level) => level !== denominator) || levels[0] || '');
+}
+
 function updateDeseqAdjustControls() {
   const adjustSelect = document.getElementById('deseq-adjust-columns');
   if (!adjustSelect) return;
   const formValues = readDeseqFormValues();
   const scope = buildAnalysisScope(formValues);
   const direct = formValues.questionType === 'direct_group_comparison';
-  const blocked = new Set(direct ? formValues.groupFactors : [document.getElementById('deseq-design-column')?.value || '']);
+  const interaction = formValues.questionType === 'pairwise_interaction' || formValues.questionType === 'omnibus_interaction_lrt';
+  const blocked = new Set(direct
+    ? formValues.groupFactors
+    : (interaction
+      ? [formValues.interactionConditionFactor, formValues.interactionModifierFactor]
+      : [document.getElementById('deseq-design-column')?.value || '']));
   const previous = new Set(Array.from(adjustSelect.selectedOptions || []).map((option) => option.value));
   const candidates = adjustmentMetadataColumns()
     .filter((column) => !blocked.has(column))
@@ -439,6 +550,15 @@ function contrastFromSpec(spec) {
     design: spec.fullModel,
     model_kind: spec.modelKind,
     result_mode: spec.resultMode,
+    test_label: spec.testLabel || '',
+    condition_factor: spec.conditionFactor || '',
+    modifier_factor: spec.modifierFactor || '',
+    condition_numerator: spec.conditionNumerator || '',
+    condition_denominator: spec.conditionDenominator || '',
+    modifier_numerator: spec.modifierNumerator || '',
+    modifier_denominator: spec.modifierDenominator || '',
+    tested_terms: spec.testedTerms || [],
+    coefficient_name: spec.coefficientName || '',
     group_factors: spec.groupFactors || [],
     group_one_label: spec.groupOneLabel || '',
     group_two_label: spec.groupTwoLabel || '',
@@ -461,12 +581,19 @@ async function deseqRunInWebR(spec) {
 suppressPackageStartupMessages(library(DESeq2))
 count_text <- ${deseqRString(countsCsv)}
 metadata_text <- ${deseqRString(metadataCsv)}
+result_mode <- ${deseqRString(spec.resultMode)}
 primary_col_raw <- ${deseqRString(spec.primaryFactor)}
+condition_col_raw <- ${deseqRString(spec.conditionFactor || '')}
+modifier_col_raw <- ${deseqRString(spec.modifierFactor || '')}
 adjust_cols_raw <- c(${spec.adjustColumns.map(deseqRString).join(', ')})
 adjust_types_raw <- ${adjustTypeVector}
 reference_level <- ${deseqRString(spec.reference)}
 numerator_level <- ${deseqRString(spec.numerator)}
 denominator_level <- ${deseqRString(spec.denominator)}
+condition_numerator_level <- ${deseqRString(spec.conditionNumerator || spec.numerator || '')}
+condition_denominator_level <- ${deseqRString(spec.conditionDenominator || spec.denominator || '')}
+modifier_numerator_level <- ${deseqRString(spec.modifierNumerator || '')}
+modifier_denominator_level <- ${deseqRString(spec.modifierDenominator || '')}
 countData <- read.csv(text = count_text, row.names = 1, check.names = FALSE)
 rownames(countData) <- make.unique(rownames(countData))
 countData <- as.matrix(countData)
@@ -482,14 +609,61 @@ raw_names <- colnames(colData)
 safe_names <- make.names(raw_names, unique = TRUE)
 colnames(colData) <- safe_names
 safe_lookup <- setNames(safe_names, raw_names)
-design_col <- unname(safe_lookup[[primary_col_raw]])
-if (is.na(design_col) || !nzchar(design_col)) {
-  stop("Primary design column is missing from metadata.")
+lookup_column <- function(raw_col, label) {
+  if (is.null(raw_col) || is.na(raw_col) || !nzchar(raw_col)) {
+    stop(paste(label, "was not specified."))
+  }
+  safe_col <- unname(safe_lookup[[raw_col]])
+  if (is.null(safe_col) || is.na(safe_col) || !nzchar(safe_col)) {
+    stop(paste(label, "is missing from metadata:", raw_col))
+  }
+  safe_col
+}
+prepare_factor <- function(raw_col, label, reference = "") {
+  safe_col <- lookup_column(raw_col, label)
+  value <- trimws(as.character(colData[[safe_col]]))
+  if (any(!nzchar(value))) {
+    stop(paste(label, "has missing values."))
+  }
+  factor_value <- factor(value)
+  if (nlevels(factor_value) < 2) {
+    stop(paste(label, "has fewer than two levels after subsetting samples."))
+  }
+  if (nzchar(reference)) {
+    if (!reference %in% levels(factor_value)) {
+      stop(paste(label, "reference level was not found after subsetting samples:", reference))
+    }
+    factor_value <- relevel(factor_value, ref = reference)
+  }
+  colData[[safe_col]] <<- factor_value
+  safe_col
+}
+normalize_name <- function(x) gsub("[^[:alnum:]]+", "", tolower(as.character(x)))
+contains_part <- function(name, part) {
+  part <- normalize_name(part)
+  nzchar(part) && grepl(part, normalize_name(name), fixed = TRUE)
+}
+find_interaction_coef <- function(result_names, condition_col, condition_level, modifier_col, modifier_level) {
+  interaction_names <- result_names[grepl(":", result_names, fixed = TRUE) | grepl("\\\\.", result_names)]
+  target_parts <- c(condition_col, condition_level, modifier_col, modifier_level)
+  hits <- interaction_names[vapply(interaction_names, function(name) {
+    all(vapply(target_parts, function(part) contains_part(name, part), logical(1)))
+  }, logical(1))]
+  if (!length(hits)) {
+    level_parts <- c(condition_level, modifier_level)
+    hits <- interaction_names[vapply(interaction_names, function(name) {
+      all(vapply(level_parts, function(part) contains_part(name, part), logical(1)))
+    }, logical(1))]
+  }
+  if (!length(hits)) {
+    stop(paste("Could not find the requested interaction coefficient. Available coefficients:", paste(result_names, collapse = ", ")))
+  }
+  hits[[1]]
 }
 adjust_cols <- character(0)
 for (adjust_col_raw in adjust_cols_raw) {
   adjust_col <- unname(safe_lookup[[adjust_col_raw]])
-  if (is.na(adjust_col) || !nzchar(adjust_col)) next
+  if (is.null(adjust_col) || is.na(adjust_col) || !nzchar(adjust_col)) next
   adjust_type <- adjust_types_raw[[adjust_col_raw]]
   if (is.null(adjust_type) || is.na(adjust_type) || !nzchar(adjust_type)) adjust_type <- "categorical"
   value <- trimws(as.character(colData[[adjust_col]]))
@@ -510,41 +684,104 @@ for (adjust_col_raw in adjust_cols_raw) {
   }
   adjust_cols <- c(adjust_cols, adjust_col)
 }
-primary_value <- trimws(as.character(colData[[design_col]]))
-if (any(!nzchar(primary_value))) {
-  stop("Primary design column has missing values.")
+
+tested_terms <- character(0)
+coefficient_name <- ""
+reduced_formula_label <- ""
+if (identical(result_mode, "wald_interaction_coefficient")) {
+  condition_col <- prepare_factor(condition_col_raw, "Condition factor", condition_denominator_level)
+  modifier_col <- prepare_factor(modifier_col_raw, "Modifier factor", modifier_denominator_level)
+  if (!condition_numerator_level %in% levels(colData[[condition_col]]) || !condition_denominator_level %in% levels(colData[[condition_col]])) {
+    stop("Selected condition numerator or denominator level was not found after subsetting samples.")
+  }
+  if (!modifier_numerator_level %in% levels(colData[[modifier_col]]) || !modifier_denominator_level %in% levels(colData[[modifier_col]])) {
+    stop("Selected modifier numerator or denominator level was not found after subsetting samples.")
+  }
+  tested_terms <- paste(condition_col, modifier_col, sep = ":")
+  design_terms <- c(adjust_cols, condition_col, modifier_col, tested_terms)
+  design_formula <- reformulate(design_terms)
+  design_matrix <- model.matrix(design_formula, colData)
+  if (qr(design_matrix)$rank < ncol(design_matrix)) {
+    stop("DESeq2 interaction design is not full rank. Remove confounded covariates or blocking factors.")
+  }
+  if (nrow(design_matrix) <= ncol(design_matrix)) {
+    stop("DESeq2 interaction design has too many terms for the number of selected samples.")
+  }
+  dds <- DESeqDataSetFromMatrix(countData = countData, colData = colData, design = design_formula)
+  dds <- DESeq(dds, quiet = TRUE)
+  coefficient_name <- find_interaction_coef(resultsNames(dds), condition_col, condition_numerator_level, modifier_col, modifier_numerator_level)
+  res <- results(dds, name = coefficient_name)
+} else if (identical(result_mode, "lrt")) {
+  condition_col <- prepare_factor(condition_col_raw, "Condition factor", condition_denominator_level)
+  modifier_col <- prepare_factor(modifier_col_raw, "Modifier factor", modifier_denominator_level)
+  tested_terms <- paste(condition_col, modifier_col, sep = ":")
+  design_terms <- c(adjust_cols, condition_col, modifier_col, tested_terms)
+  reduced_terms <- c(adjust_cols, condition_col, modifier_col)
+  design_formula <- reformulate(design_terms)
+  reduced_formula <- reformulate(reduced_terms)
+  reduced_formula_label <- paste(deparse(reduced_formula), collapse = " ")
+  design_matrix <- model.matrix(design_formula, colData)
+  if (qr(design_matrix)$rank < ncol(design_matrix)) {
+    stop("DESeq2 LRT full design is not full rank. Remove confounded covariates or blocking factors.")
+  }
+  if (nrow(design_matrix) <= ncol(design_matrix)) {
+    stop("DESeq2 LRT design has too many terms for the number of selected samples.")
+  }
+  dds <- DESeqDataSetFromMatrix(countData = countData, colData = colData, design = design_formula)
+  dds <- DESeq(dds, test = "LRT", reduced = reduced_formula, quiet = TRUE)
+  coefficient_name <- paste("LRT", paste(deparse(design_formula), collapse = " "), "vs", reduced_formula_label)
+  res <- results(dds)
+} else {
+  design_col <- prepare_factor(primary_col_raw, "Primary design column", reference_level)
+  if (!all(c(numerator_level, denominator_level) %in% levels(colData[[design_col]]))) {
+    stop("Selected numerator or denominator level was not found after subsetting samples.")
+  }
+  design_terms <- c(adjust_cols, design_col)
+  design_formula <- reformulate(design_terms)
+  design_matrix <- model.matrix(design_formula, colData)
+  if (qr(design_matrix)$rank < ncol(design_matrix)) {
+    stop("DESeq2 design is not full rank. Remove confounded covariates or blocking factors.")
+  }
+  if (nrow(design_matrix) <= ncol(design_matrix)) {
+    stop("DESeq2 design has too many terms for the number of selected samples.")
+  }
+  dds <- DESeqDataSetFromMatrix(countData = countData, colData = colData, design = design_formula)
+  dds <- DESeq(dds, quiet = TRUE)
+  coefficient_name <- paste(design_col, numerator_level, "vs", denominator_level, sep = "_")
+  tested_terms <- design_col
+  res <- results(dds, contrast = c(design_col, numerator_level, denominator_level))
 }
-colData[[design_col]] <- relevel(factor(primary_value), ref = reference_level)
-if (!all(c(numerator_level, denominator_level) %in% levels(colData[[design_col]]))) {
-  stop("Selected numerator or denominator level was not found after subsetting samples.")
-}
-design_terms <- c(adjust_cols, design_col)
-design_formula <- reformulate(design_terms)
-design_matrix <- model.matrix(design_formula, colData)
-if (qr(design_matrix)$rank < ncol(design_matrix)) {
-  stop("DESeq2 design is not full rank. Remove confounded covariates or blocking factors.")
-}
-if (nrow(design_matrix) <= ncol(design_matrix)) {
-  stop("DESeq2 design has too many terms for the number of selected samples.")
-}
-dds <- DESeqDataSetFromMatrix(countData = countData, colData = colData, design = design_formula)
-dds <- DESeq(dds, quiet = TRUE)
-res <- results(dds, contrast = c(design_col, numerator_level, denominator_level))
 out <- as.data.frame(res)
 out$gene_id <- rownames(out)
-out <- out[, c("gene_id", "baseMean", "log2FoldChange", "lfcSE", "stat", "pvalue", "padj")]
 names(out)[names(out) == "stat"] <- "statistic"
+wanted_cols <- c("gene_id", "baseMean", "log2FoldChange", "lfcSE", "statistic", "pvalue", "padj")
+missing_cols <- setdiff(wanted_cols, names(out))
+for (missing_col in missing_cols) out[[missing_col]] <- NA
+out <- out[, wanted_cols]
+out$result_mode <- result_mode
+out$coefficient_name <- coefficient_name
+out$tested_terms <- paste(tested_terms, collapse = ";")
+out$full_model <- paste(deparse(design_formula), collapse = " ")
+out$reduced_model <- reduced_formula_label
 paste(capture.output(write.csv(out, row.names = FALSE, na = "")), collapse = "\\n")
 `;
   const result = await evalR(code);
   const text = deseqResultText(result);
   await loadGeneAnnotation(false);
   const geneSymbols = deseqGeneSymbolLookup();
-  return parseDeCsv(text).map((row) => ({
+  const rows = parseDeCsv(text).map((row) => ({
     ...row,
     gene_symbol: row.gene_symbol || geneSymbols.get(deseqGeneKey(row.gene_id)) || '',
-    method: `DESeq2 webR ${spec.fullModel}`,
+    method: deseqResultMethod(spec),
   })).sort((a, b) => deseqSortPValue(a.padj) - deseqSortPValue(b.padj));
+  if (!spec.coefficientName && rows[0]?.coefficient_name) spec.coefficientName = rows[0].coefficient_name;
+  return rows;
+}
+
+function deseqResultMethod(spec) {
+  if (spec.resultMode === 'lrt') return `DESeq2 webR LRT ${spec.fullModel} vs ${spec.reducedModel}`;
+  if (spec.resultMode === 'wald_interaction_coefficient') return `DESeq2 webR interaction ${spec.fullModel}`;
+  return `DESeq2 webR ${spec.fullModel}`;
 }
 
 function deseqSortPValue(value) {
@@ -565,7 +802,12 @@ function deseqCountsCsv(sampleIds) {
 }
 
 function deseqMetadataCsv(spec) {
-  const metadataColumns = uniqueStrings(spec.adjustColumns.concat(spec.primaryFactor));
+  const metadataColumns = uniqueStrings(
+    (spec.metadataColumns || [])
+      .concat(spec.adjustColumns || [])
+      .concat(spec.primaryFactor || [])
+      .concat(Object.keys(spec.syntheticColumns || {})),
+  );
   const rows = spec.sampleIds.map((sampleId) => {
     const sample = state.samples.find((item) => item.sample_id === sampleId) || {};
     return [sampleId].concat(metadataColumns.map((column) => {

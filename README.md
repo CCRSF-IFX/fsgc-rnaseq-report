@@ -512,12 +512,16 @@ The built-in browser DE fallback uses Welch t-tests on log2(CPM + 1) values and
 Benjamini-Hochberg adjusted p-values. Treat those results as exploratory. Use
 pipeline-generated DESeq2 or another mature RNA-seq method for final analysis.
 
-The browser DESeq2 runner uses a biological question builder. Phase 1 supports:
+The browser DESeq2 runner uses a biological question builder. It supports:
 
 - condition effects within all samples or a selected metadata subset
 - tissue/factor effects within all samples or a selected metadata subset
 - additive covariate-adjusted factor effects
 - direct comparisons between two combined metadata groups
+- pairwise interaction effects, such as asking whether a treatment response
+  differs between two tissue or genotype levels
+- omnibus interaction likelihood-ratio tests, such as asking whether adding
+  `condition:tissue` improves the model over an additive model
 
 For subset-aware condition or tissue effects, the app first selects the sample
 scope, then runs a simple additive DESeq2 model on the selected samples. For
@@ -536,9 +540,29 @@ those combined groups are the intended biological contrast.
 
 For paired designs, choose the treatment/group column as the primary factor and
 mark the subject or pair ID column as `categorical` before selecting it as an
-adjustment/blocking column. The runner does not currently support arbitrary
-interaction terms such as `genotype:treatment`; those belong to the planned
-interaction/LRT phase.
+adjustment/blocking column.
+
+Pairwise interactions use a model equivalent to:
+
+```r
+~ batch + condition + tissue + condition:tissue
+```
+
+with the selected condition denominator and modifier denominator releveled as
+the references. The reported `log2FoldChange` is the interaction coefficient:
+the condition effect in modifier level A minus the same condition effect in the
+reference modifier level.
+
+Omnibus interaction LRT uses a full model and a reduced model:
+
+```r
+full    <- ~ batch + condition + tissue + condition:tissue
+reduced <- ~ batch + condition + tissue
+```
+
+The LRT `pvalue` and `padj` columns test whether the interaction terms improve
+the model. The `log2FoldChange` column in an LRT result is representative output
+from DESeq2 and should not be interpreted as the omnibus effect size.
 
 For time-series metadata, keep raw values in the manifest. Numeric columns named
 `time`, `dose`, `RIN`, or `age` are inferred as continuous covariates, while

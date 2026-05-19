@@ -21,6 +21,7 @@ export async function renderCurrentContrast() {
   const select = document.getElementById('contrast-select');
   const contrast = state.contrasts.find((c) => c.id === select?.value) || state.contrasts[0];
   renderContrastTags(contrast);
+  renderContrastNote(contrast);
   if (!contrast) return;
   const rows = await loadDeForContrast(contrast);
   const padj = Number(document.getElementById('padj-threshold')?.value || 0.05);
@@ -91,11 +92,32 @@ function renderContrastTags(contrast) {
     contrastFamilyLabel(contrastFamily(contrast)),
     contrast.scope_label ? `scope: ${contrast.scope_label}` : '',
     contrast.sample_count ? `${contrast.sample_count} samples` : '',
+    contrast.result_mode === 'lrt' ? 'LRT' : '',
     contrast.full_model || contrast.design || '',
+    contrast.reduced_model ? `reduced: ${contrast.reduced_model}` : '',
     contrast.contrast_label || '',
+    contrast.coefficient_name ? `coefficient: ${contrast.coefficient_name}` : '',
     contrast.method || '',
   ].filter(Boolean);
   container.innerHTML = tags.map((tag) => `<span class="contrast-tag">${escapeHtml(tag)}</span>`).join('');
+}
+
+function renderContrastNote(contrast) {
+  const note = document.getElementById('de-result-note');
+  if (!note) return;
+  if (!contrast) {
+    note.textContent = '';
+    return;
+  }
+  if (contrast.result_mode === 'lrt') {
+    note.textContent = 'DESeq2 LRT p-values test whether the full model improves over the reduced model. The log2FC column is representative and is not the omnibus effect size.';
+    return;
+  }
+  if (contrast.result_family === 'interaction_effect') {
+    note.textContent = 'Interaction log2FC is a difference-of-differences: the selected condition effect in modifier level A minus the same condition effect in the reference modifier level.';
+    return;
+  }
+  note.textContent = '';
 }
 
 function contrastFamily(contrast = {}) {
@@ -113,6 +135,8 @@ function contrastFamilyLabel(family) {
     tissue_effect: 'Tissue effects',
     adjusted_effect: 'Adjusted effects',
     direct_group_comparison: 'Direct group comparisons',
+    interaction_effect: 'Interaction effects',
+    omnibus_test: 'Omnibus tests',
     factor_effect: 'Factor effects',
     browser_generated: 'Browser-generated results',
     pipeline_result: 'Pipeline results',

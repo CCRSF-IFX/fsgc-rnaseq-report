@@ -29,6 +29,18 @@ export const DESEQ_QUESTION_TYPES = [
     resultFamily: 'direct_group_comparison',
     help: 'Compare any two combined metadata groups directly.',
   },
+  {
+    id: 'pairwise_interaction',
+    label: 'Pairwise interaction effect',
+    resultFamily: 'interaction_effect',
+    help: 'Test whether one condition effect differs between two levels of another factor.',
+  },
+  {
+    id: 'omnibus_interaction_lrt',
+    label: 'Omnibus interaction test (LRT)',
+    resultFamily: 'omnibus_test',
+    help: 'Use a likelihood-ratio test to ask whether condition-by-modifier interaction terms improve the model.',
+  },
 ];
 
 export function readDeseqFormValues(root = document) {
@@ -48,6 +60,12 @@ export function readDeseqFormValues(root = document) {
     ].filter(Boolean),
     groupOne: root.getElementById('deseq-group-one')?.value || '',
     groupTwo: root.getElementById('deseq-group-two')?.value || '',
+    interactionConditionFactor: root.getElementById('deseq-interaction-condition')?.value || '',
+    interactionModifierFactor: root.getElementById('deseq-interaction-modifier')?.value || '',
+    interactionConditionNumerator: root.getElementById('deseq-interaction-condition-numerator')?.value || '',
+    interactionConditionDenominator: root.getElementById('deseq-interaction-condition-denominator')?.value || '',
+    interactionModifierNumerator: root.getElementById('deseq-interaction-modifier-numerator')?.value || '',
+    interactionModifierDenominator: root.getElementById('deseq-interaction-modifier-denominator')?.value || '',
   };
 }
 
@@ -68,6 +86,12 @@ export function buildDeseqQuestionSpec(formValues = readDeseqFormValues()) {
 
   if (question.id === 'direct_group_comparison') {
     return buildDirectGroupSpec(formValues, scope, adjustColumns, question);
+  }
+  if (question.id === 'pairwise_interaction') {
+    return buildPairwiseInteractionSpec(formValues, scope, adjustColumns, question);
+  }
+  if (question.id === 'omnibus_interaction_lrt') {
+    return buildOmnibusInteractionLrtSpec(formValues, scope, adjustColumns, question);
   }
   return buildFactorContrastSpec(formValues, scope, adjustColumns, question);
 }
@@ -130,6 +154,8 @@ export function previewDeseqModel(spec) {
     ['Sample scope', spec.scope.label],
     ['Selected samples', `${spec.sampleIds.length} / ${sampleIdsInCounts(state.samples, state.counts).length}`],
     ['Full model', spec.fullModel],
+    ['Reduced model', spec.reducedModel],
+    ['Test', spec.testLabel],
     ['Contrast', spec.contrastLabel],
     ['Interpretation', spec.interpretation],
   ].filter(([, value]) => value !== undefined && value !== null && value !== '');
@@ -254,6 +280,157 @@ function buildDirectGroupSpec(formValues, scope, adjustColumns, question) {
   };
 }
 
+function buildPairwiseInteractionSpec(formValues, scope, adjustColumns, question) {
+  const conditionFactor = formValues.interactionConditionFactor;
+  const modifierFactor = formValues.interactionModifierFactor;
+  const conditionNumerator = formValues.interactionConditionNumerator;
+  const conditionDenominator = formValues.interactionConditionDenominator;
+  const modifierNumerator = formValues.interactionModifierNumerator;
+  const modifierDenominator = formValues.interactionModifierDenominator;
+  validateInteractionFactors(scope.sampleIds, conditionFactor, modifierFactor);
+  if (!conditionNumerator || !conditionDenominator || conditionNumerator === conditionDenominator) {
+    throw new Error('Choose two different condition levels for the interaction contrast.');
+  }
+  if (!modifierNumerator || !modifierDenominator || modifierNumerator === modifierDenominator) {
+    throw new Error('Choose two different modifier levels for the interaction contrast.');
+  }
+
+  const selectedConditions = new Set([conditionNumerator, conditionDenominator]);
+  const selectedModifiers = new Set([modifierNumerator, modifierDenominator]);
+  const sampleIds = scope.sampleIds.filter((sampleId) => (
+    selectedConditions.has(sampleValue(sampleId, conditionFactor))
+    && selectedModifiers.has(sampleValue(sampleId, modifierFactor))
+  ));
+  const groupBalance = interactionGroupBalance(sampleIds, conditionFactor, modifierFactor);
+  validateInteractionCells(
+    groupBalance,
+    [conditionNumerator, conditionDenominator],
+    [modifierNumerator, modifierDenominator],
+    conditionFactor,
+    modifierFactor,
+  );
+  validateAdjustColumns(sampleIds, conditionFactor, adjustColumns);
+  validateAdjustColumns(sampleIds, modifierFactor, adjustColumns);
+  validateInteractionModelSize(sampleIds, conditionFactor, modifierFactor, adjustColumns);
+
+  const fullModel = formulaLabel(adjustColumns.concat([conditionFactor, modifierFactor, `${conditionFactor}:${modifierFactor}`]));
+  const contrastLabel = `(${conditionNumerator} - ${conditionDenominator}) at ${modifierNumerator} vs ${modifierDenominator}`;
+  const label = `${conditionNumerator} response differs between ${modifierNumerator} and ${modifierDenominator}`;
+  const adjustmentSuffix = adjustColumns.length ? ` adjusted for ${adjustColumns.join(', ')}` : '';
+  return {
+    questionType: question.id,
+    questionLabel: question.label,
+    result_family: question.resultFamily,
+    resultFamily: question.resultFamily,
+    scope,
+    scopeId: scope.id,
+    sampleIds,
+    primaryFactor: conditionFactor,
+    numerator: conditionNumerator,
+    denominator: conditionDenominator,
+    reference: conditionDenominator,
+    conditionFactor,
+    modifierFactor,
+    conditionNumerator,
+    conditionDenominator,
+    modifierNumerator,
+    modifierDenominator,
+    adjustColumns,
+    modelKind: 'interaction',
+    resultMode: 'wald_interaction_coefficient',
+    fullModel,
+    reducedModel: '',
+    testLabel: 'Wald test of the interaction coefficient',
+    testedTerms: [`${conditionFactor}:${modifierFactor}`],
+    contrastLabel,
+    label: `${label}${adjustmentSuffix}`,
+    id: makeContrastId([
+      'deseq2_interaction',
+      conditionFactor,
+      conditionNumerator,
+      'vs',
+      conditionDenominator,
+      modifierFactor,
+      modifierNumerator,
+      'vs',
+      modifierDenominator,
+      scope.id,
+      adjustColumns.join('_'),
+    ]),
+    groupBalance,
+    warnings: interactionWarnings(sampleIds, groupBalance),
+    interpretation: `Difference in the ${conditionNumerator} vs ${conditionDenominator} effect between ${modifierFactor}=${modifierNumerator} and ${modifierFactor}=${modifierDenominator} using model ${fullModel}.`,
+    metadataColumns: uniqueStrings([conditionFactor, modifierFactor].concat(adjustColumns)),
+    syntheticColumns: {},
+  };
+}
+
+function buildOmnibusInteractionLrtSpec(formValues, scope, adjustColumns, question) {
+  const conditionFactor = formValues.interactionConditionFactor;
+  const modifierFactor = formValues.interactionModifierFactor;
+  validateInteractionFactors(scope.sampleIds, conditionFactor, modifierFactor);
+
+  const conditionLevels = levelsForColumn(conditionFactor, scope.sampleIds);
+  const modifierLevels = levelsForColumn(modifierFactor, scope.sampleIds);
+  const conditionDenominator = conditionLevels.includes(formValues.interactionConditionDenominator)
+    ? formValues.interactionConditionDenominator
+    : conditionLevels[0];
+  const conditionNumerator = conditionLevels.find((level) => level !== conditionDenominator) || conditionLevels[0];
+  const modifierDenominator = modifierLevels.includes(formValues.interactionModifierDenominator)
+    ? formValues.interactionModifierDenominator
+    : modifierLevels[0];
+  const modifierNumerator = modifierLevels.find((level) => level !== modifierDenominator) || modifierLevels[0];
+  const sampleIds = scope.sampleIds.filter((sampleId) => (
+    sampleValue(sampleId, conditionFactor) !== '' && sampleValue(sampleId, modifierFactor) !== ''
+  ));
+  const groupBalance = interactionGroupBalance(sampleIds, conditionFactor, modifierFactor);
+  validateCompleteInteractionGrid(groupBalance, conditionLevels, modifierLevels, conditionFactor, modifierFactor);
+  validateAdjustColumns(sampleIds, conditionFactor, adjustColumns);
+  validateAdjustColumns(sampleIds, modifierFactor, adjustColumns);
+  validateInteractionModelSize(sampleIds, conditionFactor, modifierFactor, adjustColumns);
+
+  const fullModel = formulaLabel(adjustColumns.concat([conditionFactor, modifierFactor, `${conditionFactor}:${modifierFactor}`]));
+  const reducedModel = formulaLabel(adjustColumns.concat([conditionFactor, modifierFactor]));
+  const contrastLabel = `${conditionFactor}:${modifierFactor} omnibus LRT`;
+  return {
+    questionType: question.id,
+    questionLabel: question.label,
+    result_family: question.resultFamily,
+    resultFamily: question.resultFamily,
+    scope,
+    scopeId: scope.id,
+    sampleIds,
+    primaryFactor: conditionFactor,
+    numerator: conditionNumerator,
+    denominator: conditionDenominator,
+    reference: conditionDenominator,
+    conditionFactor,
+    modifierFactor,
+    conditionNumerator,
+    conditionDenominator,
+    modifierNumerator,
+    modifierDenominator,
+    adjustColumns,
+    modelKind: 'interaction',
+    resultMode: 'lrt',
+    fullModel,
+    reducedModel,
+    testLabel: 'Likelihood-ratio test of all interaction terms',
+    testedTerms: [`${conditionFactor}:${modifierFactor}`],
+    contrastLabel,
+    label: `${conditionFactor} by ${modifierFactor} interaction LRT`,
+    id: makeContrastId(['deseq2_lrt', conditionFactor, 'by', modifierFactor, scope.id, adjustColumns.join('_')]),
+    groupBalance,
+    warnings: [
+      'The LRT p-value is an omnibus test for interaction terms. The displayed log2 fold change is representative and should not be interpreted as the tested effect size.',
+      ...interactionWarnings(sampleIds, groupBalance),
+    ],
+    interpretation: `Tests whether adding ${conditionFactor}:${modifierFactor} interaction terms improves ${fullModel} over ${reducedModel}.`,
+    metadataColumns: uniqueStrings([conditionFactor, modifierFactor].concat(adjustColumns)),
+    syntheticColumns: {},
+  };
+}
+
 export function buildAnalysisScope(formValues) {
   const matchedSampleIds = sampleIdsInCounts(state.samples, state.counts);
   const excluded = new Set(uniqueStrings(formValues.excludedSampleIds));
@@ -313,6 +490,53 @@ function validateModelSize(sampleIds, primaryColumn, adjustColumns) {
   }
 }
 
+function validateInteractionFactors(sampleIds, conditionFactor, modifierFactor) {
+  if (!conditionFactor || !modifierFactor) throw new Error('Choose both a condition factor and a modifier factor.');
+  if (conditionFactor === modifierFactor) throw new Error('Condition factor and modifier factor must be different columns.');
+  const eligible = analysisFactorColumns();
+  if (!eligible.includes(conditionFactor) || !eligible.includes(modifierFactor)) {
+    throw new Error('Interaction factors must be categorical or ordered metadata columns.');
+  }
+  if (levelsForColumn(conditionFactor, sampleIds).length < 2) {
+    throw new Error(`Interaction condition factor "${conditionFactor}" has fewer than two levels in selected samples.`);
+  }
+  if (levelsForColumn(modifierFactor, sampleIds).length < 2) {
+    throw new Error(`Interaction modifier factor "${modifierFactor}" has fewer than two levels in selected samples.`);
+  }
+}
+
+function validateInteractionCells(groupBalance, conditionLevels, modifierLevels, conditionFactor, modifierFactor) {
+  conditionLevels.forEach((conditionLevel) => {
+    modifierLevels.forEach((modifierLevel) => {
+      const key = interactionGroupKey(conditionFactor, conditionLevel, modifierFactor, modifierLevel);
+      if ((groupBalance[key] || 0) < 2) {
+        throw new Error(`DESeq2 interaction analysis requires at least two samples in ${key}.`);
+      }
+    });
+  });
+}
+
+function validateCompleteInteractionGrid(groupBalance, conditionLevels, modifierLevels, conditionFactor, modifierFactor) {
+  validateInteractionCells(groupBalance, conditionLevels, modifierLevels, conditionFactor, modifierFactor);
+}
+
+function validateInteractionModelSize(sampleIds, conditionFactor, modifierFactor, adjustColumns) {
+  const conditionLevelCount = levelsForColumn(conditionFactor, sampleIds).length;
+  const modifierLevelCount = levelsForColumn(modifierFactor, sampleIds).length;
+  const coefficientCount = 1
+    + Math.max(1, conditionLevelCount - 1)
+    + Math.max(1, modifierLevelCount - 1)
+    + Math.max(1, conditionLevelCount - 1) * Math.max(1, modifierLevelCount - 1)
+    + adjustColumns.reduce((sum, column) => {
+      if (metadataColumnType(column) === 'continuous') return sum + 1;
+      const levels = new Set(sampleIds.map((sampleId) => sampleValue(sampleId, column))).size;
+      return sum + Math.max(1, levels - 1);
+    }, 0);
+  if (sampleIds.length <= coefficientCount) {
+    throw new Error(`The DESeq2 interaction model has too many terms for ${sampleIds.length} selected samples.`);
+  }
+}
+
 function factorContrastWarnings(sampleIds, groupBalance, numerator, denominator) {
   const warnings = [];
   if ((groupBalance[numerator] || 0) < 3 || (groupBalance[denominator] || 0) < 3) {
@@ -322,6 +546,27 @@ function factorContrastWarnings(sampleIds, groupBalance, numerator, denominator)
     warnings.push('This is a large browser-side DESeq2 run; keep the tab open and consider using pipeline-generated results for final reporting.');
   }
   return warnings;
+}
+
+function interactionWarnings(sampleIds, groupBalance) {
+  const warnings = [];
+  if (Object.values(groupBalance).some((count) => count < 3)) {
+    warnings.push('At least three samples per interaction cell is preferred; this browser runner allows two as a minimum.');
+  }
+  if (sampleIds.length > 120) {
+    warnings.push('This is a large browser-side DESeq2 run; keep the tab open and consider using pipeline-generated results for final reporting.');
+  }
+  return warnings;
+}
+
+function interactionGroupBalance(sampleIds, conditionFactor, modifierFactor) {
+  return countBy(sampleIds, (sampleId) => (
+    interactionGroupKey(conditionFactor, sampleValue(sampleId, conditionFactor), modifierFactor, sampleValue(sampleId, modifierFactor))
+  ));
+}
+
+function interactionGroupKey(conditionFactor, conditionLevel, modifierFactor, modifierLevel) {
+  return `${conditionFactor}=${conditionLevel}, ${modifierFactor}=${modifierLevel}`;
 }
 
 function formulaLabel(terms) {
