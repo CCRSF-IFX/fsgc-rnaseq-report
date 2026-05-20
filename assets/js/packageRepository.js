@@ -151,7 +151,8 @@ export function packageRepositoryLibraryBundleDownloadUrl() {
   const archiveFile = packageRepoLibraryBundleConfig().archiveFile;
   const releaseTag = String(bundle.releaseTag || '').trim();
   if (releaseTag && archiveFile) {
-    return `https://github.com/omicsreporthub/rnaseq-report/releases/download/${encodeURIComponent(releaseTag)}/${encodeURIComponent(archiveFile)}`;
+    const repositoryUrl = String(state.config?.hostedSite?.repositoryUrl || state.config?.repositoryUrl || 'https://github.com/CCRSF-IFX/fsgc-rnaseq-report').trim().replace(/\/$/, '');
+    return `${repositoryUrl}/releases/download/${encodeURIComponent(releaseTag)}/${encodeURIComponent(archiveFile)}`;
   }
   const releaseUrl = String(bundle.releaseUrl || '').trim();
   const match = releaseUrl.match(/\/releases\/tag\/([^/?#]+)/);

@@ -9,7 +9,7 @@ snapshot needed by optional browser-side modules. Delivered HTML files should
 point at a versioned package repository URL:
 
 ```text
-https://omicsreporthub.github.io/rnaseq-report/webr-packages/v0.1.0/
+https://ccrsf-ifx.github.io/fsgc-rnaseq-report/webr-packages/v0.1.0/
 ```
 
 ## Current Snapshot
@@ -18,7 +18,7 @@ https://omicsreporthub.github.io/rnaseq-report/webr-packages/v0.1.0/
 - `assets/report_config.json` points `webr.packageRepo` at:
 
   ```text
-  https://omicsreporthub.github.io/rnaseq-report/webr-packages/v0.1.0/
+  https://ccrsf-ifx.github.io/fsgc-rnaseq-report/webr-packages/v0.1.0/
   ```
 
 - `webr-packages/packages` currently contains:
@@ -184,11 +184,11 @@ bioc::DESeq2,bioc::fgsea,bioc::S4Vectors,bioc::IRanges,bioc::GenomicRanges,bioc:
 After the Pages workflow force-overwrites `v0.1.0`, verify:
 
 ```text
-https://omicsreporthub.github.io/rnaseq-report/webr-packages/v0.1.0/bin/emscripten/contrib/4.5/PACKAGES
+https://ccrsf-ifx.github.io/fsgc-rnaseq-report/webr-packages/v0.1.0/bin/emscripten/contrib/4.5/PACKAGES
 ```
 
 Also verify the package archive:
 
 ```text
-https://omicsreporthub.github.io/rnaseq-report/webr-packages/v0.1.0/webr-packages-v0.1.0.zip
+https://ccrsf-ifx.github.io/fsgc-rnaseq-report/webr-packages/v0.1.0/webr-packages-v0.1.0.zip
 ```

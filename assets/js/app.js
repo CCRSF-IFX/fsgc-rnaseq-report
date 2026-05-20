@@ -35,6 +35,7 @@ async function main() {
   try {
     await loadCoreAssets();
     renderHeader();
+    renderVersionLinks();
     renderOverview();
     renderSamples();
     populateContrastSelectors();
@@ -195,6 +196,50 @@ function setOptionalText(id, value) {
   element.textContent = text;
   element.hidden = !text;
   return element;
+}
+
+function renderVersionLinks() {
+  const card = document.getElementById('version-links-card');
+  const container = document.getElementById('version-links');
+  if (!card || !container) return;
+  const links = reportVersionLinks(state.config);
+  card.hidden = links.length === 0;
+  container.innerHTML = links.map((link) => {
+    const version = cleanHeaderText(link.version);
+    const description = cleanHeaderText(link.description);
+    return `
+      <div class="version-link-item">
+        <div class="version-link-title">
+          <a href="${escapeHtml(link.url)}" target="_blank" rel="noopener">${escapeHtml(link.label)}</a>
+          ${version ? `<span class="version-link-badge">${escapeHtml(version)}</span>` : ''}
+        </div>
+        ${description ? `<p>${escapeHtml(description)}</p>` : ''}
+      </div>`;
+  }).join('');
+}
+
+function reportVersionLinks(cfg = {}) {
+  const site = cfg.hostedSite || cfg.site || {};
+  const configuredLinks = Array.isArray(site.versionLinks) ? site.versionLinks : [];
+  const links = configuredLinks
+    .map((link) => ({
+      label: cleanHeaderText(link.label || link.title || link.name),
+      version: cleanHeaderText(link.version || link.reportVersion),
+      url: cleanHeaderText(link.url || link.href),
+      description: cleanHeaderText(link.description || link.note),
+    }))
+    .filter((link) => link.label && /^https?:\/\//i.test(link.url));
+
+  const repositoryUrl = cleanHeaderText(site.repositoryUrl || cfg.repositoryUrl);
+  if (repositoryUrl && /^https?:\/\//i.test(repositoryUrl) && !links.some((link) => link.url === repositoryUrl)) {
+    links.push({
+      label: 'Source repository',
+      version: cleanHeaderText(site.repository || ''),
+      url: repositoryUrl,
+      description: 'Main GitHub repository for this report.',
+    });
+  }
+  return links;
 }
 
 function abbreviationFromTitle(title) {
@@ -824,6 +869,7 @@ function pcaComponentKeys() {
 
 async function refreshReportFromState() {
   renderHeader();
+  renderVersionLinks();
   renderOverview();
   renderSamples();
   populateContrastSelectors();

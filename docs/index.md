@@ -30,7 +30,7 @@ configuration.
 When deployed from GitHub Actions, documentation is available at:
 
 ```text
-https://omicsreporthub.github.io/rnaseq-report/docs/latest/
+https://ccrsf-ifx.github.io/fsgc-rnaseq-report/docs/latest/
 ```
 
 Versioned documentation is available under `/docs/vX.Y.Z/`, matching the report
@@ -39,4 +39,4 @@ version in `assets/report_config.json`.
 ## Repository
 
 The source repository is
-[OmicsReportHub/rnaseq-report](https://github.com/OmicsReportHub/rnaseq-report).
+[CCRSF-IFX/fsgc-rnaseq-report](https://github.com/CCRSF-IFX/fsgc-rnaseq-report).

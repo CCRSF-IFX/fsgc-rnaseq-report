@@ -6,12 +6,12 @@ site_description: >-
   pipeline outputs, standalone HTML delivery, and optional in-browser analysis.
 
 # Repository
-repo_name: OmicsReportHub/rnaseq-report
-repo_url: https://github.com/OmicsReportHub/rnaseq-report
+repo_name: CCRSF-IFX/fsgc-rnaseq-report
+repo_url: https://github.com/CCRSF-IFX/fsgc-rnaseq-report
 edit_uri: edit/main/docs/
 
 # Copyright
-copyright: Copyright &copy; 2026 OmicsReportHub contributors
+copyright: Copyright &copy; 2026 FSGC Bioinformatics Group
 
 theme:
   name: readthedocs

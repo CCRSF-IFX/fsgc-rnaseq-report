@@ -9,6 +9,38 @@
   "reportOrganization": "Frederick Sequencing and Genomics Core",
   "runId": "",
   "dataRoot": "assets/data",
+  "hostedSite": {
+    "repository": "CCRSF-IFX/fsgc-rnaseq-report",
+    "repositoryUrl": "https://github.com/CCRSF-IFX/fsgc-rnaseq-report",
+    "baseUrl": "https://ccrsf-ifx.github.io/fsgc-rnaseq-report/",
+    "versionsIndexUrl": "https://ccrsf-ifx.github.io/fsgc-rnaseq-report/docs/versions.json",
+    "versionLinks": [
+      {
+        "label": "Hosted report",
+        "version": "v0.1.0",
+        "url": "https://ccrsf-ifx.github.io/fsgc-rnaseq-report/",
+        "description": "Current hosted RNA-seq report."
+      },
+      {
+        "label": "Documentation",
+        "version": "latest",
+        "url": "https://ccrsf-ifx.github.io/fsgc-rnaseq-report/docs/latest/",
+        "description": "Latest user and developer documentation."
+      },
+      {
+        "label": "Documentation",
+        "version": "v0.1.0",
+        "url": "https://ccrsf-ifx.github.io/fsgc-rnaseq-report/docs/v0.1.0/",
+        "description": "Versioned documentation for report v0.1.0."
+      },
+      {
+        "label": "webR package snapshot",
+        "version": "v0.1.0",
+        "url": "https://ccrsf-ifx.github.io/fsgc-rnaseq-report/webr-packages/v0.1.0/",
+        "description": "Compiled webR package repository used by browser DESeq2 and fgsea."
+      }
+    ]
+  },
   "analysis": {
     "conditionColumn": "condition",
     "referenceLevel": "control"
@@ -41,16 +73,16 @@
   "webr": {
     "enabled": true,
     "baseUrl": "https://webr.r-wasm.org/v0.5.9/",
-    "packageRepo": "https://omicsreporthub.github.io/rnaseq-report/webr-packages/v0.1.0/",
+    "packageRepo": "https://ccrsf-ifx.github.io/fsgc-rnaseq-report/webr-packages/v0.1.0/",
     "packageRepoVersion": "v0.1.0",
-    "packageArchiveUrl": "https://github.com/omicsreporthub/rnaseq-report/releases/download/rnaseq-report-webr-packages-v0.1.0/rnaseq-report-webr-packages-v0.1.0.zip",
+    "packageArchiveUrl": "https://github.com/CCRSF-IFX/fsgc-rnaseq-report/releases/download/rnaseq-report-webr-packages-v0.1.0/rnaseq-report-webr-packages-v0.1.0.zip",
     "libraryBundle": {
       "enabled": true,
       "version": "v0.1.0",
       "artifactStem": "rnaseq-report-webr-library",
       "archiveFile": "rnaseq-report-webr-library-v0.1.0.zip",
       "releaseTag": "rnaseq-report-webr-library-v0.1.0",
-      "releaseUrl": "https://github.com/omicsreporthub/rnaseq-report/releases/tag/rnaseq-report-webr-library-v0.1.0"
+      "releaseUrl": "https://github.com/CCRSF-IFX/fsgc-rnaseq-report/releases/tag/rnaseq-report-webr-library-v0.1.0"
     },
     "modules": {
       "deseq2": {

@@ -215,8 +215,12 @@ This repository is configured to publish the hosted report with GitHub Actions:
 The current report config points to:
 
 ```text
-https://omicsreporthub.github.io/rnaseq-report/webr-packages/v0.1.0/
+https://ccrsf-ifx.github.io/fsgc-rnaseq-report/webr-packages/v0.1.0/
 ```
+
+The Guide tab renders hosted report, documentation, package snapshot, and
+repository links from `assets/report_config.json` `hostedSite.versionLinks`.
+Update that list whenever a new report or documentation version is published.
 
 The workflow reads package refs from `webr-packages/packages` using Bash/`awk`.
 It does not require `Rscript` to be present on the runner for that parsing step.
@@ -461,6 +465,24 @@ views remain usable from the standalone file.
   "reportVersion": "0.1.0",
   "reportAuthor": "FSGC Bioinformatics Group",
   "reportOrganization": "Frederick Sequencing and Genomics Core",
+  "hostedSite": {
+    "repository": "CCRSF-IFX/fsgc-rnaseq-report",
+    "repositoryUrl": "https://github.com/CCRSF-IFX/fsgc-rnaseq-report",
+    "baseUrl": "https://ccrsf-ifx.github.io/fsgc-rnaseq-report/",
+    "versionsIndexUrl": "https://ccrsf-ifx.github.io/fsgc-rnaseq-report/docs/versions.json",
+    "versionLinks": [
+      {
+        "label": "Documentation",
+        "version": "latest",
+        "url": "https://ccrsf-ifx.github.io/fsgc-rnaseq-report/docs/latest/"
+      },
+      {
+        "label": "Documentation",
+        "version": "v0.1.0",
+        "url": "https://ccrsf-ifx.github.io/fsgc-rnaseq-report/docs/v0.1.0/"
+      }
+    ]
+  },
   "analysis": {
     "conditionColumn": "condition",
     "referenceLevel": "control"
@@ -475,16 +497,16 @@ views remain usable from the standalone file.
   "webr": {
     "enabled": true,
     "baseUrl": "https://webr.r-wasm.org/v0.5.9/",
-    "packageRepo": "https://omicsreporthub.github.io/rnaseq-report/webr-packages/v0.1.0/",
+    "packageRepo": "https://ccrsf-ifx.github.io/fsgc-rnaseq-report/webr-packages/v0.1.0/",
     "packageRepoVersion": "v0.1.0",
-    "packageArchiveUrl": "https://github.com/omicsreporthub/rnaseq-report/releases/download/rnaseq-report-webr-packages-v0.1.0/rnaseq-report-webr-packages-v0.1.0.zip",
+    "packageArchiveUrl": "https://github.com/CCRSF-IFX/fsgc-rnaseq-report/releases/download/rnaseq-report-webr-packages-v0.1.0/rnaseq-report-webr-packages-v0.1.0.zip",
     "libraryBundle": {
       "enabled": true,
       "version": "v0.1.0",
       "artifactStem": "rnaseq-report-webr-library",
       "archiveFile": "rnaseq-report-webr-library-v0.1.0.zip",
       "releaseTag": "rnaseq-report-webr-library-v0.1.0",
-      "releaseUrl": "https://github.com/omicsreporthub/rnaseq-report/releases/tag/rnaseq-report-webr-library-v0.1.0"
+      "releaseUrl": "https://github.com/CCRSF-IFX/fsgc-rnaseq-report/releases/tag/rnaseq-report-webr-library-v0.1.0"
     },
     "modules": {
       "deseq2": {
@@ -741,7 +763,7 @@ that report and package/library snapshot version.
 Each deployed snapshot also exposes a ZIP archive as a GitHub Release asset:
 
 ```text
-https://github.com/omicsreporthub/rnaseq-report/releases/download/rnaseq-report-webr-packages-v0.1.0/rnaseq-report-webr-packages-v0.1.0.zip
+https://github.com/CCRSF-IFX/fsgc-rnaseq-report/releases/download/rnaseq-report-webr-packages-v0.1.0/rnaseq-report-webr-packages-v0.1.0.zip
 ```
 
 That archive can be downloaded and mirrored as a static wasm package repository.

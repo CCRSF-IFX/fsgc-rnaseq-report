@@ -26,6 +26,8 @@ workers run from an `http://` or `https://` origin.
 After the report opens:
 
 - Check the project title and run information in the sidebar.
+- Open the Guide tab and review **Report versions and links** for the hosted
+  report, documentation, source repository, and package snapshot URLs.
 - Open the sample metadata view and confirm sample names look familiar.
 - Review QC and PCA before running downstream analysis.
 - If the report asks for a webR package bundle, follow the on-screen buttons to

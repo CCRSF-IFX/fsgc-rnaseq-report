@@ -30,13 +30,13 @@ they do not compete for the repository's single GitHub Pages deployment.
 MkDocs is hosted under:
 
 ```text
-https://omicsreporthub.github.io/rnaseq-report/docs/latest/
+https://ccrsf-ifx.github.io/fsgc-rnaseq-report/docs/latest/
 ```
 
 The same build is also published under a versioned path:
 
 ```text
-https://omicsreporthub.github.io/rnaseq-report/docs/v0.1.0/
+https://ccrsf-ifx.github.io/fsgc-rnaseq-report/docs/v0.1.0/
 ```
 
 The version is derived from `assets/report_config.json` `reportVersion` and is
@@ -47,11 +47,27 @@ typed after validation.
 The workflow also writes:
 
 ```text
-https://omicsreporthub.github.io/rnaseq-report/docs/versions.json
+https://ccrsf-ifx.github.io/fsgc-rnaseq-report/docs/versions.json
 ```
 
 That file records the current version and the `latest` alias for tools or links
 that need to discover the hosted documentation location.
+
+## Report Version Links
+
+The report Guide tab shows links from `assets/report_config.json`
+`hostedSite.versionLinks`. Keep those links aligned with the primary repository:
+
+```text
+https://ccrsf-ifx.github.io/fsgc-rnaseq-report/
+https://ccrsf-ifx.github.io/fsgc-rnaseq-report/docs/latest/
+https://ccrsf-ifx.github.io/fsgc-rnaseq-report/docs/v0.1.0/
+https://ccrsf-ifx.github.io/fsgc-rnaseq-report/webr-packages/v0.1.0/
+```
+
+When a new report version is released, add the new versioned documentation and
+package snapshot links to `hostedSite.versionLinks` before building the
+deliverable HTML.
 
 ## webR Package Snapshot
 
@@ -65,7 +81,7 @@ The package snapshot is defined by:
 The current report configuration points webR package installation at:
 
 ```text
-https://omicsreporthub.github.io/rnaseq-report/webr-packages/v0.1.0/
+https://ccrsf-ifx.github.io/fsgc-rnaseq-report/webr-packages/v0.1.0/
 ```
 
 The package repository must match the webR runtime configured in
