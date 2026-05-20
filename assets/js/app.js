@@ -1,7 +1,7 @@
 import { state, setStatus, metadataColumns } from './state.js';
 import { loadCoreAssets } from './dataLoader.js';
 import { adjustVisibleDataTables, renderTable } from './tables.js';
-import { summarizeQC, qcRowsWithStatus } from './qc.js';
+import { qcRowsWithStatus } from './qc.js';
 import { isPlotlyReady, renderPCA, renderDistanceHeatmap, renderQCPlots, renderGeneCounts } from './plots.js?v=20260518-plotly-resilience';
 import { populateContrastSelectors, renderCurrentContrast } from './de.js';
 import { renderCurrentEnrichment } from './enrichment.js';
@@ -280,10 +280,59 @@ function renderOverview() {
 }
 
 function renderOverviewMetrics() {
-  const summary = summarizeQC();
   document.getElementById('sample-count').textContent = state.samples.length;
   document.getElementById('contrast-count').textContent = state.contrasts.length;
-  document.getElementById('qc-warning-count').textContent = summary.counts.warn + summary.counts.fail;
+  const qcSummary = overviewQcAvailability();
+  const qcState = document.getElementById('qc-metrics-state');
+  const qcText = document.getElementById('qc-metrics-summary');
+  if (qcState) {
+    qcState.textContent = qcSummary.label;
+    qcState.classList.toggle('muted', !qcSummary.available);
+  }
+  if (qcText) qcText.textContent = qcSummary.description;
+}
+
+function overviewQcAvailability() {
+  const qcRows = Array.isArray(state.qc) ? state.qc : [];
+  if (!qcRows.length) {
+    return {
+      available: false,
+      label: 'Not loaded',
+      description: 'No QC metrics are embedded or uploaded.',
+    };
+  }
+
+  const reportSampleIds = uniqueTrimmedValues(state.samples.map((sample) => sample.sample_id));
+  const qcSampleIds = uniqueTrimmedValues(qcRows.map((row) => row.sample_id));
+  const rowText = `${qcRows.length} QC row${qcRows.length === 1 ? '' : 's'} loaded`;
+
+  if (!reportSampleIds.length) {
+    return {
+      available: true,
+      label: 'Available',
+      description: rowText,
+    };
+  }
+
+  if (!qcSampleIds.length) {
+    return {
+      available: true,
+      label: 'Available',
+      description: `${rowText}; sample IDs are not available for coverage matching.`,
+    };
+  }
+
+  const qcSampleIdSet = new Set(qcSampleIds);
+  const represented = reportSampleIds.filter((sampleId) => qcSampleIdSet.has(sampleId)).length;
+  return {
+    available: true,
+    label: 'Available',
+    description: `${represented} / ${reportSampleIds.length} report samples represented in QC metrics.`,
+  };
+}
+
+function uniqueTrimmedValues(values) {
+  return [...new Set((values || []).map((value) => String(value ?? '').trim()).filter(Boolean))];
 }
 
 function renderSamples() {

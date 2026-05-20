@@ -8,6 +8,10 @@ test('loads the report shell and configured version links', async ({ page }) => 
   await expect(page).toHaveTitle(/RNA-seq Report/);
   await expect(page.locator('#report-title')).not.toBeEmpty();
   await expect(page.locator('#status-text')).toContainText(/Report assets loaded/i);
+  await expect(page.getByRole('heading', { name: 'QC metrics' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'QC warnings' })).toHaveCount(0);
+  await expect(page.locator('#qc-metrics-state')).toContainText('Available');
+  await expect(page.locator('#qc-metrics-summary')).toContainText('report samples represented');
 
   await page.getByRole('button', { name: 'Guide' }).click();
   await expect(page.getByRole('heading', { name: 'Report versions and links' })).toBeVisible();
