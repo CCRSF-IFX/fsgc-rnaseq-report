@@ -532,7 +532,7 @@ async function loadDefaultAnalysisCache(dataRoot) {
   const configured = cleanRelativeAssetPath(state.config?.analysisCacheFile || state.config?.defaultAnalysisCacheFile);
   const candidates = configured ? [configured] : ['analysis_cache.json'];
   for (const candidate of candidates) {
-    const cache = await loadJsonQuiet(`${dataRoot}/${candidate}`, Boolean(configured));
+    const cache = await loadJsonQuiet(`${dataRoot}/${candidate}`, false);
     if (!cache) continue;
     restoreDefaultAnalysisCache(cache);
     return;
