@@ -27,11 +27,12 @@ export async function renderCurrentContrast() {
   const padj = Number(document.getElementById('padj-threshold')?.value || 0.05);
   const lfc = Number(document.getElementById('lfc-threshold')?.value || 1);
   const showAll = Boolean(document.getElementById('de-show-all-genes')?.checked);
+  const volcanoOptions = readVolcanoOptions();
   if (!rows.length) {
     renderNoDeRows(contrast);
     return;
   }
-  renderVolcano(rows, padj, lfc);
+  renderVolcano(rows, padj, lfc, volcanoOptions);
   renderMA(rows, padj, lfc);
   const degRows = rows.filter((row) => isDeg(row, padj, lfc));
   const tableRows = (showAll ? rows : degRows).map((row) => ({
@@ -45,6 +46,12 @@ export async function renderCurrentContrast() {
       : `Showing ${degRows.length.toLocaleString()} DEG rows passing padj <= ${padj} and |log2FC| >= ${lfc}. Turn on "Show all genes" for the full DE result.`;
   }
   renderTable('de-table', tableRows, { exportName: `${contrast.id}.${showAll ? 'all' : 'deg'}.csv` });
+}
+
+function readVolcanoOptions() {
+  const capMode = document.getElementById('volcano-cap-mode')?.value || 'auto';
+  const manualCap = Number(document.getElementById('volcano-cap-value')?.value || 50);
+  return { capMode, manualCap };
 }
 
 function renderNoDeRows(contrast) {

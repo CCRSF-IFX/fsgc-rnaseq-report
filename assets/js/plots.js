@@ -8,7 +8,10 @@ function plotLayout(title) {
 const PCA_COLORS = ['#2563eb', '#dc2626', '#16a34a', '#d97706', '#7c3aed', '#0891b2', '#be123c', '#475569'];
 const PCA_SYMBOLS = ['circle', 'square', 'diamond', 'cross', 'x', 'triangle-up', 'triangle-down', 'star'];
 const PCA_SYMBOLS_3D = ['circle', 'square', 'diamond', 'cross', 'x', 'circle-open', 'square-open', 'diamond-open'];
-const VOLCANO_DISPLAY_CAP = 50;
+const MIN_PLOT_PVALUE = 1e-300;
+const VOLCANO_MIN_DISPLAY_CAP = 10;
+const VOLCANO_MANUAL_DISPLAY_CAP = 50;
+const VOLCANO_AUTO_CAP_QUANTILE = 0.995;
 const HCLUST_ESM_URL = 'https://esm.sh/ml-hclust@4.0.0?bundle';
 const DEFAULT_ENRICHMENT_DIRECTION_LIMIT = 10;
 const ENRICHMENT_UP_COLOR = '#dc2626';
@@ -227,11 +230,12 @@ export function renderQCPlots() {
   });
 }
 
-export function renderVolcano(rows, padj = 0.05, lfc = 1) {
+export function renderVolcano(rows, padj = 0.05, lfc = 1, options = {}) {
   if (!requirePlotly('volcano-plot', 'Volcano plotting requires Plotly. The differential-expression table remains available.')) return;
-  const yCap = volcanoDisplayCap(rows, padj);
+  const capStats = volcanoDisplayStats(rows, padj, options);
+  const yCap = capStats.cap;
   const points = rows.map((row) => volcanoPoint(row, padj, lfc, yCap)).filter(Boolean);
-  const cappedCount = points.filter((point) => point.capped).length;
+  const annotationLines = volcanoCapAnnotationLines(points, capStats);
   const traces = DE_CATEGORIES.flatMap((category) => {
     const categoryPoints = points.filter((point) => point.category === category.id);
     const uncapped = categoryPoints.filter((point) => !point.capped);
@@ -252,7 +256,7 @@ export function renderVolcano(rows, padj = 0.05, lfc = 1) {
       { type: 'line', x0: lfc, x1: lfc, y0: 0, y1: 1, yref: 'paper', line: { color: '#94a3b8', dash: 'dot' } },
       { type: 'line', x0: 0, x1: 1, xref: 'paper', y0: -Math.log10(plotPValue(padj)), y1: -Math.log10(plotPValue(padj)), line: { color: '#94a3b8', dash: 'dot' } },
     ],
-    annotations: cappedCount ? [{
+    annotations: annotationLines.length ? [{
       xref: 'paper',
       yref: 'paper',
       x: 0.01,
@@ -265,7 +269,7 @@ export function renderVolcano(rows, padj = 0.05, lfc = 1) {
       bgcolor: 'rgba(255,255,255,0.82)',
       bordercolor: '#cbd5e1',
       borderpad: 4,
-      text: `${cappedCount} point${cappedCount === 1 ? '' : 's'} capped at -log10(padj)=${formatNumber(yCap)}`,
+      text: annotationLines.join('<br>'),
     }] : [],
   }, plotlyConfig('volcano-plot'));
 }
@@ -662,12 +666,36 @@ export function renderGseaRunningEnrichment(curve) {
   }, plotlyConfig('gsea-running-enrichment-score'));
 }
 
-function volcanoDisplayCap(rows, padj) {
+function volcanoDisplayStats(rows, padj, options = {}) {
   const thresholdY = -Math.log10(plotPValue(padj));
-  const rawMax = Math.max(...rows.map((row) => -Math.log10(plotPValue(row.padj))).filter(Number.isFinite), 0);
-  const minimumCap = Math.max(10, Math.ceil(thresholdY + 1));
-  if (rawMax > VOLCANO_DISPLAY_CAP) return Math.max(VOLCANO_DISPLAY_CAP, minimumCap);
-  return Math.max(minimumCap, Math.ceil(rawMax + 1));
+  const minimumCap = Math.max(VOLCANO_MIN_DISPLAY_CAP, Math.ceil(thresholdY + 1));
+  const values = rows
+    .map((row) => volcanoYValue(row.padj))
+    .filter(Number.isFinite);
+  const rawMax = Math.max(...values, 0);
+  const capValues = rows
+    .filter((row) => !volcanoPValueFloorStatus(row.padj))
+    .map((row) => volcanoYValue(row.padj))
+    .filter(Number.isFinite);
+  const mode = ['auto', 'manual', 'full'].includes(options.capMode) ? options.capMode : 'auto';
+  let cap;
+  if (mode === 'manual') {
+    cap = Number(options.manualCap);
+    if (!Number.isFinite(cap) || cap <= 0) cap = VOLCANO_MANUAL_DISPLAY_CAP;
+  } else if (mode === 'full') {
+    cap = Math.ceil(rawMax + 1);
+  } else {
+    const q = quantile(capValues.length ? capValues : values, VOLCANO_AUTO_CAP_QUANTILE);
+    cap = Number.isFinite(q) ? Math.ceil(q + 0.5) : Math.ceil(rawMax + 1);
+  }
+  cap = Math.max(minimumCap, cap);
+  return {
+    cap,
+    mode,
+    quantile: VOLCANO_AUTO_CAP_QUANTILE,
+    thresholdY,
+    rawMax,
+  };
 }
 
 function clearPlot(plot, message = '') {
@@ -689,11 +717,11 @@ function showPlotlyPlaceholder(plotOrId, message = PLOTLY_UNAVAILABLE_MESSAGE) {
 
 function volcanoPoint(row, padj, lfc, yCap) {
   const log2fc = Number(row.log2FoldChange);
-  const rawY = -Math.log10(plotPValue(row.padj));
+  const rawY = volcanoYValue(row.padj);
   if (!Number.isFinite(log2fc) || !Number.isFinite(rawY)) return null;
   const category = deCategory(row, padj, lfc);
   const capped = rawY > yCap;
-  return { row, category, log2fc, rawY, y: capped ? yCap : rawY, capped };
+  return { row, category, log2fc, rawY, y: capped ? yCap : rawY, capped, pValueFloorStatus: volcanoPValueFloorStatus(row.padj) };
 }
 
 function volcanoTrace(points, category, capped, showLegend) {
@@ -701,7 +729,7 @@ function volcanoTrace(points, category, capped, showLegend) {
   return {
     x: points.map((point) => point.log2fc),
     y: points.map((point) => point.y),
-    text: points.map((point) => deHoverText(point.row, category.label, point.capped, point.rawY)),
+    text: points.map((point) => deHoverText(point.row, category.label, point.capped, point.rawY, point.pValueFloorStatus)),
     name: category.label,
     mode: 'markers',
     type: 'scattergl',
@@ -716,6 +744,40 @@ function volcanoTrace(points, category, capped, showLegend) {
     },
     hovertemplate: '%{text}<extra></extra>',
   };
+}
+
+function volcanoCapAnnotationLines(points, stats) {
+  const cappedCount = points.filter((point) => point.capped).length;
+  const zeroCount = points.filter((point) => point.pValueFloorStatus === 'zero').length;
+  const underflowCount = points.filter((point) => point.pValueFloorStatus === 'underflow').length;
+  const finiteCappedCount = points.filter((point) => point.capped && !point.pValueFloorStatus).length;
+  const lines = [];
+  if (stats.mode === 'auto') {
+    lines.push(`Y-axis cap: auto ${formatPercent(stats.quantile)} quantile (${formatNumber(stats.cap)})`);
+  } else if (stats.mode === 'manual') {
+    lines.push(`Y-axis cap: manual (${formatNumber(stats.cap)})`);
+  } else if (zeroCount || underflowCount) {
+    lines.push('Y-axis cap: full display range');
+  }
+  if (cappedCount) lines.push(`${cappedCount.toLocaleString()} point${cappedCount === 1 ? '' : 's'} shown at cap`);
+  if (finiteCappedCount) lines.push(`${finiteCappedCount.toLocaleString()} finite padj value${finiteCappedCount === 1 ? '' : 's'} above cap`);
+  if (zeroCount) lines.push(`${zeroCount.toLocaleString()} plotted gene${zeroCount === 1 ? '' : 's'} with padj = 0`);
+  if (underflowCount) lines.push(`${underflowCount.toLocaleString()} plotted gene${underflowCount === 1 ? '' : 's'} with padj < ${MIN_PLOT_PVALUE.toExponential(0)}`);
+  return lines;
+}
+
+function volcanoYValue(value) {
+  const n = numericPValue(value);
+  if (!Number.isFinite(n)) return NaN;
+  return -Math.log10(Math.max(n, MIN_PLOT_PVALUE));
+}
+
+function volcanoPValueFloorStatus(value) {
+  const n = numericPValue(value);
+  if (!Number.isFinite(n)) return '';
+  if (n === 0) return 'zero';
+  if (n > 0 && n < MIN_PLOT_PVALUE) return 'underflow';
+  return '';
 }
 
 function maPoint(row, padj, lfc) {
@@ -754,7 +816,7 @@ function deCategory(row, padj, lfc) {
   return 'padj_only';
 }
 
-function deHoverText(row, category, capped = false, rawY = null) {
+function deHoverText(row, category, capped = false, rawY = null, pValueFloorStatus = '') {
   const label = row.gene_symbol || row.gene_id || 'gene';
   const fields = [
     `<b>${escapePlotText(label)}</b>`,
@@ -765,7 +827,12 @@ function deHoverText(row, category, capped = false, rawY = null) {
     `pvalue: ${formatPValue(row.pvalue)}`,
     `padj: ${formatPValue(row.padj)}`,
   ];
-  if (capped && rawY !== null) fields.push(`shown capped; true -log10(padj): ${formatNumber(rawY)}`);
+  if (pValueFloorStatus === 'zero') fields.push(`padj = 0; plotted using display floor ${MIN_PLOT_PVALUE.toExponential(0)}`);
+  if (pValueFloorStatus === 'underflow') fields.push(`padj below display floor ${MIN_PLOT_PVALUE.toExponential(0)}`);
+  if (capped && rawY !== null) {
+    const yLabel = pValueFloorStatus ? 'display -log10(padj)' : 'true -log10(padj)';
+    fields.push(`shown capped; ${yLabel}: ${formatNumber(rawY)}`);
+  }
   return fields.join('<br>');
 }
 
@@ -1134,7 +1201,7 @@ export function numericPValue(value) {
 
 function plotPValue(value) {
   const n = numericPValue(value);
-  return Number.isFinite(n) ? Math.max(n, 1e-300) : 1;
+  return Number.isFinite(n) ? Math.max(n, MIN_PLOT_PVALUE) : 1;
 }
 
 function formatPValue(value) {
@@ -1151,6 +1218,26 @@ function formatNumber(value) {
   if (n === 0) return '0';
   if (Math.abs(n) >= 1000 || Math.abs(n) < 0.001) return n.toExponential(2);
   return n.toFixed(Math.abs(n) >= 10 ? 1 : 3).replace(/\.?0+$/, '');
+}
+
+function formatPercent(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return '';
+  return `${(n * 100).toFixed(n >= 0.99 ? 1 : 0)}%`;
+}
+
+function quantile(values, probability) {
+  const sorted = values.filter(Number.isFinite).sort((a, b) => a - b);
+  if (!sorted.length) return NaN;
+  const requested = Number(probability);
+  const p = Number.isFinite(requested) ? Math.min(1, Math.max(0, requested)) : 0.5;
+  if (sorted.length === 1) return sorted[0];
+  const index = (sorted.length - 1) * p;
+  const lower = Math.floor(index);
+  const upper = Math.ceil(index);
+  if (lower === upper) return sorted[lower];
+  const weight = index - lower;
+  return sorted[lower] * (1 - weight) + sorted[upper] * weight;
 }
 
 function escapePlotText(value) {

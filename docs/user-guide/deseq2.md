@@ -269,6 +269,15 @@ The table below the volcano plot can show only significant genes or all genes
 from the selected DE result. GSEA uses the full in-memory DE result, not just
 the visible or filtered table.
 
+## Volcano Plot Display
+
+Very small adjusted p-values can create an artificial-looking flat roof in a
+volcano plot because the y-axis is `-log10(padj)`. The report uses an
+auto-quantile y-axis cap by default and annotates the plot with the cap value,
+the number of points shown at the cap, and the number of plotted genes with
+`padj = 0` or values below the browser display floor. Use the volcano y-axis
+control to switch to a manual cap or show the full display range.
+
 ## Save Your Results
 
 After running DESeq2, export an analysis cache from **Methods & Export** before

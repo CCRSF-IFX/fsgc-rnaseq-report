@@ -680,6 +680,15 @@ function wireControls() {
     syncPcaProjectionControls();
     renderCurrentPCA();
   });
+  syncVolcanoCapControls();
+  document.getElementById('volcano-cap-mode')?.addEventListener('change', () => {
+    syncVolcanoCapControls();
+    renderCurrentContrast();
+  });
+  document.getElementById('volcano-cap-value')?.addEventListener('input', () => {
+    syncVolcanoCapControls();
+    renderCurrentContrast();
+  });
   document.getElementById('de-apply')?.addEventListener('click', renderCurrentContrast);
   document.getElementById('de-show-all-genes')?.addEventListener('change', renderCurrentContrast);
   document.getElementById('contrast-select')?.addEventListener('change', renderCurrentContrast);
@@ -838,6 +847,15 @@ function renderCountExplorerPlot(options = {}) {
     groupBy: document.getElementById('count-boxplot-group')?.value || '',
     splitBy: document.getElementById('count-boxplot-split')?.value || '',
   });
+}
+
+function syncVolcanoCapControls() {
+  const mode = document.getElementById('volcano-cap-mode')?.value || 'auto';
+  const sliderLabel = document.getElementById('volcano-cap-slider-label');
+  const slider = document.getElementById('volcano-cap-value');
+  const output = document.getElementById('volcano-cap-output');
+  if (sliderLabel) sliderLabel.hidden = mode !== 'manual';
+  if (output && slider) output.textContent = slider.value;
 }
 
 function syncPcaShapeOptions() {

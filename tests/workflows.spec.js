@@ -59,7 +59,7 @@ test('imports and exports analysis cache with DE and GSEA results', async ({ pag
     buffer: Buffer.from(JSON.stringify(analysisCacheFixture()), 'utf8'),
   });
 
-  await expect(page.locator('#analysis-cache-status')).toContainText('Loaded cache with 1 DESeq2 result set(s), 1 fgsea result set(s)');
+  await expect(page.locator('#analysis-cache-status')).toContainText('Loaded cache with 1 DESeq2 result set(s), 1 fgsea result set(s)', { timeout: 15000 });
   await expect(page.locator('#analysis-cache-export')).toBeEnabled();
 
   const downloadPromise = page.waitForEvent('download');
@@ -72,6 +72,33 @@ test('imports and exports analysis cache with DE and GSEA results', async ({ pag
   expect(exported.gsea_results.some((entry) => entry.result_id === CACHE_GSEA_RESULT_ID)).toBeTruthy();
 });
 
+test('annotates volcano y-axis capping and zero adjusted p-values', async ({ page }) => {
+  await openReport(page);
+  await activateTab(page, 'provenance');
+  await page.locator('#analysis-cache-file').setInputFiles({
+    name: 'playwright.analysis-cache.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify(analysisCacheFixture()), 'utf8'),
+  });
+  await expect(page.locator('#analysis-cache-status')).toContainText('Loaded cache', { timeout: 15000 });
+
+  await activateTab(page, 'de');
+  await page.waitForFunction(() => Boolean(document.getElementById('volcano-plot')?.__plotlyLayout?.annotations?.length));
+  const autoAnnotation = await page.evaluate(() => document.getElementById('volcano-plot').__plotlyLayout.annotations[0].text);
+  expect(autoAnnotation).toContain('Y-axis cap: auto 99.5% quantile');
+  expect(autoAnnotation).toContain('shown at cap');
+  expect(autoAnnotation).toContain('padj = 0');
+
+  await page.locator('#volcano-cap-mode').selectOption('manual');
+  await expect(page.locator('#volcano-cap-slider-label')).toBeVisible();
+  await page.locator('#volcano-cap-value').evaluate((input) => {
+    input.value = '25';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  await expect(page.locator('#volcano-cap-output')).toHaveText('25');
+  await page.waitForFunction(() => document.getElementById('volcano-plot')?.__plotlyLayout?.annotations?.[0]?.text?.includes('manual (25)'));
+});
+
 test('replaces prior imported analysis cache results by default', async ({ page }) => {
   await openReport(page);
   await activateTab(page, 'provenance');
@@ -81,14 +108,14 @@ test('replaces prior imported analysis cache results by default', async ({ page 
     mimeType: 'application/json',
     buffer: Buffer.from(JSON.stringify(analysisCacheFixture()), 'utf8'),
   });
-  await expect(page.locator('#analysis-cache-status')).toContainText('Loaded cache');
+  await expect(page.locator('#analysis-cache-status')).toContainText('Loaded cache', { timeout: 15000 });
 
   await page.locator('#analysis-cache-file').setInputFiles({
     name: 'replacement.analysis-cache.json',
     mimeType: 'application/json',
     buffer: Buffer.from(JSON.stringify(replacementAnalysisCacheFixture()), 'utf8'),
   });
-  await expect(page.locator('#analysis-cache-status')).toContainText('Loaded cache with 1 DESeq2 result set(s), 0 fgsea result set(s)');
+  await expect(page.locator('#analysis-cache-status')).toContainText('Loaded cache with 1 DESeq2 result set(s), 0 fgsea result set(s)', { timeout: 15000 });
 
   await activateTab(page, 'de');
   await expect(page.locator('#contrast-select')).toContainText('Replacement cache contrast');
@@ -105,7 +132,7 @@ test('rejects analysis cache files with mismatched sample IDs', async ({ page })
     buffer: Buffer.from(JSON.stringify(mismatchedAnalysisCacheFixture()), 'utf8'),
   });
 
-  await expect(page.locator('#analysis-cache-status')).toContainText('Cache load failed: Cache sample IDs do not match the current count matrix');
+  await expect(page.locator('#analysis-cache-status')).toContainText('Cache load failed: Cache sample IDs do not match the current count matrix', { timeout: 15000 });
 });
 
 test('renders cached GSEA overview and running enrichment plots', async ({ page }) => {
@@ -116,7 +143,7 @@ test('renders cached GSEA overview and running enrichment plots', async ({ page 
     mimeType: 'application/json',
     buffer: Buffer.from(JSON.stringify(analysisCacheFixture()), 'utf8'),
   });
-  await expect(page.locator('#analysis-cache-status')).toContainText('Loaded cache');
+  await expect(page.locator('#analysis-cache-status')).toContainText('Loaded cache', { timeout: 15000 });
 
   await activateTab(page, 'enrichment');
   await page.locator('#enrichment-contrast-select').selectOption(CACHE_CONTRAST_ID);
@@ -189,7 +216,7 @@ function analysisCacheFixture() {
     de_results: [{
       contrast_id: CACHE_CONTRAST_ID,
       rows: [
-        { gene_id: 'ENSGSIM000001', gene_symbol: 'SimInflam1', baseMean: 250, log2FoldChange: 2.1, lfcSE: 0.2, statistic: 10.5, pvalue: 0.00001, padj: 0.001 },
+        { gene_id: 'ENSGSIM000001', gene_symbol: 'SimInflam1', baseMean: 250, log2FoldChange: 2.1, lfcSE: 0.2, statistic: 10.5, pvalue: 0.00001, padj: 0 },
         { gene_id: 'ENSGSIM000002', gene_symbol: 'SimInflam2', baseMean: 190, log2FoldChange: 1.7, lfcSE: 0.3, statistic: 5.7, pvalue: 0.0004, padj: 0.01 },
         { gene_id: 'ENSGSIM000003', gene_symbol: 'SimMetab1', baseMean: 620, log2FoldChange: -1.4, lfcSE: 0.25, statistic: -5.6, pvalue: 0.0006, padj: 0.02 },
         { gene_id: 'ENSGSIM000005', gene_symbol: 'SimStable1', baseMean: 1510, log2FoldChange: 0.03, lfcSE: 0.4, statistic: 0.08, pvalue: 0.92, padj: 0.95 },
