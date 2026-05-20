@@ -1,0 +1,53 @@
+name: mkdocs
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - "docs/**"
+      - "mkdocs.yaml"
+      - ".github/workflows/ci_mkdocs.yaml"
+  pull_request:
+    branches: [main, master]
+    paths:
+      - "docs/**"
+      - "mkdocs.yaml"
+      - ".github/workflows/ci_mkdocs.yaml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Cache MkDocs
+        uses: actions/cache@v4
+        with:
+          path: .cache
+          key: rnaseq-report-mkdocs-${{ runner.os }}-${{ hashFiles('mkdocs.yaml', 'docs/**') }}
+          restore-keys: |
+            rnaseq-report-mkdocs-${{ runner.os }}-
+
+      - name: Install documentation dependencies
+        run: pip install mkdocs
+
+      - name: Build documentation
+        run: mkdocs build --strict
+
+      - name: Upload documentation artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: rnaseq-report-docs
+          path: site/
+          retention-days: 14

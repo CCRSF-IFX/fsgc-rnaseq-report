@@ -1,0 +1,44 @@
+# Project Information
+site_name: RNA-seq Report Documentation
+site_author: FSGC Bioinformatics Group
+site_description: >-
+  RNA-seq Report is a portable, browser-based report viewer for RNA-seq
+  pipeline outputs, standalone HTML delivery, and optional in-browser analysis.
+
+# Repository
+repo_name: OmicsReportHub/rnaseq-report
+repo_url: https://github.com/OmicsReportHub/rnaseq-report
+edit_uri: edit/main/docs/
+
+# Copyright
+copyright: Copyright &copy; 2026 OmicsReportHub contributors
+
+theme:
+  name: readthedocs
+  highlightjs: true
+  hljs_languages:
+    - bash
+    - javascript
+    - json
+    - python
+    - r
+    - yaml
+
+# Page Tree
+nav:
+  - Introduction:
+      - Overview: index.md
+      - Report architecture: architecture.md
+  - Building reports:
+      - Data inputs: data-inputs.md
+      - Standalone builds: standalone-builds.md
+      - GitHub Pages and webR snapshots: deployment.md
+  - Browser analysis:
+      - Runtime packages: runtime-packages.md
+      - Optional analyses: optional-analysis.md
+      - AI assistant: ai-assistant.md
+  - FAQ:
+      - General Questions: general-questions.md
+      - Troubleshooting: troubleshooting.md
+  - Reference: ref.md
+  - License: license.md
