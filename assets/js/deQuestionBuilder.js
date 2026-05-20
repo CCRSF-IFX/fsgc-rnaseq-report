@@ -3,60 +3,56 @@ import { sampleIdsInCounts } from './analysis.js';
 import { adjustmentMetadataColumns, analysisFactorColumns, metadataColumnType } from './metadataSchema.js';
 
 export const DESEQ_GROUP_COLUMN = '__rnaseq_report_group';
-export const DESEQ_ADVANCED_QUESTION_TYPE = 'advanced_interaction_lrt';
+export const DESEQ_PAIRWISE_QUESTION_TYPE = 'pairwise_comparison';
+export const DESEQ_ADDITIVE_QUESTION_TYPE = 'additive_adjusted_effect';
+export const DESEQ_ADVANCED_QUESTION_TYPE = 'advanced_analysis';
 export const DESEQ_CONDITION_LIKE_COLUMNS = ['condition', 'group', 'treatment', 'phenotype'];
 
 export const DESEQ_QUESTION_TYPES = [
   {
-    id: 'condition_within_subset',
-    label: 'Condition effect within selected samples',
-    resultFamily: 'condition_effect',
-    help: 'Compare two levels of a condition-like factor inside the selected sample scope.',
+    id: DESEQ_PAIRWISE_QUESTION_TYPE,
+    label: 'Pairwise comparison',
+    resultFamily: 'pairwise_comparison',
+    help: 'Compare two levels of one selected factor with no adjustment variables.',
   },
   {
-    id: 'tissue_within_subset',
-    label: 'Tissue effect within selected samples',
-    resultFamily: 'tissue_effect',
-    help: 'Compare two tissue levels inside the selected sample scope.',
-  },
-  {
-    id: 'additive_adjusted_effect',
-    label: 'Additive covariate-adjusted effect',
+    id: DESEQ_ADDITIVE_QUESTION_TYPE,
+    label: 'Additive covariate analysis',
     resultFamily: 'adjusted_effect',
-    help: 'Estimate a primary factor effect after additive adjustment variables.',
-  },
-  {
-    id: 'direct_group_comparison',
-    label: 'Direct group comparison',
-    resultFamily: 'direct_group_comparison',
-    help: 'Compare any two combined metadata groups directly.',
+    help: 'Compare two levels of a primary factor while adjusting or blocking by optional variables.',
   },
   {
     id: DESEQ_ADVANCED_QUESTION_TYPE,
-    label: 'Advanced: interaction / LRT',
+    label: 'Advanced analysis',
     resultFamily: 'advanced',
-    help: 'Open interaction and likelihood-ratio test options for multi-factor questions.',
+    help: 'Open combined-group, interaction, and likelihood-ratio workflows.',
   },
 ];
 
 export const DESEQ_ADVANCED_QUESTION_TYPES = [
   {
-    id: 'pairwise_interaction',
-    label: 'Pairwise interaction effect',
-    resultFamily: 'interaction_effect',
-    help: 'Test whether one condition effect differs between two levels of another factor.',
-  },
-  {
     id: 'omnibus_interaction_lrt',
     label: 'Omnibus interaction test (LRT)',
     resultFamily: 'omnibus_test',
-    help: 'Use a likelihood-ratio test to ask whether condition-by-modifier interaction terms improve the model.',
+    help: 'Recommended first for multi-level interaction questions. Tests whether condition-by-modifier interaction terms improve the model.',
+  },
+  {
+    id: 'pairwise_interaction',
+    label: 'Interaction effect',
+    resultFamily: 'interaction_effect',
+    help: 'Follow-up coefficient workflow. Fit an interaction model using selected reference levels and report each non-reference interaction coefficient.',
+  },
+  {
+    id: 'direct_group_comparison',
+    label: 'Direct combined-group comparison (less common)',
+    resultFamily: 'direct_group_comparison',
+    help: 'Less common special-case workflow. Compare any two combined metadata groups directly when that exact combined contrast is the intended question.',
   },
 ];
 
 export function readDeseqFormValues(root = document) {
-  const questionMode = root.getElementById('deseq-question-type')?.value || 'condition_within_subset';
-  const advancedQuestionType = root.getElementById('deseq-advanced-question-type')?.value || DESEQ_ADVANCED_QUESTION_TYPES[0].id;
+  const questionMode = normalizeQuestionMode(root.getElementById('deseq-question-type')?.value || DESEQ_PAIRWISE_QUESTION_TYPE);
+  const advancedQuestionType = normalizeAdvancedQuestionType(root.getElementById('deseq-advanced-question-type')?.value || DESEQ_ADVANCED_QUESTION_TYPES[0].id);
   return {
     questionMode,
     advancedQuestionType,
@@ -186,6 +182,7 @@ function buildFactorContrastSpec(formValues, scope, adjustColumns, question) {
   const primaryFactor = formValues.primaryFactor;
   const numerator = formValues.numerator;
   const denominator = formValues.denominator;
+  const effectiveAdjustColumns = question.id === DESEQ_PAIRWISE_QUESTION_TYPE ? [] : adjustColumns;
   if (!primaryFactor) throw new Error('Choose a primary factor.');
   if (!numerator || !denominator || numerator === denominator) {
     throw new Error('Choose two different numerator and denominator levels.');
@@ -197,26 +194,19 @@ function buildFactorContrastSpec(formValues, scope, adjustColumns, question) {
   });
   const groupBalance = countBy(sampleIds, (sampleId) => sampleValue(sampleId, primaryFactor));
   validateComparedGroups(groupBalance, numerator, denominator);
-  validateAdjustColumns(sampleIds, primaryFactor, adjustColumns);
-  validateModelSize(sampleIds, primaryFactor, adjustColumns);
+  validateAdjustColumns(sampleIds, primaryFactor, effectiveAdjustColumns);
+  validateModelSize(sampleIds, primaryFactor, effectiveAdjustColumns);
 
-  const fullModel = formulaLabel(adjustColumns.concat(primaryFactor));
+  const fullModel = formulaLabel(effectiveAdjustColumns.concat(primaryFactor));
   const scopeSuffix = scope.id === 'all_samples' ? '' : ` within ${scope.label}`;
   const label = `${numerator} vs ${denominator}${scopeSuffix}`;
-  const adjustedSuffix = adjustColumns.length ? ` adjusted for ${adjustColumns.join(', ')}` : '';
-  const conditionLike = isConditionLikeColumn(primaryFactor);
-  const resultFamily = question.resultFamily === 'condition_effect' && primaryFactor !== 'condition'
-    ? (conditionLike ? 'condition_effect' : 'factor_effect')
-    : question.resultFamily;
-  const questionLabel = question.id === 'condition_within_subset' && !conditionLike
-    ? 'Manual primary-factor comparison'
-    : question.label;
+  const adjustedSuffix = effectiveAdjustColumns.length ? ` adjusted for ${effectiveAdjustColumns.join(', ')}` : '';
 
   return {
     questionType: question.id,
-    questionLabel,
-    result_family: resultFamily,
-    resultFamily,
+    questionLabel: question.label,
+    result_family: question.resultFamily,
+    resultFamily: question.resultFamily,
     scope,
     scopeId: scope.id,
     sampleIds,
@@ -224,21 +214,18 @@ function buildFactorContrastSpec(formValues, scope, adjustColumns, question) {
     numerator,
     denominator,
     reference: denominator,
-    adjustColumns,
+    adjustColumns: effectiveAdjustColumns,
     modelKind: 'factor_contrast',
     resultMode: 'wald_factor_contrast',
     fullModel,
     reducedModel: '',
     contrastLabel: `${numerator} - ${denominator}`,
     label: `${label}${adjustedSuffix}`,
-    id: makeContrastId(['deseq2', question.id, primaryFactor, numerator, 'vs', denominator, scope.id, adjustColumns.join('_')]),
+    id: makeContrastId(['deseq2', question.id, primaryFactor, numerator, 'vs', denominator, scope.id, effectiveAdjustColumns.join('_')]),
     groupBalance,
-    warnings: [
-      ...manualConditionFactorWarnings(question.id, primaryFactor),
-      ...factorContrastWarnings(sampleIds, groupBalance, numerator, denominator),
-    ],
+    warnings: factorContrastWarnings(sampleIds, groupBalance, numerator, denominator),
     interpretation: `${numerator} vs ${denominator} for ${primaryFactor}${scope.id === 'all_samples' ? '' : ` using ${scope.label}`} with model ${fullModel}.`,
-    metadataColumns: uniqueStrings([primaryFactor].concat(adjustColumns)),
+    metadataColumns: uniqueStrings([primaryFactor].concat(effectiveAdjustColumns)),
     syntheticColumns: {},
   };
 }
@@ -292,7 +279,7 @@ function buildDirectGroupSpec(formValues, scope, adjustColumns, question) {
     id: makeContrastId(['deseq2_direct', groupOne, 'vs', groupTwo, scope.id, adjustColumns.join('_')]),
     groupBalance: Object.fromEntries(Object.entries(groupBalance).map(([key, value]) => [groupLabelByValue.get(key) || key, value])),
     warnings: [
-      'Direct group comparisons can mix effects from multiple metadata factors; use only when these combined groups are the intended biological comparison.',
+      'Less common workflow: direct group comparisons can mix effects from multiple metadata factors; use only when these combined groups are the intended biological comparison.',
       ...factorContrastWarnings(sampleIds, groupBalance, groupOne, groupTwo),
     ],
     interpretation: `Direct comparison of ${groupOneLabel} vs ${groupTwoLabel} with model ${fullModel}.`,
@@ -306,39 +293,38 @@ function buildDirectGroupSpec(formValues, scope, adjustColumns, question) {
 function buildPairwiseInteractionSpec(formValues, scope, adjustColumns, question) {
   const conditionFactor = formValues.interactionConditionFactor;
   const modifierFactor = formValues.interactionModifierFactor;
-  const conditionNumerator = formValues.interactionConditionNumerator;
   const conditionDenominator = formValues.interactionConditionDenominator;
-  const modifierNumerator = formValues.interactionModifierNumerator;
   const modifierDenominator = formValues.interactionModifierDenominator;
   validateInteractionFactors(scope.sampleIds, conditionFactor, modifierFactor);
-  if (!conditionNumerator || !conditionDenominator || conditionNumerator === conditionDenominator) {
-    throw new Error('Choose two different condition levels for the interaction contrast.');
+
+  const conditionLevels = levelsForColumn(conditionFactor, scope.sampleIds);
+  const modifierLevels = levelsForColumn(modifierFactor, scope.sampleIds);
+  if (!conditionDenominator || !conditionLevels.includes(conditionDenominator)) {
+    throw new Error('Choose the condition reference level for the interaction model.');
   }
-  if (!modifierNumerator || !modifierDenominator || modifierNumerator === modifierDenominator) {
-    throw new Error('Choose two different modifier levels for the interaction contrast.');
+  if (!modifierDenominator || !modifierLevels.includes(modifierDenominator)) {
+    throw new Error('Choose the modifier reference level for the interaction model.');
+  }
+  const conditionNonReferenceLevels = conditionLevels.filter((level) => level !== conditionDenominator);
+  const modifierNonReferenceLevels = modifierLevels.filter((level) => level !== modifierDenominator);
+  if (!conditionNonReferenceLevels.length || !modifierNonReferenceLevels.length) {
+    throw new Error('Each interaction factor needs at least one non-reference level.');
   }
 
-  const selectedConditions = new Set([conditionNumerator, conditionDenominator]);
-  const selectedModifiers = new Set([modifierNumerator, modifierDenominator]);
   const sampleIds = scope.sampleIds.filter((sampleId) => (
-    selectedConditions.has(sampleValue(sampleId, conditionFactor))
-    && selectedModifiers.has(sampleValue(sampleId, modifierFactor))
+    sampleValue(sampleId, conditionFactor) !== ''
+    && sampleValue(sampleId, modifierFactor) !== ''
   ));
   const groupBalance = interactionGroupBalance(sampleIds, conditionFactor, modifierFactor);
-  validateInteractionCells(
-    groupBalance,
-    [conditionNumerator, conditionDenominator],
-    [modifierNumerator, modifierDenominator],
-    conditionFactor,
-    modifierFactor,
-  );
+  validateCompleteInteractionGrid(groupBalance, conditionLevels, modifierLevels, conditionFactor, modifierFactor);
   validateAdjustColumns(sampleIds, conditionFactor, adjustColumns);
   validateAdjustColumns(sampleIds, modifierFactor, adjustColumns);
   validateInteractionModelSize(sampleIds, conditionFactor, modifierFactor, adjustColumns);
 
   const fullModel = formulaLabel(adjustColumns.concat([conditionFactor, modifierFactor, `${conditionFactor}:${modifierFactor}`]));
-  const contrastLabel = `(${conditionNumerator} - ${conditionDenominator}) at ${modifierNumerator} vs ${modifierDenominator}`;
-  const label = `${conditionNumerator} response differs between ${modifierNumerator} and ${modifierDenominator}`;
+  const contrastCount = conditionNonReferenceLevels.length * modifierNonReferenceLevels.length;
+  const contrastLabel = `${conditionFactor}:${modifierFactor} interaction coefficients`;
+  const label = `${conditionFactor} by ${modifierFactor} interaction effect`;
   const adjustmentSuffix = adjustColumns.length ? ` adjusted for ${adjustColumns.join(', ')}` : '';
   return {
     questionType: question.id,
@@ -349,40 +335,43 @@ function buildPairwiseInteractionSpec(formValues, scope, adjustColumns, question
     scopeId: scope.id,
     sampleIds,
     primaryFactor: conditionFactor,
-    numerator: conditionNumerator,
+    numerator: conditionNonReferenceLevels[0],
     denominator: conditionDenominator,
     reference: conditionDenominator,
     conditionFactor,
     modifierFactor,
-    conditionNumerator,
+    conditionNumerator: conditionNonReferenceLevels[0],
     conditionDenominator,
-    modifierNumerator,
+    modifierNumerator: modifierNonReferenceLevels[0],
     modifierDenominator,
+    conditionNonReferenceLevels,
+    modifierNonReferenceLevels,
     adjustColumns,
     modelKind: 'interaction',
     resultMode: 'wald_interaction_coefficient',
     fullModel,
     reducedModel: '',
-    testLabel: 'Wald test of the interaction coefficient',
+    testLabel: 'Wald tests of interaction coefficients',
     testedTerms: [`${conditionFactor}:${modifierFactor}`],
     contrastLabel,
     label: `${label}${adjustmentSuffix}`,
     id: makeContrastId([
       'deseq2_interaction',
       conditionFactor,
-      conditionNumerator,
-      'vs',
       conditionDenominator,
+      'ref',
       modifierFactor,
-      modifierNumerator,
-      'vs',
       modifierDenominator,
+      'ref',
       scope.id,
       adjustColumns.join('_'),
     ]),
     groupBalance,
-    warnings: interactionWarnings(sampleIds, groupBalance),
-    interpretation: `Difference in the ${conditionNumerator} vs ${conditionDenominator} effect between ${modifierFactor}=${modifierNumerator} and ${modifierFactor}=${modifierDenominator} using model ${fullModel}.`,
+    warnings: [
+      `This run will create ${contrastCount} interaction result${contrastCount === 1 ? '' : 's'} from the selected reference levels.`,
+      ...interactionWarnings(sampleIds, groupBalance),
+    ],
+    interpretation: `Tests condition-by-modifier interaction coefficients using ${conditionFactor} reference ${conditionDenominator} and ${modifierFactor} reference ${modifierDenominator} with model ${fullModel}.`,
     metadataColumns: uniqueStrings([conditionFactor, modifierFactor].concat(adjustColumns)),
     syntheticColumns: {},
   };
@@ -597,26 +586,63 @@ function formulaLabel(terms) {
   return `~ ${cleanTerms.length ? cleanTerms.join(' + ') : '1'}`;
 }
 
-function isConditionLikeColumn(column) {
-  return DESEQ_CONDITION_LIKE_COLUMNS.includes(String(column || '').trim().toLowerCase());
-}
-
-function manualConditionFactorWarnings(questionType, primaryFactor) {
-  if (questionType !== 'condition_within_subset' || isConditionLikeColumn(primaryFactor)) return [];
-  return [`No condition-like column was found, so "${primaryFactor}" is being used as the manually selected primary comparison factor.`];
-}
-
 function questionTypeById(id) {
   return DESEQ_QUESTION_TYPES.concat(DESEQ_ADVANCED_QUESTION_TYPES)
     .find((type) => type.id === id) || DESEQ_QUESTION_TYPES[0];
 }
 
 function normalizeQuestionFormValues(formValues) {
-  if (formValues.questionType !== DESEQ_ADVANCED_QUESTION_TYPE) return formValues;
+  const questionMode = normalizeQuestionMode(formValues.questionMode || formValues.questionType);
+  const rawQuestionType = normalizeQuestionType(formValues.questionType);
+  const advancedQuestionType = normalizeAdvancedQuestionType(
+    formValues.advancedQuestionType || (isAdvancedQuestionType(rawQuestionType) ? rawQuestionType : ''),
+  );
+  const questionType = questionMode === DESEQ_ADVANCED_QUESTION_TYPE ? advancedQuestionType : rawQuestionType;
+  if (questionMode !== DESEQ_ADVANCED_QUESTION_TYPE && questionType !== DESEQ_ADVANCED_QUESTION_TYPE) {
+    return {
+      ...formValues,
+      questionMode,
+      advancedQuestionType,
+      questionType,
+    };
+  }
   return {
     ...formValues,
-    questionType: formValues.advancedQuestionType || DESEQ_ADVANCED_QUESTION_TYPES[0].id,
+    questionMode: DESEQ_ADVANCED_QUESTION_TYPE,
+    advancedQuestionType,
+    questionType: advancedQuestionType,
   };
+}
+
+export function normalizeQuestionMode(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return DESEQ_PAIRWISE_QUESTION_TYPE;
+  if (raw === 'advanced_interaction_lrt') return DESEQ_ADVANCED_QUESTION_TYPE;
+  if (raw === 'condition_within_subset' || raw === 'tissue_within_subset') return DESEQ_PAIRWISE_QUESTION_TYPE;
+  if (DESEQ_ADVANCED_QUESTION_TYPES.some((type) => type.id === raw)) return DESEQ_ADVANCED_QUESTION_TYPE;
+  return DESEQ_QUESTION_TYPES.some((type) => type.id === raw) ? raw : DESEQ_PAIRWISE_QUESTION_TYPE;
+}
+
+export function normalizeAdvancedQuestionType(value) {
+  const raw = String(value || '').trim();
+  if (raw === 'advanced_interaction_lrt') return 'omnibus_interaction_lrt';
+  if (raw === 'condition_within_subset' || raw === 'tissue_within_subset') return DESEQ_ADVANCED_QUESTION_TYPES[0].id;
+  return DESEQ_ADVANCED_QUESTION_TYPES.some((type) => type.id === raw)
+    ? raw
+    : DESEQ_ADVANCED_QUESTION_TYPES[0].id;
+}
+
+function normalizeQuestionType(value) {
+  const raw = String(value || '').trim();
+  if (raw === DESEQ_ADVANCED_QUESTION_TYPE || raw === 'advanced_interaction_lrt') return DESEQ_ADVANCED_QUESTION_TYPE;
+  if (raw === 'condition_within_subset' || raw === 'tissue_within_subset') return DESEQ_PAIRWISE_QUESTION_TYPE;
+  if (DESEQ_ADVANCED_QUESTION_TYPES.some((type) => type.id === raw)) return raw;
+  if (DESEQ_QUESTION_TYPES.some((type) => type.id === raw)) return raw;
+  return DESEQ_PAIRWISE_QUESTION_TYPE;
+}
+
+function isAdvancedQuestionType(value) {
+  return DESEQ_ADVANCED_QUESTION_TYPES.some((type) => type.id === value);
 }
 
 function sampleValue(sampleId, column) {

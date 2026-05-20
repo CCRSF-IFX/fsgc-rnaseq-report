@@ -8,6 +8,7 @@ import { markAnalysisCacheDirty } from './analysisCache.js';
 import {
   DESEQ_ADVANCED_QUESTION_TYPE,
   DESEQ_ADVANCED_QUESTION_TYPES,
+  DESEQ_PAIRWISE_QUESTION_TYPE,
   DESEQ_CONDITION_LIKE_COLUMNS,
   DESEQ_GROUP_COLUMN,
   DESEQ_QUESTION_TYPES,
@@ -21,6 +22,8 @@ import {
   readDeseqFormValues,
   registerAnalysisScope,
   safeBuildDeseqQuestionSpec,
+  normalizeAdvancedQuestionType,
+  normalizeQuestionMode,
 } from './deQuestionBuilder.js';
 
 let deseqCallbacks = {};
@@ -179,20 +182,19 @@ function refreshDeseqBuilder(event = null) {
 function populateQuestionTypes() {
   const select = document.getElementById('deseq-question-type');
   if (!select) return;
-  const previous = select.value;
+  const previous = normalizeQuestionMode(select.value);
   select.innerHTML = DESEQ_QUESTION_TYPES
     .map((type) => `<option value="${deseqEscapeHtml(type.id)}">${deseqEscapeHtml(type.label)}</option>`)
     .join('');
-  const previousWasAdvanced = DESEQ_ADVANCED_QUESTION_TYPES.some((type) => type.id === previous);
   select.value = DESEQ_QUESTION_TYPES.some((type) => type.id === previous)
     ? previous
-    : (previousWasAdvanced ? DESEQ_ADVANCED_QUESTION_TYPE : DESEQ_QUESTION_TYPES[0].id);
+    : DESEQ_QUESTION_TYPES[0].id;
 }
 
 function populateAdvancedQuestionTypes() {
   const select = document.getElementById('deseq-advanced-question-type');
   if (!select) return;
-  const previous = select.value;
+  const previous = normalizeAdvancedQuestionType(select.value);
   select.innerHTML = DESEQ_ADVANCED_QUESTION_TYPES
     .map((type) => `<option value="${deseqEscapeHtml(type.id)}">${deseqEscapeHtml(type.label)}</option>`)
     .join('');
@@ -253,7 +255,7 @@ function populateExcludedSamples() {
 }
 
 function syncDeseqQuestionUi() {
-  const questionMode = document.getElementById('deseq-question-type')?.value || '';
+  const questionMode = normalizeQuestionMode(document.getElementById('deseq-question-type')?.value || '');
   const questionType = currentEffectiveQuestionType();
   const advanced = questionMode === DESEQ_ADVANCED_QUESTION_TYPE;
   const direct = questionType === 'direct_group_comparison';
@@ -263,31 +265,50 @@ function syncDeseqQuestionUi() {
   const directControls = document.getElementById('deseq-direct-group-controls');
   const interactionControls = document.getElementById('deseq-interaction-controls');
   const advancedRow = document.getElementById('deseq-advanced-question-row');
+  const advancedHelp = document.getElementById('deseq-advanced-question-help');
   const manualFactorGuide = document.getElementById('deseq-manual-factor-guide');
   const interactionConditionLevels = document.getElementById('deseq-interaction-condition-levels');
   const interactionModifierLevels = document.getElementById('deseq-interaction-modifier-levels');
+  const interactionConditionNumeratorLabel = document.getElementById('deseq-interaction-condition-numerator-label');
+  const interactionModifierNumeratorLabel = document.getElementById('deseq-interaction-modifier-numerator-label');
   const interactionHelp = document.getElementById('deseq-interaction-help');
   if (advancedRow) advancedRow.hidden = !advanced;
+  if (advancedHelp) advancedHelp.textContent = advancedQuestionHelp(questionType);
   if (factorControls) factorControls.hidden = direct || interaction || advanced;
   if (directControls) directControls.hidden = !direct;
   if (interactionControls) interactionControls.hidden = !advanced || !interaction;
   if (interactionConditionLevels) interactionConditionLevels.hidden = lrt;
   if (interactionModifierLevels) interactionModifierLevels.hidden = lrt;
+  if (interactionConditionNumeratorLabel) interactionConditionNumeratorLabel.hidden = questionType === 'pairwise_interaction';
+  if (interactionModifierNumeratorLabel) interactionModifierNumeratorLabel.hidden = questionType === 'pairwise_interaction';
   if (interactionHelp) {
     interactionHelp.textContent = lrt
-      ? 'LRT tests whether adding all condition-by-modifier interaction terms improves the additive model. The p-value is omnibus; the log2FC column is representative.'
-      : 'Pairwise interaction tests whether the condition effect differs between two modifier levels using the denominators as DESeq2 reference levels.';
+      ? 'Recommended first for multi-level factors. LRT tests whether adding condition-by-modifier interaction terms improves the additive model. Genes with small padj have evidence of interaction.'
+      : 'Follow-up after a significant or biologically interesting LRT. Interaction effect creates one DE result for each non-reference interaction coefficient.';
   }
   if (manualFactorGuide) {
-    const missingConditionLike = questionType === 'condition_within_subset' && !hasConditionLikeColumn();
+    const missingConditionLike = questionType === DESEQ_PAIRWISE_QUESTION_TYPE && !hasConditionLikeColumn();
     manualFactorGuide.hidden = !missingConditionLike || direct || interaction || advanced;
   }
 }
 
+function advancedQuestionHelp(questionType) {
+  if (questionType === 'omnibus_interaction_lrt') {
+    return 'Recommended first for multi-level factors. Use LRT to ask whether the condition response changes across the modifier levels; then follow up significant genes with Interaction effect.';
+  }
+  if (questionType === 'pairwise_interaction') {
+    return 'Follow-up workflow. Choose reference levels and the app will create separate coefficient-level results for each non-reference interaction effect.';
+  }
+  if (questionType === 'direct_group_comparison') {
+    return 'Less common special case. Use direct combined groups only when comparing two exact combined groups is the intended biological question.';
+  }
+  return 'Recommended flow: run Omnibus interaction LRT first to screen for interaction, then use Interaction effect for coefficient-level follow-up. Direct combined-group comparison is less common.';
+}
+
 function currentEffectiveQuestionType() {
-  const questionMode = document.getElementById('deseq-question-type')?.value || '';
+  const questionMode = normalizeQuestionMode(document.getElementById('deseq-question-type')?.value || '');
   if (questionMode !== DESEQ_ADVANCED_QUESTION_TYPE) return questionMode;
-  return document.getElementById('deseq-advanced-question-type')?.value || DESEQ_ADVANCED_QUESTION_TYPES[0].id;
+  return normalizeAdvancedQuestionType(document.getElementById('deseq-advanced-question-type')?.value || DESEQ_ADVANCED_QUESTION_TYPES[0].id);
 }
 
 function populateFactorControls(options = {}) {
@@ -299,7 +320,7 @@ function populateFactorControls(options = {}) {
   const previous = designSelect.value;
   const forcedColumn = forcedPrimaryFactor(formValues.questionType, eligibleColumns);
   const defaultColumn = defaultPrimaryFactor(formValues.questionType, eligibleColumns);
-  const needsManualPrimaryFactor = formValues.questionType === 'condition_within_subset' && !conditionLikeColumnFor(eligibleColumns);
+  const needsManualPrimaryFactor = formValues.questionType === DESEQ_PAIRWISE_QUESTION_TYPE && !conditionLikeColumnFor(eligibleColumns);
   designSelect.disabled = eligibleColumns.length === 0;
   const placeholder = needsManualPrimaryFactor ? '<option value="">Choose primary factor...</option>' : '';
   designSelect.innerHTML = placeholder + eligibleColumns
@@ -314,13 +335,10 @@ function populateFactorControls(options = {}) {
 }
 
 function forcedPrimaryFactor(questionType, columns) {
-  if (questionType === 'tissue_within_subset' && columns.includes('tissue')) return 'tissue';
-  if (questionType === 'condition_within_subset' && columns.includes('condition')) return 'condition';
   return '';
 }
 
 function defaultPrimaryFactor(questionType, columns) {
-  if (questionType === 'tissue_within_subset' && columns.includes('tissue')) return 'tissue';
   if (columns.includes(state.config?.analysis?.conditionColumn)) return state.config.analysis.conditionColumn;
   const conditionLike = conditionLikeColumnFor(columns);
   if (conditionLike) return conditionLike;
@@ -484,6 +502,18 @@ function updateDeseqAdjustControls() {
   if (!adjustSelect) return;
   const formValues = readDeseqFormValues();
   const scope = buildAnalysisScope(formValues);
+  if (formValues.questionType === DESEQ_PAIRWISE_QUESTION_TYPE) {
+    adjustSelect.innerHTML = '';
+    adjustSelect.disabled = true;
+    syncAdjustSelectionDataset(adjustSelect);
+    renderDeseqAdjustChecklist(
+      [],
+      new Set(),
+      scope.sampleIds,
+      'Pairwise comparison uses model ~ primary factor. Choose Additive covariate analysis when you need batch, subject, paired-sample, or numeric covariate adjustment.',
+    );
+    return;
+  }
   const direct = formValues.questionType === 'direct_group_comparison';
   const interaction = formValues.questionType === 'pairwise_interaction' || formValues.questionType === 'omnibus_interaction_lrt';
   const blocked = new Set(direct
@@ -514,11 +544,11 @@ function syncAdjustSelectionDataset(select) {
     .join('\t');
 }
 
-function renderDeseqAdjustChecklist(candidates, selectedValuesSet, sampleIds) {
+function renderDeseqAdjustChecklist(candidates, selectedValuesSet, sampleIds, emptyMessage = '') {
   const list = document.getElementById('deseq-adjust-list');
   if (!list) return;
   if (!candidates.length) {
-    list.innerHTML = '<p class="empty-note">No eligible adjustment variables for the selected model and sample scope.</p>';
+    list.innerHTML = `<p class="empty-note">${deseqEscapeHtml(emptyMessage || 'No eligible adjustment variables for the selected model and sample scope.')}</p>`;
     return;
   }
   list.innerHTML = candidates.map((column) => {
@@ -626,12 +656,9 @@ export async function runDeseq2Analysis() {
     if (rows.length === 0) throw new Error('DESeq2 returned no result rows.');
 
     await progress.step('Registering contrast and updating plots', 5);
-    const contrast = contrastFromSpec(spec);
-    const existingIndex = state.contrasts.findIndex((item) => item.id === contrast.id);
-    if (existingIndex >= 0) state.contrasts[existingIndex] = contrast;
-    else state.contrasts.push(contrast);
-    state.deResults.set(contrast.id, rows);
-    markAnalysisCacheDirty(`DESeq2 ${contrast.label}`);
+    const registered = registerDeseqResultRows(spec, rows);
+    const contrast = registered[0].contrast;
+    markAnalysisCacheDirty(`DESeq2 ${registered.map((item) => item.contrast.label).join('; ')}`);
 
     deseqCallbacks.populateContrastSelectors?.();
     deseqCallbacks.renderOverviewMetrics?.();
@@ -643,9 +670,12 @@ export async function runDeseq2Analysis() {
     await progress.step('Rendering DE table and volcano/MA plots', 6);
     await deseqCallbacks.renderCurrentContrast?.();
 
-    logAnalysis(`DESeq2 completed for ${contrast.label} with ${spec.fullModel}: ${rows.length} genes.`);
-    deseqSetStatus(status, `DESeq2 complete: ${rows.length} genes. Model ${spec.fullModel}.`);
-    await progress.done(`Complete: ${rows.length} genes. Model ${spec.fullModel}`);
+    const resultSummary = registered.length === 1
+      ? `${registered[0].rows.length} genes`
+      : `${registered.length} interaction result sets`;
+    logAnalysis(`DESeq2 completed for ${registered.map((item) => item.contrast.label).join('; ')} with ${spec.fullModel}: ${resultSummary}.`);
+    deseqSetStatus(status, `DESeq2 complete: ${resultSummary}. Model ${spec.fullModel}.`);
+    await progress.done(`Complete: ${resultSummary}. Model ${spec.fullModel}`);
   } catch (error) {
     logAnalysis(`DESeq2 failed: ${error.message}`);
     deseqSetStatus(status, `DESeq2 failed: ${error.message}`);
@@ -658,6 +688,60 @@ export async function runDeseq2Analysis() {
       renderDeseqPreview();
     }
   }
+}
+
+function registerDeseqResultRows(spec, rows) {
+  const resultSets = spec.resultMode === 'wald_interaction_coefficient'
+    ? interactionResultSets(spec, rows)
+    : [{ spec, rows }];
+  resultSets.forEach((resultSet) => {
+    const contrast = contrastFromSpec(resultSet.spec);
+    const existingIndex = state.contrasts.findIndex((item) => item.id === contrast.id);
+    if (existingIndex >= 0) state.contrasts[existingIndex] = contrast;
+    else state.contrasts.push(contrast);
+    state.deResults.set(contrast.id, resultSet.rows);
+    resultSet.contrast = contrast;
+  });
+  return resultSets;
+}
+
+function interactionResultSets(spec, rows) {
+  const grouped = new Map();
+  rows.forEach((row) => {
+    const key = row.coefficient_name || row.interaction_label || 'interaction';
+    if (!grouped.has(key)) grouped.set(key, []);
+    grouped.get(key).push(row);
+  });
+  return Array.from(grouped.entries()).map(([coefficientName, coefficientRows]) => {
+    const first = coefficientRows[0] || {};
+    const conditionNumerator = first.condition_numerator || spec.conditionNumerator;
+    const conditionDenominator = first.condition_denominator || spec.conditionDenominator;
+    const modifierNumerator = first.modifier_numerator || spec.modifierNumerator;
+    const modifierDenominator = first.modifier_denominator || spec.modifierDenominator;
+    const label = `${conditionNumerator} response differs in ${spec.modifierFactor}=${modifierNumerator} vs ${modifierDenominator}`;
+    const coefficientSpec = {
+      ...spec,
+      id: makeDeseqResultId([
+        spec.id,
+        conditionNumerator,
+        conditionDenominator,
+        modifierNumerator,
+        modifierDenominator,
+        coefficientName,
+      ]),
+      label,
+      contrastLabel: `(${conditionNumerator} - ${conditionDenominator}) interaction at ${modifierNumerator} vs ${modifierDenominator}`,
+      numerator: conditionNumerator,
+      denominator: conditionDenominator,
+      conditionNumerator,
+      conditionDenominator,
+      modifierNumerator,
+      modifierDenominator,
+      coefficientName,
+      interpretation: `Interaction coefficient for ${conditionNumerator} vs ${conditionDenominator} at ${spec.modifierFactor}=${modifierNumerator} relative to ${modifierDenominator}, using model ${spec.fullModel}.`,
+    };
+    return { spec: coefficientSpec, rows: coefficientRows };
+  });
 }
 
 function contrastFromSpec(spec) {
@@ -699,6 +783,13 @@ function contrastFromSpec(spec) {
     generated: true,
     method: 'DESeq2 webR',
   };
+}
+
+function makeDeseqResultId(parts) {
+  return parts
+    .map((part) => String(part || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, ''))
+    .filter(Boolean)
+    .join('__');
 }
 
 function deseqPackageSet() {
@@ -820,15 +911,10 @@ for (adjust_col_raw in adjust_cols_raw) {
 tested_terms <- character(0)
 coefficient_name <- ""
 reduced_formula_label <- ""
+out <- NULL
 if (identical(result_mode, "wald_interaction_coefficient")) {
   condition_col <- prepare_factor(condition_col_raw, "Condition factor", condition_denominator_level)
   modifier_col <- prepare_factor(modifier_col_raw, "Modifier factor", modifier_denominator_level)
-  if (!condition_numerator_level %in% levels(colData[[condition_col]]) || !condition_denominator_level %in% levels(colData[[condition_col]])) {
-    stop("Selected condition numerator or denominator level was not found after subsetting samples.")
-  }
-  if (!modifier_numerator_level %in% levels(colData[[modifier_col]]) || !modifier_denominator_level %in% levels(colData[[modifier_col]])) {
-    stop("Selected modifier numerator or denominator level was not found after subsetting samples.")
-  }
   tested_terms <- paste(condition_col, modifier_col, sep = ":")
   design_terms <- c(adjust_cols, condition_col, modifier_col, tested_terms)
   design_formula <- reformulate(design_terms)
@@ -841,8 +927,31 @@ if (identical(result_mode, "wald_interaction_coefficient")) {
   }
   dds <- DESeqDataSetFromMatrix(countData = countData, colData = colData, design = design_formula)
   dds <- DESeq(dds, quiet = TRUE)
-  coefficient_name <- find_interaction_coef(resultsNames(dds), condition_col, condition_numerator_level, modifier_col, modifier_numerator_level)
-  res <- results(dds, name = coefficient_name)
+  condition_nonref_levels <- setdiff(levels(colData[[condition_col]]), condition_denominator_level)
+  modifier_nonref_levels <- setdiff(levels(colData[[modifier_col]]), modifier_denominator_level)
+  if (!length(condition_nonref_levels) || !length(modifier_nonref_levels)) {
+    stop("Interaction factors need at least one non-reference level each.")
+  }
+  interaction_tables <- list()
+  coefficient_names <- character(0)
+  for (condition_level in condition_nonref_levels) {
+    for (modifier_level in modifier_nonref_levels) {
+      current_coef <- find_interaction_coef(resultsNames(dds), condition_col, condition_level, modifier_col, modifier_level)
+      coefficient_names <- c(coefficient_names, current_coef)
+      current_res <- results(dds, name = current_coef)
+      current_out <- as.data.frame(current_res)
+      current_out$gene_id <- rownames(current_out)
+      current_out$coefficient_name <- current_coef
+      current_out$condition_numerator <- condition_level
+      current_out$condition_denominator <- condition_denominator_level
+      current_out$modifier_numerator <- modifier_level
+      current_out$modifier_denominator <- modifier_denominator_level
+      current_out$interaction_label <- paste0("(", condition_level, " - ", condition_denominator_level, ") at ", modifier_level, " vs ", modifier_denominator_level)
+      interaction_tables[[length(interaction_tables) + 1]] <- current_out
+    }
+  }
+  coefficient_name <- paste(coefficient_names, collapse = ";")
+  out <- do.call(rbind, interaction_tables)
 } else if (identical(result_mode, "lrt")) {
   condition_col <- prepare_factor(condition_col_raw, "Condition factor", condition_denominator_level)
   modifier_col <- prepare_factor(modifier_col_raw, "Modifier factor", modifier_denominator_level)
@@ -883,18 +992,25 @@ if (identical(result_mode, "wald_interaction_coefficient")) {
   tested_terms <- design_col
   res <- results(dds, contrast = c(design_col, numerator_level, denominator_level))
 }
-out <- as.data.frame(res)
-out$gene_id <- rownames(out)
+if (is.null(out)) {
+  out <- as.data.frame(res)
+  out$gene_id <- rownames(out)
+}
 names(out)[names(out) == "stat"] <- "statistic"
-wanted_cols <- c("gene_id", "baseMean", "log2FoldChange", "lfcSE", "statistic", "pvalue", "padj")
+if (!"result_mode" %in% names(out)) out$result_mode <- result_mode
+if (!"coefficient_name" %in% names(out)) out$coefficient_name <- coefficient_name
+if (!"tested_terms" %in% names(out)) out$tested_terms <- paste(tested_terms, collapse = ";")
+if (!"full_model" %in% names(out)) out$full_model <- paste(deparse(design_formula), collapse = " ")
+if (!"reduced_model" %in% names(out)) out$reduced_model <- reduced_formula_label
+if (!"condition_numerator" %in% names(out)) out$condition_numerator <- ""
+if (!"condition_denominator" %in% names(out)) out$condition_denominator <- ""
+if (!"modifier_numerator" %in% names(out)) out$modifier_numerator <- ""
+if (!"modifier_denominator" %in% names(out)) out$modifier_denominator <- ""
+if (!"interaction_label" %in% names(out)) out$interaction_label <- ""
+wanted_cols <- c("gene_id", "baseMean", "log2FoldChange", "lfcSE", "statistic", "pvalue", "padj", "result_mode", "coefficient_name", "tested_terms", "full_model", "reduced_model", "condition_numerator", "condition_denominator", "modifier_numerator", "modifier_denominator", "interaction_label")
 missing_cols <- setdiff(wanted_cols, names(out))
 for (missing_col in missing_cols) out[[missing_col]] <- NA
 out <- out[, wanted_cols]
-out$result_mode <- result_mode
-out$coefficient_name <- coefficient_name
-out$tested_terms <- paste(tested_terms, collapse = ";")
-out$full_model <- paste(deparse(design_formula), collapse = " ")
-out$reduced_model <- reduced_formula_label
 paste(capture.output(write.csv(out, row.names = FALSE, na = "")), collapse = "\\n")
 `;
   const result = await evalR(code);

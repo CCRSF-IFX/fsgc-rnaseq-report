@@ -628,6 +628,7 @@ function wireControls() {
   document.getElementById('gsea-result-select')?.addEventListener('change', renderCurrentEnrichment);
   [
     'deseq-question-type',
+    'deseq-advanced-question-type',
     'deseq-scope-column',
     'deseq-scope-level',
     'deseq-exclude-samples',
@@ -639,6 +640,12 @@ function wireControls() {
     'deseq-group-factor-b',
     'deseq-group-one',
     'deseq-group-two',
+    'deseq-interaction-condition',
+    'deseq-interaction-modifier',
+    'deseq-interaction-condition-numerator',
+    'deseq-interaction-condition-denominator',
+    'deseq-interaction-modifier-numerator',
+    'deseq-interaction-modifier-denominator',
   ].forEach((id) => document.getElementById(id)?.addEventListener('change', renderAnalysisReadiness));
   document.querySelectorAll('input[name="deseq-scope-mode"]').forEach((radio) => radio.addEventListener('change', renderAnalysisReadiness));
   document.getElementById('gsea-gmt-file')?.addEventListener('change', renderAnalysisReadiness);

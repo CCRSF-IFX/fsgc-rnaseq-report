@@ -512,61 +512,70 @@ The built-in browser DE fallback uses Welch t-tests on log2(CPM + 1) values and
 Benjamini-Hochberg adjusted p-values. Treat those results as exploratory. Use
 pipeline-generated DESeq2 or another mature RNA-seq method for final analysis.
 
-The browser DESeq2 runner uses a biological question builder. The default path
-is a simple two-level comparison, with interaction and LRT workflows tucked
-behind the `Advanced: interaction / LRT` question type. It supports:
+The browser DESeq2 runner uses a biological question builder with three
+top-level choices:
 
-- condition effects within all samples or a selected metadata subset
-- tissue/factor effects within all samples or a selected metadata subset
-- additive covariate-adjusted factor effects
-- direct comparisons between two combined metadata groups
-- advanced pairwise interaction effects, such as asking whether a treatment response
-  differs between two tissue or genotype levels
-- advanced omnibus interaction likelihood-ratio tests, such as asking whether adding
-  `condition:tissue` improves the model over an additive model
+- Pairwise comparison: compare two levels of one selected metadata factor with
+  a model like `~ condition`
+- Additive covariate analysis: compare two levels of a primary factor while
+  adjusting or blocking by selected metadata columns, with a model like
+  `~ batch + sex + condition`
+- Advanced analysis: open the recommended LRT-first interaction workflow,
+  coefficient-level interaction effects, and less-common direct combined-group
+  comparisons
 
-The default condition workflow automatically uses `condition` when it exists,
+The default pairwise workflow automatically uses `condition` when it exists,
 and also recognizes condition-like columns such as `group`, `treatment`, and
-`phenotype`. If none of those columns are present, the report keeps the simple
-workflow visible but shows a guide asking the user to choose the primary factor
-manually.
+`phenotype`. If none of those columns are present, the report keeps the pairwise
+workflow visible but asks the user to choose the primary factor manually.
 
-For subset-aware condition or tissue effects, the app first selects the sample
-scope, then runs a simple additive DESeq2 model on the selected samples. For
-example, choosing `condition` as the primary factor inside a `tissue = liver`
-scope with `batch` plus `sex` adjustment columns runs a model equivalent to:
+For subset-aware pairwise or additive effects, the app first selects the sample
+scope, then runs DESeq2 on the selected samples. For example, choosing
+`condition` as the primary factor inside a `tissue = liver` scope with the
+Additive covariate analysis question type and `batch` plus `sex` adjustment
+columns runs a model equivalent to:
 
 ```r
 ~ batch + sex + condition
 ```
 
-Direct group comparisons create a temporary combined group factor from two
-metadata columns, such as `condition` and `tissue`, then compare two selected
-combined groups. This is useful for explicit comparisons such as treated liver
-vs control brain, but it can mix condition and tissue effects; use it only when
-those combined groups are the intended biological contrast.
+Advanced direct group comparisons are a less-common special case. They create a
+temporary combined group factor from two metadata columns, such as `condition`
+and `tissue`, then compare two selected combined groups. This is useful for
+explicit comparisons such as treated liver vs control brain, but it can mix
+condition and tissue effects; use it only when those combined groups are the
+intended biological contrast.
 
 For paired designs, choose the treatment/group column as the primary factor and
 mark the subject or pair ID column as `categorical` before selecting it as an
 adjustment/blocking column.
 
-Pairwise interactions use a model equivalent to:
-
-```r
-~ batch + condition + tissue + condition:tissue
-```
-
-with the selected condition denominator and modifier denominator releveled as
-the references. The reported `log2FoldChange` is the interaction coefficient:
-the condition effect in modifier level A minus the same condition effect in the
-reference modifier level.
-
-Omnibus interaction LRT uses a full model and a reduced model:
+For interaction questions, use **Omnibus interaction test (LRT)** first when
+the modifier has more than two levels. LRT answers the global yes/no question:
+does the condition effect change across modifier levels?
 
 ```r
 full    <- ~ batch + condition + tissue + condition:tissue
 reduced <- ~ batch + condition + tissue
 ```
+
+Genes with `padj <= 0.05` have evidence of interaction. Genes with
+`padj > 0.05` have no significant detected interaction; this does not prove the
+condition effect is identical across all levels.
+
+Use **Interaction effect** as the follow-up workflow for genes, pathways, or
+questions that are significant or biologically interesting in the LRT. It uses
+a model equivalent to:
+
+```r
+~ batch + condition + tissue + condition:tissue
+```
+
+with the selected condition and modifier references releveled before DESeq2 is
+run. The app reports one result set for each non-reference interaction
+coefficient. For example, if `condition = mock` and `tissue = cornea` are the
+references, a `log2FoldChange` for `sars_cov_2:tissue_limbus` is the
+SARS-CoV-2 effect in limbus minus the SARS-CoV-2 effect in cornea.
 
 The LRT `pvalue` and `padj` columns test whether the interaction terms improve
 the model. The `log2FoldChange` column in an LRT result is representative output

@@ -371,6 +371,7 @@ function deAnalysisCacheEntry(contrast) {
   return {
     contrast_id: contrast.id,
     question_type: contrast.question_type || '',
+    question_label: contrast.question_label || '',
     result_family: contrast.result_family || '',
     scope_id: contrast.scope_id || '',
     scope_label: contrast.scope_label || '',

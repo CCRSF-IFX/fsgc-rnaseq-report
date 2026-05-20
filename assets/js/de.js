@@ -110,11 +110,11 @@ function renderContrastNote(contrast) {
     return;
   }
   if (contrast.result_mode === 'lrt') {
-    note.textContent = 'DESeq2 LRT p-values test whether the full model improves over the reduced model. The log2FC column is representative and is not the omnibus effect size.';
+    note.textContent = 'DESeq2 LRT p-values test whether the full model improves over the reduced model. padj <= the threshold means interaction detected; padj above the threshold means no significant interaction detected. The log2FC column is representative and is not the omnibus effect size.';
     return;
   }
   if (contrast.result_family === 'interaction_effect') {
-    note.textContent = 'Interaction log2FC is a difference-of-differences: the selected condition effect in modifier level A minus the same condition effect in the reference modifier level.';
+    note.textContent = 'Interaction log2FC is a difference-of-differences: the condition non-reference effect in this modifier level minus the same condition effect in the modifier reference level.';
     return;
   }
   note.textContent = '';
@@ -131,10 +131,11 @@ function contrastFamily(contrast = {}) {
 
 function contrastFamilyLabel(family) {
   return {
+    pairwise_comparison: 'Pairwise comparisons',
     condition_effect: 'Condition effects',
     tissue_effect: 'Tissue effects',
     adjusted_effect: 'Adjusted effects',
-    direct_group_comparison: 'Direct group comparisons',
+    direct_group_comparison: 'Direct group comparisons (less common)',
     interaction_effect: 'Interaction effects',
     omnibus_test: 'Omnibus tests',
     factor_effect: 'Factor effects',
