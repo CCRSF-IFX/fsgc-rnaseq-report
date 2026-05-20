@@ -13,6 +13,7 @@ import {
   parseTsv,
   validateCountMatrix,
 } from './dataLoader.js';
+import { captureAnalysisCacheBaseline } from './analysisCache.js';
 import { refreshMetadataSchema } from './metadataSchema.js';
 
 let userDataCallbacks = {};
@@ -67,6 +68,7 @@ async function applyUploadedUserData() {
       counts_file: countFile?.name || 'embedded count matrix',
       sample_manifest: manifestFile.name,
     };
+    captureAnalysisCacheBaseline();
 
     await userDataCallbacks.refresh?.();
     const matched = sampleIdsInCounts(state.samples, state.counts).length;

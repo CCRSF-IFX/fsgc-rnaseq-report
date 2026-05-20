@@ -1,5 +1,6 @@
 import { state, logAnalysis, setStatus, yieldToBrowser } from './state.js';
 import { sampleIdsInCounts } from './analysis.js';
+import { countSampleIdsFromCounts } from './dataLoader.js';
 import { gseaResultCurves } from './enrichment.js';
 import { metadataSchemaForCache, restoreMetadataSchemaFromCache } from './metadataSchema.js';
 
@@ -11,6 +12,7 @@ let cacheControlsWired = false;
 let cacheDirty = false;
 let cacheCallbacks = {};
 let cacheBusy = false;
+let analysisCacheBaseline = null;
 
 export function setupAnalysisCacheControls(callbacks = {}) {
   cacheCallbacks = callbacks;
@@ -28,6 +30,19 @@ export function markAnalysisCacheDirty(reason = '') {
   updateAnalysisCacheControls();
   setAnalysisCacheStatus(`${CACHE_CLOSE_GUIDE} Reopen the report later and use Load cache to restore the saved results.`);
   if (reason) logAnalysis(`Analysis cache has unsaved results: ${reason}`);
+}
+
+export function captureAnalysisCacheBaseline() {
+  analysisCacheBaseline = {
+    samples: clonePlain(state.samples || []),
+    metadataSchema: clonePlain(state.metadataSchema || {}),
+    analysisScopes: clonePlain(state.analysisScopes || []),
+    activeAnalysisScopeId: state.activeAnalysisScopeId || 'all_samples',
+    contrasts: clonePlain(state.contrasts || []),
+    deResults: cloneMap(state.deResults),
+    enrichmentResults: cloneMap(state.enrichmentResults),
+    provenance: clonePlain(state.provenance || null),
+  };
 }
 
 function markAnalysisCacheClean(message = '') {
@@ -92,10 +107,12 @@ async function importAnalysisCacheFromInput(event) {
     setStatus('Analysis cache: parsing JSON', { busy: true, progress: 0.62 });
     await yieldToBrowser();
     const cache = parseAnalysisCache(JSON.parse(text));
+    validateAnalysisCacheSampleCompatibility(cache);
 
     setAnalysisCacheProgress('Loading cache', 'Restoring results', 0.78);
     setStatus('Analysis cache: restoring results', { busy: true, progress: 0.78 });
     await yieldToBrowser();
+    resetAnalysisCacheSession();
     const restored = restoreAnalysisCache(cache);
     const metadataNote = restored.sampleMetadata
       ? ` and ${restored.sampleMetadataRows} sample metadata row(s)`
@@ -232,6 +249,19 @@ function restoreAnalysisCache(cache) {
   return restored;
 }
 
+function resetAnalysisCacheSession() {
+  if (!analysisCacheBaseline) captureAnalysisCacheBaseline();
+  const baseline = analysisCacheBaseline || {};
+  state.samples = clonePlain(baseline.samples || state.samples || []);
+  state.metadataSchema = clonePlain(baseline.metadataSchema || {});
+  state.analysisScopes = clonePlain(baseline.analysisScopes || []);
+  state.activeAnalysisScopeId = baseline.activeAnalysisScopeId || 'all_samples';
+  state.contrasts = clonePlain(baseline.contrasts || []);
+  state.deResults = cloneMapEntries(baseline.deResults || []);
+  state.enrichmentResults = cloneMapEntries(baseline.enrichmentResults || []);
+  state.provenance = clonePlain(baseline.provenance || state.provenance || null);
+}
+
 function restoreAnalysisScopes(scopes = []) {
   if (!Array.isArray(scopes) || !scopes.length) return;
   const byId = new Map((state.analysisScopes || []).map((scope) => [scope.id, scope]));
@@ -243,6 +273,61 @@ function restoreAnalysisScopes(scopes = []) {
     });
   });
   state.analysisScopes = Array.from(byId.values());
+}
+
+function validateAnalysisCacheSampleCompatibility(cache) {
+  const currentIds = currentAnalysisSampleIds();
+  if (currentIds.length < 2) return;
+
+  const cachedMetadataIds = cache.sample_metadata?.rows?.map((row) => String(row.sample_id || '').trim()).filter(Boolean) || [];
+  if (cachedMetadataIds.length) {
+    assertSameSampleSet(cachedMetadataIds, currentIds);
+    return;
+  }
+
+  const scopeIds = Array.from(new Set((cache.analysis_scopes || []).flatMap((scope) => (
+    Array.isArray(scope?.sampleIds) ? scope.sampleIds : []
+  )).map((id) => String(id || '').trim()).filter(Boolean)));
+  if (scopeIds.length) {
+    const missing = scopeIds.filter((id) => !currentIds.includes(id));
+    if (missing.length) {
+      throw new Error(`Cache sample IDs do not match the current count matrix. Missing from count matrix: ${previewList(missing)}.`);
+    }
+    return;
+  }
+
+  if (cache.de_results.length || cache.gsea_results.length) {
+    throw new Error('Cache does not include sample metadata or analysis-scope sample IDs, so it cannot be verified against the current count matrix.');
+  }
+}
+
+function currentAnalysisSampleIds() {
+  const baselineSamples = Array.isArray(analysisCacheBaseline?.samples) && analysisCacheBaseline.samples.length
+    ? analysisCacheBaseline.samples
+    : state.samples;
+  const matched = sampleIdsInCounts(baselineSamples, state.counts);
+  return matched.length >= 2 ? matched : countSampleIdsFromCounts(state.counts);
+}
+
+function assertSameSampleSet(cacheIds, countIds) {
+  const uniqueCacheIds = Array.from(new Set(cacheIds));
+  const uniqueCountIds = Array.from(new Set(countIds));
+  const countSet = new Set(uniqueCountIds);
+  const cacheSet = new Set(uniqueCacheIds);
+  const missingFromCounts = uniqueCacheIds.filter((id) => !countSet.has(id));
+  const missingFromCache = uniqueCountIds.filter((id) => !cacheSet.has(id));
+  if (missingFromCounts.length || missingFromCache.length) {
+    const parts = [];
+    if (missingFromCounts.length) parts.push(`missing from count matrix: ${previewList(missingFromCounts)}`);
+    if (missingFromCache.length) parts.push(`missing from cache metadata: ${previewList(missingFromCache)}`);
+    throw new Error(`Cache sample IDs do not match the current count matrix (${parts.join('; ')}).`);
+  }
+}
+
+function previewList(values, limit = 5) {
+  const shown = values.slice(0, limit).join(', ');
+  const extra = values.length > limit ? `, and ${values.length - limit} more` : '';
+  return `${shown}${extra}`;
 }
 
 async function refreshImportedAnalysis(cache, restored = {}) {
@@ -355,6 +440,21 @@ function plainRows(rows) {
 
 function plainObject(value) {
   return Object.fromEntries(Object.entries(value || {}).map(([key, item]) => [key, item ?? '']));
+}
+
+function clonePlain(value) {
+  if (value === undefined || value === null) return value ?? null;
+  return JSON.parse(JSON.stringify(value));
+}
+
+function cloneMap(map) {
+  return Array.from((map instanceof Map ? map : new Map()).entries())
+    .map(([key, value]) => [key, clonePlain(value)]);
+}
+
+function cloneMapEntries(entries) {
+  return new Map((Array.isArray(entries) ? entries : [])
+    .map(([key, value]) => [key, clonePlain(value)]));
 }
 
 function deAnalysisCacheEntry(contrast) {

@@ -27,6 +27,13 @@ DESeq2 or load results. Only enable `analysis.enableBrowserFallbackDE` for
 explicit demo or debugging workflows where a Welch test on `log2(CPM + 1)` is
 acceptable.
 
+Manual cache import is replace-by-default. The app captures a baseline analysis
+state after initial report load, and again after a user uploads a replacement
+count matrix or sample manifest. Loading a cache first validates cached sample
+IDs against the current sample set matched to the count matrix, then resets DESeq2/GSEA
+results, analysis scopes, contrasts, and cached sample metadata back to that
+baseline before applying the selected cache.
+
 The DESeq2 interaction behavior follows common DESeq2 design patterns,
 including the examples in
 [DESeq2 experimental design and interpretation](https://rstudio-pubs-static.s3.amazonaws.com/329027_593046fb6d7a427da6b2c538caf601e1.html).

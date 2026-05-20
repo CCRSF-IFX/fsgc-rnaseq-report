@@ -12,7 +12,7 @@ import { readDeseqFormValues, safeBuildDeseqQuestionSpec } from './deQuestionBui
 import { setupFgseaControls } from './fgsea.js';
 import { renderActiveExpressionHeatmap, resizeExpressionHeatmap, setupCanvasXpressHeatmapControls, setupExpressionHeatmapControls } from './heatmap.js?v=20260517-canvasxpress-production';
 import { setupUserDataControls } from './userData.js';
-import { setupAnalysisCacheControls } from './analysisCache.js';
+import { captureAnalysisCacheBaseline, setupAnalysisCacheControls } from './analysisCache.js';
 import { setupPackageFallbackModal } from './packageFallbackModal.js';
 import { refreshAiAssistant, setupAiAssistant } from './aiAssistant.js';
 import { sampleIdsInCounts } from './analysis.js';
@@ -37,6 +37,7 @@ async function main() {
   markReportReady('loading');
   try {
     await loadCoreAssets();
+    captureAnalysisCacheBaseline();
     renderHeader();
     renderVersionLinks();
     renderOverview();

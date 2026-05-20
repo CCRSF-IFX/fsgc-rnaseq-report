@@ -72,6 +72,42 @@ test('imports and exports analysis cache with DE and GSEA results', async ({ pag
   expect(exported.gsea_results.some((entry) => entry.result_id === CACHE_GSEA_RESULT_ID)).toBeTruthy();
 });
 
+test('replaces prior imported analysis cache results by default', async ({ page }) => {
+  await openReport(page);
+  await activateTab(page, 'provenance');
+
+  await page.locator('#analysis-cache-file').setInputFiles({
+    name: 'playwright.analysis-cache.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify(analysisCacheFixture()), 'utf8'),
+  });
+  await expect(page.locator('#analysis-cache-status')).toContainText('Loaded cache');
+
+  await page.locator('#analysis-cache-file').setInputFiles({
+    name: 'replacement.analysis-cache.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify(replacementAnalysisCacheFixture()), 'utf8'),
+  });
+  await expect(page.locator('#analysis-cache-status')).toContainText('Loaded cache with 1 DESeq2 result set(s), 0 fgsea result set(s)');
+
+  await activateTab(page, 'de');
+  await expect(page.locator('#contrast-select')).toContainText('Replacement cache contrast');
+  await expect(page.locator('#contrast-select')).not.toContainText('Playwright cache contrast');
+});
+
+test('rejects analysis cache files with mismatched sample IDs', async ({ page }) => {
+  await openReport(page);
+  await activateTab(page, 'provenance');
+
+  await page.locator('#analysis-cache-file').setInputFiles({
+    name: 'mismatched.analysis-cache.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify(mismatchedAnalysisCacheFixture()), 'utf8'),
+  });
+
+  await expect(page.locator('#analysis-cache-status')).toContainText('Cache load failed: Cache sample IDs do not match the current count matrix');
+});
+
 test('renders cached GSEA overview and running enrichment plots', async ({ page }) => {
   await openReport(page);
   await activateTab(page, 'provenance');
@@ -119,7 +155,7 @@ function analysisCacheFixture() {
     project_title: 'Playwright cache fixture',
     run_id: 'p1',
     data_root: 'assets/data',
-    sample_metadata: null,
+    sample_metadata: { source: 'playwright fixture', rows: defaultSampleMetadataRows() },
     analysis_scopes: [],
     contrasts: [{
       id: CACHE_CONTRAST_ID,
@@ -199,4 +235,61 @@ function analysisCacheFixture() {
       }],
     }],
   };
+}
+
+function replacementAnalysisCacheFixture() {
+  const cache = analysisCacheFixture();
+  cache.project_title = 'Replacement cache fixture';
+  cache.contrasts = [{
+    id: 'replacement_cache_contrast',
+    label: 'Replacement cache contrast',
+    question_type: 'pairwise_comparison',
+    question_label: 'Pairwise comparison',
+    result_family: 'pairwise_comparison',
+    full_model: '~ condition',
+    contrast_label: 'sars_cov_2 - mock',
+    generated: true,
+    method: 'DESeq2 webR',
+  }];
+  cache.de_analyses = [{
+    contrast_id: 'replacement_cache_contrast',
+    question_type: 'pairwise_comparison',
+    question_label: 'Pairwise comparison',
+    result_family: 'pairwise_comparison',
+    full_model: '~ condition',
+    contrast_label: 'sars_cov_2 - mock',
+    sample_count: 18,
+    primary_factor: 'condition',
+    numerator: 'sars_cov_2',
+    denominator: 'mock',
+    model_kind: 'factor_contrast',
+    result_mode: 'wald_factor_contrast',
+    group_balance: { mock: 9, sars_cov_2: 9 },
+    method: 'DESeq2 webR',
+  }];
+  cache.de_results = [{
+    contrast_id: 'replacement_cache_contrast',
+    rows: [
+      { gene_id: 'ENSGREPL000001', gene_symbol: 'ReplacementGene', baseMean: 100, log2FoldChange: 1.2, lfcSE: 0.3, statistic: 4, pvalue: 0.001, padj: 0.02 },
+    ],
+  }];
+  cache.gsea_results = [];
+  return cache;
+}
+
+function mismatchedAnalysisCacheFixture() {
+  return {
+    ...analysisCacheFixture(),
+    sample_metadata: {
+      source: 'wrong project fixture',
+      rows: [
+        { sample_id: 'WRONG_SAMPLE_1', condition: 'control' },
+        { sample_id: 'WRONG_SAMPLE_2', condition: 'treated' },
+      ],
+    },
+  };
+}
+
+function defaultSampleMetadataRows() {
+  return JSON.parse(readFileSync('assets/data/gse164073/samples.json', 'utf8'));
 }

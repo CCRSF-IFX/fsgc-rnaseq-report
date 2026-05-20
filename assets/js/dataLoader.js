@@ -389,9 +389,13 @@ const COUNT_METADATA_COLUMNS = new Set([
   'biotype',
 ]);
 
-function inferSamplesFromCounts(counts) {
+export function countSampleIdsFromCounts(counts) {
   if (!Array.isArray(counts) || counts.length === 0) return [];
-  const sampleIds = Object.keys(counts[0]).filter((column) => isLikelyCountColumn(counts, column));
+  return Object.keys(counts[0]).filter((column) => isLikelyCountColumn(counts, column));
+}
+
+function inferSamplesFromCounts(counts) {
+  const sampleIds = countSampleIdsFromCounts(counts);
   if (sampleIds.length < 2) {
     throw new Error('No sample manifest was found, and the count matrix did not include at least two numeric sample columns.');
   }

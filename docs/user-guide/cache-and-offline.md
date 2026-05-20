@@ -30,7 +30,15 @@ To restore browser analysis results:
 4. Choose the exported cache JSON file.
 
 The cache restores sample metadata only when its `sample_id` values match the
-current count matrix.
+current count matrix. Loading a cache replaces the current browser analysis
+session by default: prior browser-run/imported DESeq2 and GSEA results are
+cleared back to the report's current baseline before the selected cache is
+restored.
+
+For safety, the report checks the cache sample names against the sample set
+currently matched to the count matrix in the browser. If cached sample metadata
+is present, the cached `sample_id` set must match that current sample set
+exactly. Wrong-project caches are rejected before any results are restored.
 
 ## What The Cache Does Not Include
 
