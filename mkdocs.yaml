@@ -45,6 +45,7 @@ nav:
       - Report Architecture: developer-guide/architecture.md
       - Data Assets: developer-guide/data-assets.md
       - Standalone Builds: developer-guide/standalone-builds.md
+      - Browser Analysis Implementation: developer-guide/browser-analysis.md
       - GitHub Pages And Versioning: developer-guide/github-pages.md
       - webR Packages: developer-guide/webr-packages.md
       - CI Workflows: developer-guide/ci-workflows.md

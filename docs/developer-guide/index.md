@@ -44,6 +44,9 @@ python3 scripts/build_report_bundle.py --data-root path/to/report-data
 - Use [Data Assets](data-assets.md) to understand required and optional files.
 - Use [Standalone Builds](standalone-builds.md) to create a single deliverable
   HTML report.
+- Use [Browser Analysis Implementation](browser-analysis.md) to maintain the
+  DESeq2 question builder, interaction models, fgsea handoff, and cache
+  contract.
 - Use [GitHub Pages And Versioning](github-pages.md) to host the report,
   documentation, and webR package snapshots.
 - Use [webR Packages](webr-packages.md) when DESeq2 or fgsea package loading
