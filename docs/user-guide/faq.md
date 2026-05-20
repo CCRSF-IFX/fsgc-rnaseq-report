@@ -50,9 +50,3 @@ URLs or a mounted library bundle.
 They come from the package snapshot or library bundle configured by the report
 provider. If the online snapshot is unavailable, use the report buttons to
 download and choose the local bundle.
-
-## Can AI be excluded from reports?
-
-Yes. Many delivered reports do not show any AI assistant. If an assistant is
-enabled, review your local policy before sending sample names, gene lists, or
-analysis notes to any model service.

@@ -46,6 +46,40 @@ mkdocs build --strict
 git diff --check
 ```
 
+For report and asset changes, run the relevant subset of:
+
+```bash
+python3 scripts/validate_assets.py assets/data
+python3 -m json.tool assets/report_config.json >/dev/null
+python3 -m py_compile \
+  scripts/build_report_bundle.py \
+  scripts/validate_assets.py \
+  scripts/qc_excel.py
+node --check assets/js/app.js
+node --check assets/js/analysis.js
+node --check assets/js/dataLoader.js
+node --check assets/js/downstreamPlugins.js
+node --check assets/js/deseq2.js
+node --check assets/js/fgsea.js
+node --check assets/js/heatmap.js
+node --check assets/js/packageRepository.js
+node --check assets/js/plots.js
+node --check assets/js/userData.js
+python3 scripts/build_report_bundle.py
+```
+
+Validate workflow YAML with:
+
+```bash
+ruby -e 'require "yaml"; YAML.load_file(".github/workflows/deploy-pages.yml"); puts "yaml ok"'
+```
+
+Check the package parser output with:
+
+```bash
+awk '{ gsub(/^[[:space:]]+|[[:space:]]+$/, "", $0); if ($0 == "" || substr($0, 1, 1) == "#") next; if (!seen[$0]++) { if (out != "") out = out ","; out = out $0 } } END { print out }' webr-packages/packages
+```
+
 If available, also run:
 
 ```bash

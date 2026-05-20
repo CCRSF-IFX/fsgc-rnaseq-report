@@ -50,3 +50,14 @@ local webR library bundle. The usual order is:
 
 The bundle lets webR load precompiled packages without reinstalling them during
 the browser session.
+
+For the current report version, the bundle is named like:
+
+```text
+rnaseq-report-webr-library-v0.1.0.zip
+```
+
+If the report shows a package snapshot warning when it opens, use the buttons in
+the warning dialog or Runtime & Packages section. You can retry the online
+snapshot, continue in report-only mode, download the bundle, or choose a bundle
+you already downloaded.

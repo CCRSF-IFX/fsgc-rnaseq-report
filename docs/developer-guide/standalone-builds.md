@@ -18,6 +18,12 @@ dist/rnaseq-report.html
 
 `dist/` is ignored by git because reports often contain run-specific data.
 
+Write to a specific output path with:
+
+```bash
+python3 scripts/build_report_bundle.py --output path/to/report.html
+```
+
 ## Build From A Data Directory
 
 ```bash
@@ -26,6 +32,11 @@ python3 scripts/build_report_bundle.py --data-root path/to/data
 
 The data root can be repo-relative or absolute. Files are embedded into the
 generated HTML under the report's internal `assets/data/` path.
+
+A standalone report can be built with only a count matrix. A sample manifest is
+required before users can run metadata-driven DESeq2 or GSEA. If a recipient
+uploads only a manifest, the report uses the embedded count matrix. If a
+recipient uploads a new count matrix, they must upload a matching manifest too.
 
 ## Branding And Attribution
 
@@ -54,6 +65,17 @@ python3 scripts/build_report_bundle.py --project-logo path/to/logo.svg
 ```
 
 Supported logo formats include SVG, PNG, JPG, GIF, and WebP.
+Relative logo paths resolve from the repository root. The default report
+configuration uses `assets/branding/fsgc-rnaseq-report-logo.svg`; pass
+`--project-logo` to override that default for one generated report.
+
+Run ID override:
+
+```bash
+python3 scripts/build_report_bundle.py --run-id "batch-2026-05-16"
+```
+
+By default the run label is empty and hidden.
 
 ## Plotly Options
 
@@ -77,6 +99,10 @@ You can also inline a local Plotly build:
 ```bash
 python3 scripts/build_report_bundle.py --plotly-file path/to/plotly.min.js
 ```
+
+`--embed-plotly` only inlines Plotly. The Clustergrammer heatmap still loads
+Clustergrammer-JS and its browser dependencies from CDN unless those scripts
+are vendored and the heatmap loader is updated.
 
 ## FSGC RSEM Profile
 

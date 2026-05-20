@@ -24,6 +24,9 @@ theme:
     - r
     - yaml
 
+exclude_docs: |
+  developer-guide/ai-assistant.md
+
 # Page Tree
 nav:
   - Home: index.md
@@ -44,7 +47,6 @@ nav:
       - Standalone Builds: developer-guide/standalone-builds.md
       - GitHub Pages And Versioning: developer-guide/github-pages.md
       - webR Packages: developer-guide/webr-packages.md
-      - AI Assistant: developer-guide/ai-assistant.md
       - CI Workflows: developer-guide/ci-workflows.md
       - Troubleshooting: developer-guide/troubleshooting.md
   - Reference: ref.md

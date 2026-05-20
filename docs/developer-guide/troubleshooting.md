@@ -67,21 +67,12 @@ Check:
   are required.
 - A prebuilt library bundle is available if package installation is blocked.
 
+If GitHub Actions reports `Rscript: command not found`, make sure the workflow
+uses the Bash package parser in **Retrieve webR package refs**. Older workflow
+versions used `shell: Rscript {0}` for that step.
+
 ## Optional Analysis Runs Out Of Memory
 
 Browser memory varies by machine and browser. Reduce input size where possible,
 filter genes before heatmap-style workflows, and prefer pipeline outputs for
 large production contrasts.
-
-## The AI Assistant Cannot Connect
-
-The assistant expects an OpenAI-compatible endpoint when enabled. For a local
-proxy, confirm that the service is running and reachable at the configured
-`ai.baseUrl`, for example:
-
-```text
-http://127.0.0.1:10531/v1
-```
-
-If a model endpoint is unavailable, provide the generated prompt to the user so
-they can paste it into an approved ChatGPT session.

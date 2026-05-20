@@ -2,9 +2,9 @@
 
 ## Project Files
 
-- `README.md`: repository overview and common commands.
+- `README.md`: concise entry point linking to the user and developer guides.
 - `assets/report_config.json`: report configuration, analysis defaults, webR
-  settings, and AI settings.
+  settings, and hosted-site links.
 - `scripts/build_report_bundle.py`: standalone report builder.
 - `scripts/validate_assets.py`: data validator.
 - `scripts/qc_excel.py`: QC Excel parser for supported summary workbooks.
