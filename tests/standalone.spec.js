@@ -1,6 +1,7 @@
 // @ts-check
 import { execFileSync } from 'node:child_process';
 import { test, expect } from '@playwright/test';
+import { openReport } from './helpers/reportPage.js';
 
 const STANDALONE_PATH = 'dist/playwright-standalone-smoke.html';
 
@@ -19,11 +20,11 @@ test.beforeAll(() => {
 });
 
 test('generated standalone report loads without module script tags', async ({ page }) => {
-  await page.goto(`/${STANDALONE_PATH}`, { waitUntil: 'domcontentloaded' });
+  await openReport(page, `/${STANDALONE_PATH}`);
 
   await expect(page).toHaveTitle(/RNA-seq Report/);
   await expect(page.locator('#report-title')).not.toBeEmpty();
-  await expect(page.locator('#status-text')).toContainText(/Report assets loaded|plots loading/i);
+  await expect(page.locator('#status-text')).toContainText(/Report assets loaded/i);
 
   await expect(page.locator('#contrast-count')).toHaveText('1');
   await expect(page.locator('#contrast-select')).toContainText(/treated vs control/i);

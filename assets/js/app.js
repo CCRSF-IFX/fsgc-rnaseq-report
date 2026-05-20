@@ -29,9 +29,12 @@ import {
 
 let packageSnapshotEventsWired = false;
 let plotlyLoadPromise = null;
+const REPORT_READY_GLOBAL = '__RNA_SEQ_REPORT_READY__';
+const REPORT_READY_EVENT = 'rnaseq-report:ready';
 
 async function main() {
   wireTabs();
+  markReportReady('loading');
   try {
     await loadCoreAssets();
     renderHeader();
@@ -71,11 +74,23 @@ async function main() {
     await renderCurrentContrast();
     await renderCurrentEnrichment();
     setStatus(isPlotlyReady() ? 'Report assets loaded' : 'Report assets loaded; plots loading in background', { busy: !isPlotlyReady() });
+    markReportReady('ready');
     loadPlotlyAndRenderPlots();
   } catch (error) {
     setStatus(`Error: ${error.message}`);
+    markReportReady('error', error.message);
     console.error(error);
   }
+}
+
+function markReportReady(status, message = '') {
+  const detail = {
+    status,
+    message,
+    updatedAt: new Date().toISOString(),
+  };
+  globalThis[REPORT_READY_GLOBAL] = detail;
+  document.dispatchEvent(new CustomEvent(REPORT_READY_EVENT, { detail }));
 }
 
 function waitForPlotly(timeoutMs = 30000) {

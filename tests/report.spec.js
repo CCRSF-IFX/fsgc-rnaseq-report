@@ -1,12 +1,13 @@
 // @ts-check
 import { test, expect } from '@playwright/test';
+import { openReport } from './helpers/reportPage.js';
 
 test('loads the report shell and configured version links', async ({ page }) => {
-  await page.goto('/', { waitUntil: 'domcontentloaded' });
+  await openReport(page);
 
   await expect(page).toHaveTitle(/RNA-seq Report/);
   await expect(page.locator('#report-title')).not.toBeEmpty();
-  await expect(page.locator('#status-text')).toContainText(/Report assets loaded|plots loading/i);
+  await expect(page.locator('#status-text')).toContainText(/Report assets loaded/i);
 
   await page.getByRole('button', { name: 'Guide' }).click();
   await expect(page.getByRole('heading', { name: 'Report versions and links' })).toBeVisible();
