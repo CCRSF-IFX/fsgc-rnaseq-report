@@ -55,6 +55,13 @@ or pair ID column is marked as categorical.
 
 Advanced analysis is for interaction or combined-group questions.
 
+The interaction guidance follows common DESeq2 design patterns, including the
+worked examples in
+[DESeq2 experimental design and interpretation](https://rstudio-pubs-static.s3.amazonaws.com/329027_593046fb6d7a427da6b2c538caf601e1.html).
+That reference is useful background for understanding why the report asks for
+reference levels and why interaction models can produce several biologically
+different result tables from one fitted model.
+
 ### Omnibus Interaction Test
 
 Use Omnibus interaction test first when asking whether a condition effect
@@ -223,6 +230,25 @@ Optional retained outputs include:
 
 Each retained output becomes its own result set with its own plot, table,
 cache entry, and possible GSEA input. Select only the outputs you need.
+
+The table below maps common DESeq2 interaction questions from the reference
+examples to report choices.
+
+| Biological question | Report choice | Notes |
+| --- | --- | --- |
+| Two groups, such as treated vs control | Pairwise comparison | Use the denominator as the reference level. |
+| One factor with more than two levels | Pairwise comparison | Choose the numerator and denominator for the specific comparison. |
+| Condition effect at the modifier reference level | Interaction effect, then retain Condition main effect at modifier reference | Example: treatment effect in the reference tissue or genotype. |
+| Modifier effect at the condition reference level | Interaction effect, then retain Modifier main effect at condition reference | Example: tissue difference in the untreated or mock group. |
+| Condition effect within each modifier level | Interaction effect, then retain Condition effect within each modifier level | Example: treatment vs control separately inside each tissue or genotype. |
+| Modifier effect within each condition level | Interaction effect, then retain Modifier effect within each condition level | Example: tissue difference separately inside each condition. |
+| Difference in condition response between modifier levels | Interaction effect, then retain Interaction coefficients | Example: whether treatment response differs between two tissues or genotypes. |
+| Any evidence that condition response varies across modifier levels | Omnibus Interaction Test | Best first-pass screen when the modifier has two or more levels. |
+
+The current report intentionally avoids arbitrary free-form coefficient-vector
+contrasts in the UI. For non-reference simple effects, choose the desired
+denominator/reference levels and rerun the analysis. For three-way interactions
+or custom numeric contrasts, use a scripted DESeq2 workflow outside the report.
 
 ### Direct Combined-Group Comparison
 

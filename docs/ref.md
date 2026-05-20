@@ -18,6 +18,7 @@
 - [webR documentation](https://docs.r-wasm.org/webr/)
 - [r-wasm/actions](https://github.com/r-wasm/actions)
 - [DESeq2](https://bioconductor.org/packages/DESeq2/)
+- [DESeq2 experimental design and interpretation](https://rstudio-pubs-static.s3.amazonaws.com/329027_593046fb6d7a427da6b2c538caf601e1.html)
 - [fgsea](https://bioconductor.org/packages/fgsea/)
 - [Plotly JavaScript](https://plotly.com/javascript/)
 - [MkDocs](https://www.mkdocs.org/)
