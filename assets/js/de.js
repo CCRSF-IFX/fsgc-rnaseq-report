@@ -27,6 +27,10 @@ export async function renderCurrentContrast() {
   const padj = Number(document.getElementById('padj-threshold')?.value || 0.05);
   const lfc = Number(document.getElementById('lfc-threshold')?.value || 1);
   const showAll = Boolean(document.getElementById('de-show-all-genes')?.checked);
+  if (!rows.length) {
+    renderNoDeRows(contrast);
+    return;
+  }
   renderVolcano(rows, padj, lfc);
   renderMA(rows, padj, lfc);
   const degRows = rows.filter((row) => isDeg(row, padj, lfc));
@@ -41,6 +45,21 @@ export async function renderCurrentContrast() {
       : `Showing ${degRows.length.toLocaleString()} DEG rows passing padj <= ${padj} and |log2FC| >= ${lfc}. Turn on "Show all genes" for the full DE result.`;
   }
   renderTable('de-table', tableRows, { exportName: `${contrast.id}.${showAll ? 'all' : 'deg'}.csv` });
+}
+
+function renderNoDeRows(contrast) {
+  const message = contrast?.generated
+    ? 'No DE result rows are loaded for this inferred contrast. Run DESeq2, import an analysis cache, or provide pipeline DE results before reviewing DE plots or running GSEA.'
+    : 'No DE result rows are loaded for this contrast. Import an analysis cache or provide a non-empty pipeline DE result file.';
+  for (const id of ['volcano-plot', 'ma-plot']) {
+    const plot = document.getElementById(id);
+    if (!plot) continue;
+    globalThis.Plotly?.purge?.(plot);
+    plot.innerHTML = `<p class="note">${message}</p>`;
+  }
+  const tableStatus = document.getElementById('de-table-status');
+  if (tableStatus) tableStatus.textContent = message;
+  renderTable('de-table', []);
 }
 
 function populateContrastFamilySelect() {

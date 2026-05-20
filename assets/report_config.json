@@ -44,7 +44,8 @@
   },
   "analysis": {
     "conditionColumn": "condition",
-    "referenceLevel": "mock"
+    "referenceLevel": "mock",
+    "enableBrowserFallbackDE": false
   },
   "ai": {
     "enabled": false,

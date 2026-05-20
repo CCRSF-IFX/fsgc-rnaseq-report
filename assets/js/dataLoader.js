@@ -489,11 +489,15 @@ export async function loadDeForContrast(contrast) {
   if (state.deResults.has(contrast.id)) return state.deResults.get(contrast.id);
   const dataRoot = state.config.dataRoot || 'assets/data';
   let rows = contrast.de_file ? parseDeCsv(await loadText(`${dataRoot}/${contrast.de_file}`, false)) : [];
-  if (rows.length === 0 && contrast.column && contrast.numerator !== undefined && contrast.denominator !== undefined) {
+  if (rows.length === 0 && browserFallbackDeEnabled() && contrast.column && contrast.numerator !== undefined && contrast.denominator !== undefined) {
     rows = computeDifferentialExpression(state.counts, state.samples, contrast, state.config);
   }
   state.deResults.set(contrast.id, rows);
   return rows;
+}
+
+function browserFallbackDeEnabled() {
+  return state.config?.analysis?.enableBrowserFallbackDE === true;
 }
 
 export async function loadEnrichmentForContrast(contrast) {

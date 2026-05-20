@@ -141,7 +141,13 @@ With counts and a manifest, the report can derive:
 - Sample distances from log2(CPM + 1) expression.
 - Gene-level count summaries, sample bar plots, and grouped box plots.
 - Clustergrammer expression heatmaps from top-variable or custom gene lists.
-- Metadata-defined browser contrasts for optional downstream analysis.
+- Metadata-defined contrast choices for browser DESeq2 and downstream GSEA.
+
+Differential-expression result rows are not computed with JavaScript by
+default. They must come from a pipeline DE table, an imported analysis cache, or
+a DESeq2 run in webR. The legacy Welch-test fallback can be enabled only by
+setting `analysis.enableBrowserFallbackDE` to `true`, and should be reserved for
+demo or debugging reports.
 
 The PCA view supports one metadata column as color and, when more than one
 metadata factor is available, a second metadata column as marker shape. Extra

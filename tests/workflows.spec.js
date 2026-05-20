@@ -39,6 +39,16 @@ test('updates the DESeq2 question builder for pairwise and additive models', asy
   await expect(page.locator('#deseq-run')).toBeEnabled();
 });
 
+test('does not compute browser Welch DE fallback by default', async ({ page }) => {
+  await openReport(page);
+  await uploadSimulatedData(page);
+  await activateTab(page, 'de');
+
+  await expect(page.locator('#de-table-status')).toContainText('No DE result rows are loaded for this inferred contrast');
+  await expect(page.locator('#volcano-plot')).toContainText('Run DESeq2');
+  await expect(page.locator('#de-table')).toContainText('No table data available');
+});
+
 test('imports and exports analysis cache with DE and GSEA results', async ({ page }) => {
   await openReport(page);
   await activateTab(page, 'provenance');

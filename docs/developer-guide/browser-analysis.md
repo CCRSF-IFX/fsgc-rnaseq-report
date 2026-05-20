@@ -20,6 +20,13 @@ or correcting sample metadata.
 - `assets/report_config.json`: controls whether webR modules are enabled and
   which package snapshot or library bundle they use.
 
+JavaScript differential-expression fallback is disabled by default. When a
+contrast has no pipeline DE file, cached DESeq2 result, or newly run DESeq2
+result, `loadDeForContrast()` returns no rows and the UI asks the user to run
+DESeq2 or load results. Only enable `analysis.enableBrowserFallbackDE` for
+explicit demo or debugging workflows where a Welch test on `log2(CPM + 1)` is
+acceptable.
+
 The DESeq2 interaction behavior follows common DESeq2 design patterns,
 including the examples in
 [DESeq2 experimental design and interpretation](https://rstudio-pubs-static.s3.amazonaws.com/329027_593046fb6d7a427da6b2c538caf601e1.html).

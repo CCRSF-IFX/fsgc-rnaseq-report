@@ -17,6 +17,14 @@ analysis.
 No. Browser DESeq2 is an exploratory feature. Pipeline-generated and reviewed
 outputs should remain the source of truth for final reporting.
 
+## Does the report calculate DE results with JavaScript?
+
+No by default. If a selected contrast has no pipeline DE table, cached DESeq2
+result, or browser-run DESeq2 result, the report shows that DE rows are missing
+and asks the user to run DESeq2 or load results. The older JavaScript Welch-test
+fallback is disabled in the shipped configuration so GSEA is not ranked from a
+non-DESeq2 approximation by accident.
+
 ## Which DESeq2 question type should I use?
 
 Use Pairwise comparison for a direct two-level comparison without adjustment.
