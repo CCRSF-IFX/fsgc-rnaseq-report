@@ -419,7 +419,7 @@ jobs:
           trap 'rm -rf "$tmpdir"' EXIT
           curl -fsSL "$runtime_base/R.wasm" -o "$tmpdir/R.wasm"
           tar -xzf "$fastmatch_pkg" -C "$tmpdir"
-          node scripts/check_webr_package_abi.js "$tmpdir/R.wasm" "$tmpdir/fastmatch/libs/fastmatch.so"
+          node scripts/check_webr_package_abi.cjs "$tmpdir/R.wasm" "$tmpdir/fastmatch/libs/fastmatch.so"
 
       - name: Build webR package snapshot archive
         if: steps.snapshot-guard.outputs.build_snapshot == 'true'

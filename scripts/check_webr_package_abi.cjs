@@ -141,7 +141,7 @@ function exportedFunctionSignatures(module) {
 function main() {
   const [runtimePath, ...sideModulePaths] = process.argv.slice(2);
   if (!runtimePath || sideModulePaths.length === 0) {
-    console.error('Usage: node scripts/check_webr_package_abi.js <R.wasm> <package.so> [...]');
+    console.error('Usage: node scripts/check_webr_package_abi.cjs <R.wasm> <package.so> [...]');
     process.exit(2);
   }
 
