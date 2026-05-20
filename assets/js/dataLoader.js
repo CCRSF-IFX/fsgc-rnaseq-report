@@ -337,6 +337,7 @@ export async function loadCoreAssets() {
   if (!state.pca) state.pca = computePcaFromCounts(state.counts, state.samples, state.config);
   if (!state.distance) state.distance = computeSampleDistanceFromCounts(state.counts, state.samples, state.config);
   if (state.contrasts.length === 0) state.contrasts = inferContrastsFromSamples(state.samples, state.config, state.metadataSchema);
+  await loadDefaultAnalysisCache(dataRoot);
   validatePca(state.pca);
   if (state.distance) validateDistance(state.distance);
 }
@@ -525,6 +526,148 @@ function enrichmentResultForContrast(contrastId, sourceKind = '') {
 
 function enrichmentRows(entry) {
   return Array.isArray(entry) ? entry : (entry?.rows || []);
+}
+
+async function loadDefaultAnalysisCache(dataRoot) {
+  const configured = cleanRelativeAssetPath(state.config?.analysisCacheFile || state.config?.defaultAnalysisCacheFile);
+  const candidates = configured ? [configured] : ['analysis_cache.json'];
+  for (const candidate of candidates) {
+    const cache = await loadJsonQuiet(`${dataRoot}/${candidate}`, Boolean(configured));
+    if (!cache) continue;
+    restoreDefaultAnalysisCache(cache);
+    return;
+  }
+}
+
+function restoreDefaultAnalysisCache(cache) {
+  if (!cache || typeof cache !== 'object') return;
+  if (cache.cache_kind && cache.cache_kind !== 'rnaseq-report-analysis-cache') {
+    throw new Error('Default analysis cache is not an RNA-seq report analysis cache.');
+  }
+
+  restoreDefaultAnalysisScopes(cache.analysis_scopes);
+  const contrastById = new Map(state.contrasts.map((contrast) => [contrast.id, contrast]));
+  mergeDefaultCacheContrasts(contrastById, cache.contrasts);
+  mergeDefaultCacheContrasts(contrastById, cache.de_analyses, { analysis: true });
+
+  (Array.isArray(cache.de_results) ? cache.de_results : []).forEach((entry) => {
+    if (!entry?.contrast_id || !Array.isArray(entry.rows)) return;
+    if (!contrastById.has(entry.contrast_id)) {
+      contrastById.set(entry.contrast_id, {
+        id: entry.contrast_id,
+        label: entry.contrast_id,
+        cached: true,
+      });
+    }
+    state.deResults.set(entry.contrast_id, plainRows(entry.rows));
+  });
+
+  (Array.isArray(cache.gsea_results) ? cache.gsea_results : []).forEach((entry) => {
+    if (!entry?.contrast_id || !Array.isArray(entry.rows)) return;
+    if (!contrastById.has(entry.contrast_id)) {
+      contrastById.set(entry.contrast_id, {
+        id: entry.contrast_id,
+        label: entry.contrast_id,
+        cached: true,
+      });
+    }
+    const resultId = entry.result_id || defaultGseaResultId(entry);
+    state.enrichmentResults.set(resultId, {
+      result_id: resultId,
+      contrast_id: entry.contrast_id,
+      label: entry.label || entry.source_label || entry.reference || entry.contrast_id,
+      source_kind: entry.source_kind || 'analysis-cache',
+      source_id: entry.source_id || entry.reference || resultId,
+      source_label: entry.source_label || entry.reference || 'Default GSEA result',
+      reference: entry.reference || '',
+      min_size: entry.min_size ?? '',
+      max_size: entry.max_size ?? '',
+      curve_limit: entry.curve_limit ?? entry.top_n_pathway_plots ?? '',
+      curve_up_limit: entry.curve_up_limit ?? '',
+      curve_down_limit: entry.curve_down_limit ?? '',
+      created_at: entry.created_at || cache.created_at || '',
+      enrichment_curves: plainGseaCurves(entry.enrichment_curves || entry.curves),
+      rows: plainRows(entry.rows),
+    });
+  });
+
+  state.contrasts = Array.from(contrastById.values());
+}
+
+function mergeDefaultCacheContrasts(contrastById, contrasts, options = {}) {
+  (Array.isArray(contrasts) ? contrasts : []).forEach((contrast) => {
+    const id = options.analysis ? contrast?.contrast_id : contrast?.id;
+    if (!id) return;
+    const normalized = options.analysis ? { ...contrast, id } : contrast;
+    contrastById.set(id, {
+      ...contrastById.get(id),
+      ...plainObject(normalized),
+      id,
+      cached: true,
+    });
+  });
+}
+
+function restoreDefaultAnalysisScopes(scopes) {
+  if (!Array.isArray(scopes) || !scopes.length) return;
+  const byId = new Map((state.analysisScopes || []).map((scope) => [scope.id, scope]));
+  scopes.forEach((scope) => {
+    if (!scope?.id) return;
+    byId.set(scope.id, {
+      ...plainObject(scope),
+      cached: true,
+    });
+  });
+  state.analysisScopes = Array.from(byId.values());
+}
+
+function plainRows(rows) {
+  return (Array.isArray(rows) ? rows : []).map(plainObject);
+}
+
+function plainObject(value) {
+  return Object.fromEntries(Object.entries(value || {}).map(([key, item]) => [key, item ?? '']));
+}
+
+function plainGseaCurves(curves) {
+  return (Array.isArray(curves) ? curves : []).map((curve) => ({
+    term_id: curve.term_id || '',
+    term_name: curve.term_name || curve.term_id || '',
+    enrichmentScore: curve.enrichmentScore ?? '',
+    NES: curve.NES ?? '',
+    padj: curve.padj ?? '',
+    size: curve.size ?? '',
+    totalRanks: curve.totalRanks ?? curve.total_ranks ?? '',
+    points: plainRows(curve.points),
+    hits: plainRows(curve.hits),
+  })).filter((curve) => curve.term_id && curve.points.length);
+}
+
+function defaultGseaResultId(entry) {
+  return [
+    entry.contrast_id,
+    entry.source_kind || 'gsea',
+    entry.source_id || entry.source_label || entry.reference || 'cached',
+    entry.min_size ? `min${entry.min_size}` : '',
+    entry.max_size ? `max${entry.max_size}` : '',
+    entry.curve_limit ? `plots${entry.curve_limit}` : '',
+    entry.curve_up_limit ? `up${entry.curve_up_limit}` : '',
+    entry.curve_down_limit ? `down${entry.curve_down_limit}` : '',
+  ].map(slug).filter(Boolean).join('__') || `${entry.contrast_id || 'contrast'}__gsea`;
+}
+
+function cleanRelativeAssetPath(value) {
+  const path = String(value || '').trim().replace(/^\/+/, '');
+  if (!path || path.includes('..')) return '';
+  return path;
+}
+
+function slug(value) {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '') || 'item';
 }
 
 function validateSamples(samples) {

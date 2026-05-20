@@ -9,6 +9,7 @@
   "reportOrganization": "Frederick Sequencing and Genomics Core",
   "runId": "GSE164073",
   "dataRoot": "assets/data/gse164073",
+  "analysisCacheFile": "analysis_cache.json",
   "hostedSite": {
     "repository": "CCRSF-IFX/fsgc-rnaseq-report",
     "repositoryUrl": "https://github.com/CCRSF-IFX/fsgc-rnaseq-report",
