@@ -26,8 +26,8 @@ test('generated standalone report loads without module script tags', async ({ pa
   await expect(page.locator('#report-title')).not.toBeEmpty();
   await expect(page.locator('#status-text')).toContainText(/Report assets loaded/i);
 
-  await expect(page.locator('#contrast-count')).toHaveText('1');
-  await expect(page.locator('#contrast-select')).toContainText(/treated vs control/i);
+  await expect(page.locator('#contrast-count')).toHaveText('0');
+  await expect(page.locator('#de-table-status')).toContainText('No DE results are loaded yet');
   await expect(page.locator('script[type="module"]')).toHaveCount(0);
   await expect.poll(
     () => page.evaluate(() => Object.keys(globalThis.REPORT_EMBEDDED_ASSETS || {}).length),

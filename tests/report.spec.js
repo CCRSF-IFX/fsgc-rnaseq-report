@@ -1,6 +1,6 @@
 // @ts-check
 import { test, expect } from '@playwright/test';
-import { openReport } from './helpers/reportPage.js';
+import { activateTab, openReport } from './helpers/reportPage.js';
 
 test('loads the report shell and configured version links', async ({ page }) => {
   await openReport(page);
@@ -28,4 +28,8 @@ test('loads the report shell and configured version links', async ({ page }) => 
     'href',
     'https://github.com/CCRSF-IFX/fsgc-rnaseq-report',
   );
+
+  await activateTab(page, 'de');
+  await expect(page.locator('#contrast-family-select')).not.toContainText('Browser-generated results');
+  await expect(page.locator('#de-contrast-tags')).not.toContainText('browser_welch');
 });

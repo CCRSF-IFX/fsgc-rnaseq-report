@@ -1,6 +1,6 @@
 import { state, logAnalysis, setStatus, yieldToBrowser } from './state.js';
 import { sampleIdsInCounts } from './analysis.js';
-import { countSampleIdsFromCounts } from './dataLoader.js';
+import { countSampleIdsFromCounts, filterDisabledBrowserFallbackCache, skippedBrowserFallbackCount } from './dataLoader.js';
 import { gseaResultCurves } from './enrichment.js';
 import { metadataSchemaForCache, restoreMetadataSchemaFromCache } from './metadataSchema.js';
 
@@ -106,7 +106,10 @@ async function importAnalysisCacheFromInput(event) {
     setAnalysisCacheProgress('Loading cache', 'Parsing JSON', 0.62);
     setStatus('Analysis cache: parsing JSON', { busy: true, progress: 0.62 });
     await yieldToBrowser();
-    const cache = parseAnalysisCache(JSON.parse(text));
+    let cache = parseAnalysisCache(JSON.parse(text));
+    const filtered = filterDisabledBrowserFallbackCache(cache);
+    cache = filtered.cache;
+    const skippedFallbackItems = skippedBrowserFallbackCount(filtered.skipped);
     validateAnalysisCacheSampleCompatibility(cache);
 
     setAnalysisCacheProgress('Loading cache', 'Restoring results', 0.78);
@@ -117,7 +120,10 @@ async function importAnalysisCacheFromInput(event) {
     const metadataNote = restored.sampleMetadata
       ? ` and ${restored.sampleMetadataRows} sample metadata row(s)`
       : '';
-    markAnalysisCacheClean(`Loaded cache with ${cache.de_results.length} DESeq2 result set(s), ${cache.gsea_results.length} fgsea result set(s)${metadataNote}.`);
+    const skippedNote = skippedFallbackItems
+      ? ` Skipped ${skippedFallbackItems} legacy browser Welch cache item(s) because browser fallback DE is disabled.`
+      : '';
+    markAnalysisCacheClean(`Loaded cache with ${cache.de_results.length} DESeq2 result set(s), ${cache.gsea_results.length} fgsea result set(s)${metadataNote}.${skippedNote}`);
     logAnalysis(`Analysis cache loaded from ${file.name}.`);
     setAnalysisCacheProgress('Cache loaded', file.name, 1, 'ok');
     await refreshImportedAnalysis(cache, restored);

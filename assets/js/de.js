@@ -22,7 +22,10 @@ export async function renderCurrentContrast() {
   const contrast = state.contrasts.find((c) => c.id === select?.value) || state.contrasts[0];
   renderContrastTags(contrast);
   renderContrastNote(contrast);
-  if (!contrast) return;
+  if (!contrast) {
+    renderNoDeRows(null);
+    return;
+  }
   const rows = await loadDeForContrast(contrast);
   const padj = Number(document.getElementById('padj-threshold')?.value || 0.05);
   const lfc = Number(document.getElementById('lfc-threshold')?.value || 1);
@@ -55,7 +58,9 @@ function readVolcanoOptions() {
 }
 
 function renderNoDeRows(contrast) {
-  const message = contrast?.generated
+  const message = !contrast
+    ? 'No DE results are loaded yet. Run DESeq2, import an analysis cache, or provide pipeline DE results before reviewing DE plots or running GSEA.'
+    : contrast?.generated
     ? 'No DE result rows are loaded for this inferred contrast. Run DESeq2, import an analysis cache, or provide pipeline DE results before reviewing DE plots or running GSEA.'
     : 'No DE result rows are loaded for this contrast. Import an analysis cache or provide a non-empty pipeline DE result file.';
   for (const id of ['volcano-plot', 'ma-plot']) {

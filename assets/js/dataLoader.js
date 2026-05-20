@@ -326,7 +326,7 @@ export async function loadCoreAssets() {
   state.distance = await loadJson(`${dataRoot}/sample_distance_matrix.json`, false);
   state.geneAnnotation = [];
   state.geneAnnotationLoaded = false;
-  state.contrasts = await loadJson(`${dataRoot}/contrast_list.json`, false) || [];
+  state.contrasts = filterDisabledBrowserFallbackContrasts(await loadJson(`${dataRoot}/contrast_list.json`, false) || []);
   state.provenance = await loadJson(`${dataRoot}/logs/pipeline_provenance.json`, false);
   state.software = await loadJson(`${dataRoot}/logs/software_versions.json`, false);
 
@@ -336,7 +336,9 @@ export async function loadCoreAssets() {
   validateCounts(state.counts);
   if (!state.pca) state.pca = computePcaFromCounts(state.counts, state.samples, state.config);
   if (!state.distance) state.distance = computeSampleDistanceFromCounts(state.counts, state.samples, state.config);
-  if (state.contrasts.length === 0) state.contrasts = inferContrastsFromSamples(state.samples, state.config, state.metadataSchema);
+  if (state.contrasts.length === 0 && browserFallbackDeEnabled()) {
+    state.contrasts = inferContrastsFromSamples(state.samples, state.config, state.metadataSchema);
+  }
   await loadDefaultAnalysisCache(dataRoot);
   validatePca(state.pca);
   if (state.distance) validateDistance(state.distance);
@@ -500,8 +502,80 @@ export async function loadDeForContrast(contrast) {
   return rows;
 }
 
-function browserFallbackDeEnabled() {
+export function browserFallbackDeEnabled() {
   return state.config?.analysis?.enableBrowserFallbackDE === true;
+}
+
+export function isBrowserFallbackContrast(contrast = {}) {
+  const method = String(contrast.method || '').trim().toLowerCase();
+  const family = String(contrast.result_family || '').trim().toLowerCase();
+  return method === 'browser_welch'
+    || method.includes('browser welch')
+    || family === 'browser_generated';
+}
+
+export function filterDisabledBrowserFallbackContrasts(contrasts) {
+  const rows = Array.isArray(contrasts) ? contrasts : [];
+  if (browserFallbackDeEnabled()) return rows;
+  return rows.filter((contrast) => !isBrowserFallbackContrast(contrast));
+}
+
+export function filterDisabledBrowserFallbackCache(cache) {
+  if (browserFallbackDeEnabled() || !cache || typeof cache !== 'object') {
+    return { cache, skipped: skippedBrowserFallbackSummary() };
+  }
+
+  const contrasts = Array.isArray(cache.contrasts) ? cache.contrasts : [];
+  const analyses = Array.isArray(cache.de_analyses) ? cache.de_analyses : [];
+  const deResults = Array.isArray(cache.de_results) ? cache.de_results : [];
+  const gseaResults = Array.isArray(cache.gsea_results) ? cache.gsea_results : [];
+  const disabledIds = new Set();
+
+  contrasts.forEach((contrast) => {
+    if (contrast?.id && isBrowserFallbackContrast(contrast)) disabledIds.add(contrast.id);
+  });
+  analyses.forEach((analysis) => {
+    if (analysis?.contrast_id && isBrowserFallbackContrast(analysis)) disabledIds.add(analysis.contrast_id);
+  });
+  deResults.forEach((entry) => {
+    if (entry?.contrast_id && disabledIds.has(entry.contrast_id)) return;
+    if (entry?.contrast_id && deResultLooksLikeBrowserFallback(entry)) disabledIds.add(entry.contrast_id);
+  });
+
+  const filtered = {
+    ...cache,
+    contrasts: contrasts.filter((contrast) => !disabledIds.has(contrast?.id) && !isBrowserFallbackContrast(contrast)),
+    de_analyses: analyses.filter((analysis) => !disabledIds.has(analysis?.contrast_id) && !isBrowserFallbackContrast(analysis)),
+    de_results: deResults.filter((entry) => !disabledIds.has(entry?.contrast_id)),
+    gsea_results: gseaResults.filter((entry) => !disabledIds.has(entry?.contrast_id)),
+  };
+  return {
+    cache: filtered,
+    skipped: skippedBrowserFallbackSummary({
+      contrasts: contrasts.length - filtered.contrasts.length,
+      deAnalyses: analyses.length - filtered.de_analyses.length,
+      deResults: deResults.length - filtered.de_results.length,
+      gseaResults: gseaResults.length - filtered.gsea_results.length,
+    }),
+  };
+}
+
+function deResultLooksLikeBrowserFallback(entry) {
+  const rows = Array.isArray(entry?.rows) ? entry.rows : [];
+  return rows.some((row) => String(row?.method || '').toLowerCase().includes('browser welch'));
+}
+
+function skippedBrowserFallbackSummary(values = {}) {
+  return {
+    contrasts: values.contrasts || 0,
+    deAnalyses: values.deAnalyses || 0,
+    deResults: values.deResults || 0,
+    gseaResults: values.gseaResults || 0,
+  };
+}
+
+export function skippedBrowserFallbackCount(skipped = {}) {
+  return (skipped.contrasts || 0) + (skipped.deAnalyses || 0) + (skipped.deResults || 0) + (skipped.gseaResults || 0);
 }
 
 export async function loadEnrichmentForContrast(contrast) {
@@ -551,6 +625,12 @@ function restoreDefaultAnalysisCache(cache) {
   if (!cache || typeof cache !== 'object') return;
   if (cache.cache_kind && cache.cache_kind !== 'rnaseq-report-analysis-cache') {
     throw new Error('Default analysis cache is not an RNA-seq report analysis cache.');
+  }
+  const filtered = filterDisabledBrowserFallbackCache(cache);
+  cache = filtered.cache;
+  const skipped = skippedBrowserFallbackCount(filtered.skipped);
+  if (skipped > 0) {
+    console.warn(`Skipped ${skipped} legacy browser Welch cache item(s) because analysis.enableBrowserFallbackDE is false.`);
   }
 
   restoreDefaultAnalysisScopes(cache.analysis_scopes);

@@ -14,7 +14,7 @@ test('uploads a count matrix and sample manifest', async ({ page }) => {
 
   await expect(page.locator('#user-data-status')).toContainText('Loaded 8 metadata rows');
   await expect(page.locator('#sample-count')).toHaveText('8');
-  await expect(page.locator('#contrast-count')).toHaveText('1');
+  await expect(page.locator('#contrast-count')).toHaveText('0');
   await expect(page.locator('#samples-table')).toContainText('SIM_C1');
   await expect(page.locator('#counts-table')).toContainText('SimInflam1');
 });
@@ -44,7 +44,8 @@ test('does not compute browser Welch DE fallback by default', async ({ page }) =
   await uploadSimulatedData(page);
   await activateTab(page, 'de');
 
-  await expect(page.locator('#de-table-status')).toContainText('No DE result rows are loaded for this inferred contrast');
+  await expect(page.locator('#contrast-count')).toHaveText('0');
+  await expect(page.locator('#de-table-status')).toContainText('No DE results are loaded yet');
   await expect(page.locator('#volcano-plot')).toContainText('Run DESeq2');
   await expect(page.locator('#de-table')).toContainText('No table data available');
 });

@@ -12,6 +12,7 @@ import {
   parseCsv,
   parseTsv,
   validateCountMatrix,
+  browserFallbackDeEnabled,
 } from './dataLoader.js';
 import { captureAnalysisCacheBaseline } from './analysisCache.js';
 import { refreshMetadataSchema } from './metadataSchema.js';
@@ -57,7 +58,9 @@ async function applyUploadedUserData() {
     }
     state.pca = computePcaFromCounts(state.counts, state.samples, state.config);
     state.distance = computeSampleDistanceFromCounts(state.counts, state.samples, state.config);
-    state.contrasts = inferContrastsFromSamples(state.samples, state.config, state.metadataSchema);
+    state.contrasts = browserFallbackDeEnabled()
+      ? inferContrastsFromSamples(state.samples, state.config, state.metadataSchema)
+      : [];
     state.analysisScopes = [];
     state.activeAnalysisScopeId = 'all_samples';
     state.deResults = new Map();
