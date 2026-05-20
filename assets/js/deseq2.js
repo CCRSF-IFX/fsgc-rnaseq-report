@@ -25,6 +25,8 @@ import {
 
 let deseqCallbacks = {};
 let deseqControlsWired = false;
+let deseqPreviewSignature = '';
+let deseqPreviewWatcher = null;
 
 export function setupDeseqControls(callbacks = {}) {
   deseqCallbacks = callbacks;
@@ -42,11 +44,32 @@ export function setupDeseqControls(callbacks = {}) {
   updateDeseqAdjustControls();
   populateExcludedSamples();
   renderDeseqPreview();
+  startDeseqPreviewWatcher();
 
   if (!deseqControlsWired) {
     deseqControlsWired = true;
     wireDeseqBuilderControls();
     document.getElementById('deseq-run')?.addEventListener('click', runDeseq2Analysis);
+  }
+}
+
+function startDeseqPreviewWatcher() {
+  if (deseqPreviewWatcher) return;
+  deseqPreviewSignature = deseqCurrentFormSignature();
+  deseqPreviewWatcher = setInterval(() => {
+    const signature = deseqCurrentFormSignature();
+    if (signature === deseqPreviewSignature) return;
+    deseqPreviewSignature = signature;
+    renderDeseqPreview();
+    deseqCallbacks.renderAnalysisReadiness?.();
+  }, 250);
+}
+
+function deseqCurrentFormSignature() {
+  try {
+    return JSON.stringify(readDeseqFormValues());
+  } catch {
+    return '';
   }
 }
 
@@ -74,10 +97,46 @@ function wireDeseqBuilderControls() {
   ].forEach((id) => {
     document.getElementById(id)?.addEventListener('change', refreshDeseqBuilder);
   });
+  wireMultiSelectRefresh('deseq-exclude-samples');
+  wireMultiSelectRefresh('deseq-adjust-columns');
+  wireDeseqAdjustChecklist();
   document.querySelectorAll('input[name="deseq-scope-mode"]').forEach((radio) => {
     radio.addEventListener('change', refreshDeseqBuilder);
   });
 }
+
+function wireMultiSelectRefresh(id) {
+  const select = document.getElementById(id);
+  if (!select) return;
+  select.addEventListener('mousedown', (event) => {
+    if (event.target?.tagName !== 'OPTION') return;
+    event.preventDefault();
+    event.target.selected = !event.target.selected;
+    refreshDeseqBuilder(event);
+  });
+  ['input', 'click', 'keyup', 'mouseup', 'pointerup', 'blur'].forEach((eventName) => {
+    select.addEventListener(eventName, (event) => {
+      refreshDeseqBuilder(event);
+      setTimeout(() => refreshDeseqBuilder(event), 0);
+    });
+  });
+}
+
+function wireDeseqAdjustChecklist() {
+  const list = document.getElementById('deseq-adjust-list');
+  if (!list) return;
+  list.addEventListener('change', (event) => {
+    const checkbox = event.target;
+    if (!(checkbox instanceof HTMLInputElement) || checkbox.type !== 'checkbox') return;
+    const select = document.getElementById('deseq-adjust-columns');
+    const option = Array.from(select?.options || []).find((item) => item.value === checkbox.value);
+    if (option) option.selected = checkbox.checked;
+    syncAdjustSelectionDataset(select);
+    refreshDeseqBuilder(event);
+    setTimeout(renderDeseqPreview, 0);
+  });
+}
+
 
 function refreshDeseqBuilder(event = null) {
   const changedId = event?.currentTarget?.id || '';
@@ -443,6 +502,32 @@ function updateDeseqAdjustControls() {
     return `<option value="${deseqEscapeHtml(column)}"${previous.has(column) ? ' selected' : ''}>${deseqEscapeHtml(column)} (${suffix})</option>`;
   }).join('');
   adjustSelect.disabled = candidates.length === 0;
+  syncAdjustSelectionDataset(adjustSelect);
+  renderDeseqAdjustChecklist(candidates, previous, scope.sampleIds);
+}
+
+function syncAdjustSelectionDataset(select) {
+  if (!select) return;
+  select.dataset.selectedValues = Array.from(select.selectedOptions || [])
+    .map((option) => option.value)
+    .filter(Boolean)
+    .join('\t');
+}
+
+function renderDeseqAdjustChecklist(candidates, selectedValuesSet, sampleIds) {
+  const list = document.getElementById('deseq-adjust-list');
+  if (!list) return;
+  if (!candidates.length) {
+    list.innerHTML = '<p class="empty-note">No eligible adjustment variables for the selected model and sample scope.</p>';
+    return;
+  }
+  list.innerHTML = candidates.map((column) => {
+    const levels = levelsForColumn(column, sampleIds).length;
+    const type = metadataColumnType(column);
+    const suffix = type === 'continuous' ? 'continuous' : `${levels} levels`;
+    const checked = selectedValuesSet.has(column) ? ' checked' : '';
+    return `<label class="check-label"><input type="checkbox" value="${deseqEscapeHtml(column)}"${checked} /> ${deseqEscapeHtml(column)} <span class="muted">(${deseqEscapeHtml(suffix)})</span></label>`;
+  }).join('');
 }
 
 function columnVariesInScope(column, sampleIds) {

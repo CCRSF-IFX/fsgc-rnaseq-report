@@ -64,11 +64,11 @@ export function readDeseqFormValues(root = document) {
     scopeMode: root.querySelector('input[name="deseq-scope-mode"]:checked')?.value || 'all',
     scopeColumn: root.getElementById('deseq-scope-column')?.value || '',
     scopeLevel: root.getElementById('deseq-scope-level')?.value || '',
-    excludedSampleIds: selectedValues(root, 'deseq-exclude-samples'),
+    excludedSampleIds: selectedDeseqValues(root, 'deseq-exclude-samples'),
     primaryFactor: root.getElementById('deseq-design-column')?.value || '',
     numerator: root.getElementById('deseq-numerator-level')?.value || '',
     denominator: root.getElementById('deseq-denominator-level')?.value || '',
-    adjustColumns: selectedValues(root, 'deseq-adjust-columns'),
+    adjustColumns: selectedDeseqValues(root, 'deseq-adjust-columns'),
     groupFactors: [
       root.getElementById('deseq-group-factor-a')?.value || '',
       root.getElementById('deseq-group-factor-b')?.value || '',
@@ -643,10 +643,19 @@ function countBy(items, callback) {
   }, {});
 }
 
-function selectedValues(root, id) {
-  return Array.from(root.getElementById(id)?.selectedOptions || [])
+function selectedDeseqValues(root, id) {
+  const element = root.getElementById(id);
+  const values = Array.from(element?.selectedOptions || [])
     .map((option) => option.value)
     .filter(Boolean);
+  if (id !== 'deseq-adjust-columns') return values;
+  const dataValues = String(element?.dataset?.selectedValues || '')
+    .split('\t')
+    .filter(Boolean);
+  const checkedValues = Array.from(root.querySelectorAll('#deseq-adjust-list input[type="checkbox"]:checked'))
+    .map((input) => input.value)
+    .filter(Boolean);
+  return uniqueStrings(values.concat(dataValues, checkedValues));
 }
 
 function uniqueStrings(values) {

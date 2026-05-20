@@ -469,7 +469,8 @@
             </section>
             <section class="deseq-panel">
               <h4>3. Adjustment variables</h4>
-              <label class="deseq-wide-label">Adjust/block by <select id="deseq-adjust-columns" multiple size="5"></select></label>
+              <label class="deseq-wide-label">Adjust/block by <select id="deseq-adjust-columns" multiple size="5" hidden></select></label>
+              <div id="deseq-adjust-list" class="deseq-option-list" role="group" aria-label="Adjustment variables"></div>
               <p class="note">Choose optional batch, sex, subject, paired-sample, or numeric covariate columns. Constant columns inside the selected scope are excluded.</p>
             </section>
             <section class="deseq-panel deseq-preview-panel">
