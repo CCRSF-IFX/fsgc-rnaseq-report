@@ -7,8 +7,11 @@ import argparse
 import base64
 import json
 import mimetypes
+import os
 import re
+import shutil
 import subprocess
+import tempfile
 import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
@@ -282,76 +285,53 @@ def inject_standalone_script(html: str, context: BuildContext) -> str:
 
 def bundled_app_script(repo_root: Path, assets: dict[str, str]) -> str:
     assets_json = json.dumps(assets, ensure_ascii=False, separators=(",", ":"))
-    chunks = [
+    embedded_assets_script = "\n".join([
         "const REPORT_EMBEDDED_ASSETS = Object.freeze(" + assets_json + ");",
         "globalThis.REPORT_EMBEDDED_ASSETS = REPORT_EMBEDDED_ASSETS;",
-    ]
-
-    for relative_path in js_bundle_order(repo_root):
-        source_path = repo_root / relative_path
-        chunks.append(f"\n// ---- {relative_path} ----\n{strip_module_syntax(read_text(source_path))}")
-
-    return "(function () {\n'use strict';\n" + "\n".join(chunks) + "\n})();\n"
+    ])
+    return f"(function () {{\n'use strict';\n{embedded_assets_script}\n}})();\n{bundle_app_script(repo_root)}\n"
 
 
-def js_bundle_order(repo_root: Path, entrypoint: str = JS_ENTRYPOINT) -> list[str]:
-    order: list[str] = []
-    visiting: set[str] = set()
-    visited: set[str] = set()
+def bundle_app_script(repo_root: Path) -> str:
+    entrypoint = repo_root / JS_ENTRYPOINT
+    if not entrypoint.is_file():
+        raise FileNotFoundError(f"JavaScript entrypoint not found: {entrypoint}")
 
-    def visit(relative_path: str) -> None:
-        if relative_path in visited:
-            return
-        if relative_path in visiting:
-            raise RuntimeError(f"Circular JavaScript import detected at {relative_path}")
-        source_path = repo_root / relative_path
-        if not source_path.is_file():
-            raise FileNotFoundError(f"JavaScript module not found: {relative_path}")
-
-        visiting.add(relative_path)
-        for imported_path in local_imports(read_text(source_path), source_path, repo_root):
-            visit(imported_path)
-        visiting.remove(relative_path)
-        visited.add(relative_path)
-        order.append(relative_path)
-
-    visit(entrypoint)
-    return order
-
-
-def strip_module_syntax(source: str) -> str:
-    lines = []
-    skipping_import = False
-    for line in source.splitlines():
-        if skipping_import:
-            if ";" in line:
-                skipping_import = False
-            continue
-        if re.match(r"^\s*import\b", line):
-            if ";" not in line:
-                skipping_import = True
-            continue
-        line = re.sub(
-            r"^\s*export\s+(?=(async\s+)?function\b|const\b|let\b|var\b|class\b)",
-            "",
-            line,
-        )
-        if re.match(r"^\s*export\s*\{", line):
-            continue
-        lines.append(line)
-    return "\n".join(lines)
-
-
-def local_imports(source: str, source_path: Path, repo_root: Path) -> list[str]:
-    imports = []
-    for match in re.finditer(r"^\s*import\s+(?:[\s\S]*?\s+from\s+)?['\"](\.[^'\"]+)['\"]\s*;", source, flags=re.M):
-        specifier = re.split(r"[?#]", match.group(1), maxsplit=1)[0]
-        imported = (source_path.parent / specifier).resolve()
+    with tempfile.TemporaryDirectory(prefix="rnaseq-report-bundle-") as temp_dir:
+        output_path = Path(temp_dir) / "app.bundle.js"
+        command = esbuild_command(repo_root) + [
+            str(entrypoint),
+            "--bundle",
+            "--format=iife",
+            "--global-name=RNASeqReportApp",
+            "--platform=browser",
+            "--target=es2020",
+            "--legal-comments=none",
+            "--log-level=warning",
+            f"--outfile={output_path}",
+        ]
         try:
-            imports.append(imported.relative_to(repo_root).as_posix())
-        except ValueError:
-            continue
-    return imports
+            subprocess.run(command, cwd=repo_root, check=True, text=True, capture_output=True)
+        except FileNotFoundError as error:
+            raise RuntimeError(
+                "esbuild is required to build standalone reports. Run `npm install` first."
+            ) from error
+        except subprocess.CalledProcessError as error:
+            details = "\n".join(part for part in [error.stdout, error.stderr] if part)
+            raise RuntimeError(f"esbuild failed while bundling {JS_ENTRYPOINT}:\n{details}") from error
+        return read_text(output_path)
+
+
+def esbuild_command(repo_root: Path) -> list[str]:
+    local_binary = repo_root / "node_modules" / ".bin" / ("esbuild.cmd" if os.name == "nt" else "esbuild")
+    if local_binary.is_file():
+        return [str(local_binary)]
+
+    npx = shutil.which("npx")
+    if npx:
+        return [npx, "--yes", "esbuild"]
+
+    raise RuntimeError("esbuild is required to build standalone reports. Run `npm install` first.")
 
 
 def plotly_tag(options: BuildOptions, repo_root: Path) -> str:

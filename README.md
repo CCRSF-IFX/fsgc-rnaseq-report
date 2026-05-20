@@ -29,6 +29,12 @@ https://ccrsf-ifx.github.io/fsgc-rnaseq-report/docs/v0.1.0/
 
 ## Common Commands
 
+Install JavaScript tooling used by tests and standalone bundling:
+
+```bash
+npm install
+```
+
 Preview the development report:
 
 ```bash

@@ -2,7 +2,7 @@
 import { test, expect } from '@playwright/test';
 
 test('loads the report shell and configured version links', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/', { waitUntil: 'domcontentloaded' });
 
   await expect(page).toHaveTitle(/RNA-seq Report/);
   await expect(page.locator('#report-title')).not.toBeEmpty();

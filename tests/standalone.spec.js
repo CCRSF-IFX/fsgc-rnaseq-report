@@ -1,0 +1,34 @@
+// @ts-check
+import { execFileSync } from 'node:child_process';
+import { test, expect } from '@playwright/test';
+
+const STANDALONE_PATH = 'dist/playwright-standalone-smoke.html';
+
+test.beforeAll(() => {
+  execFileSync(
+    'python3',
+    [
+      'scripts/build_report_bundle.py',
+      '--data-root',
+      'assets/data/simulated',
+      '--output',
+      STANDALONE_PATH,
+    ],
+    { cwd: process.cwd(), stdio: 'inherit' },
+  );
+});
+
+test('generated standalone report loads without module script tags', async ({ page }) => {
+  await page.goto(`/${STANDALONE_PATH}`, { waitUntil: 'domcontentloaded' });
+
+  await expect(page).toHaveTitle(/RNA-seq Report/);
+  await expect(page.locator('#report-title')).not.toBeEmpty();
+  await expect(page.locator('#status-text')).toContainText(/Report assets loaded|plots loading/i);
+
+  await expect(page.locator('#contrast-count')).toHaveText('1');
+  await expect(page.locator('#contrast-select')).toContainText(/treated vs control/i);
+  await expect(page.locator('script[type="module"]')).toHaveCount(0);
+  await expect.poll(
+    () => page.evaluate(() => Object.keys(globalThis.REPORT_EMBEDDED_ASSETS || {}).length),
+  ).toBeGreaterThan(0);
+});

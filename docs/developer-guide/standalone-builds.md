@@ -6,6 +6,12 @@ should not run a local web server.
 
 ## Default Build
 
+Install the JavaScript tooling first:
+
+```bash
+npm install
+```
+
 ```bash
 python3 scripts/build_report_bundle.py
 ```
@@ -17,6 +23,8 @@ dist/rnaseq-report.html
 ```
 
 `dist/` is ignored by git because reports often contain run-specific data.
+The builder uses esbuild to preserve JavaScript module scope before embedding
+the app into the one-file report.
 
 Write to a specific output path with:
 

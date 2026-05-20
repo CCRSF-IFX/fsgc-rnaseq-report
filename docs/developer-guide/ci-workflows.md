@@ -55,6 +55,7 @@ python3 -m py_compile \
   scripts/build_report_bundle.py \
   scripts/validate_assets.py \
   scripts/qc_excel.py
+npm ci
 node --check assets/js/app.js
 node --check assets/js/analysis.js
 node --check assets/js/dataLoader.js

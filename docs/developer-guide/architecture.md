@@ -33,8 +33,9 @@ Important data categories include:
 
 `scripts/build_report_bundle.py` creates a single HTML artifact for report
 delivery. The builder embeds the selected data root, CSS, JavaScript, and report
-configuration. Plotly can be loaded from CDN or embedded into the generated
-file.
+configuration. It uses esbuild to bundle browser JavaScript while preserving
+module scope, then injects embedded report assets before the app bundle. Plotly
+can be loaded from CDN or embedded into the generated file.
 
 ### Browser R Runtime
 
