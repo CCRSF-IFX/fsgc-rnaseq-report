@@ -9,11 +9,11 @@ can use webR for exploratory DESeq2 and fgsea analysis.
 
 The documentation is split by audience:
 
-- [User Guide](docs/user-guide/index.md): for people who receive or open an
+- [User Guide](https://ccrsf-ifx.github.io/fsgc-rnaseq-report/docs/latest/user-guide/): for people who receive or open an
   HTML report. Start here for opening the report, loading sample metadata,
   reviewing QC/PCA/heatmaps, running DESeq2/GSEA, and saving browser analysis
   results.
-- [Developer Guide](docs/developer-guide/index.md): for maintainers who build,
+- [Developer Guide](https://ccrsf-ifx.github.io/fsgc-rnaseq-report/docs/latest/developer-guide/): for maintainers who build,
   customize, validate, and deploy reports. Start here for data assets,
   standalone builds, GitHub Pages, webR package snapshots, and CI workflows.
 - [Reference](docs/ref.md): quick links to important project files and external
