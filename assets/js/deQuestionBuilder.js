@@ -4,6 +4,7 @@ import { adjustmentMetadataColumns, analysisFactorColumns, metadataColumnType } 
 
 export const DESEQ_GROUP_COLUMN = '__rnaseq_report_group';
 export const DESEQ_ADVANCED_QUESTION_TYPE = 'advanced_interaction_lrt';
+export const DESEQ_CONDITION_LIKE_COLUMNS = ['condition', 'group', 'treatment', 'phenotype'];
 
 export const DESEQ_QUESTION_TYPES = [
   {
@@ -203,13 +204,17 @@ function buildFactorContrastSpec(formValues, scope, adjustColumns, question) {
   const scopeSuffix = scope.id === 'all_samples' ? '' : ` within ${scope.label}`;
   const label = `${numerator} vs ${denominator}${scopeSuffix}`;
   const adjustedSuffix = adjustColumns.length ? ` adjusted for ${adjustColumns.join(', ')}` : '';
+  const conditionLike = isConditionLikeColumn(primaryFactor);
   const resultFamily = question.resultFamily === 'condition_effect' && primaryFactor !== 'condition'
-    ? 'factor_effect'
+    ? (conditionLike ? 'condition_effect' : 'factor_effect')
     : question.resultFamily;
+  const questionLabel = question.id === 'condition_within_subset' && !conditionLike
+    ? 'Manual primary-factor comparison'
+    : question.label;
 
   return {
     questionType: question.id,
-    questionLabel: question.label,
+    questionLabel,
     result_family: resultFamily,
     resultFamily,
     scope,
@@ -228,7 +233,10 @@ function buildFactorContrastSpec(formValues, scope, adjustColumns, question) {
     label: `${label}${adjustedSuffix}`,
     id: makeContrastId(['deseq2', question.id, primaryFactor, numerator, 'vs', denominator, scope.id, adjustColumns.join('_')]),
     groupBalance,
-    warnings: factorContrastWarnings(sampleIds, groupBalance, numerator, denominator),
+    warnings: [
+      ...manualConditionFactorWarnings(question.id, primaryFactor),
+      ...factorContrastWarnings(sampleIds, groupBalance, numerator, denominator),
+    ],
     interpretation: `${numerator} vs ${denominator} for ${primaryFactor}${scope.id === 'all_samples' ? '' : ` using ${scope.label}`} with model ${fullModel}.`,
     metadataColumns: uniqueStrings([primaryFactor].concat(adjustColumns)),
     syntheticColumns: {},
@@ -587,6 +595,15 @@ function interactionGroupKey(conditionFactor, conditionLevel, modifierFactor, mo
 function formulaLabel(terms) {
   const cleanTerms = uniqueStrings(terms).filter(Boolean);
   return `~ ${cleanTerms.length ? cleanTerms.join(' + ') : '1'}`;
+}
+
+function isConditionLikeColumn(column) {
+  return DESEQ_CONDITION_LIKE_COLUMNS.includes(String(column || '').trim().toLowerCase());
+}
+
+function manualConditionFactorWarnings(questionType, primaryFactor) {
+  if (questionType !== 'condition_within_subset' || isConditionLikeColumn(primaryFactor)) return [];
+  return [`No condition-like column was found, so "${primaryFactor}" is being used as the manually selected primary comparison factor.`];
 }
 
 function questionTypeById(id) {

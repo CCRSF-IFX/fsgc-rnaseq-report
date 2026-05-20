@@ -525,6 +525,12 @@ behind the `Advanced: interaction / LRT` question type. It supports:
 - advanced omnibus interaction likelihood-ratio tests, such as asking whether adding
   `condition:tissue` improves the model over an additive model
 
+The default condition workflow automatically uses `condition` when it exists,
+and also recognizes condition-like columns such as `group`, `treatment`, and
+`phenotype`. If none of those columns are present, the report keeps the simple
+workflow visible but shows a guide asking the user to choose the primary factor
+manually.
+
 For subset-aware condition or tissue effects, the app first selects the sample
 scope, then runs a simple additive DESeq2 model on the selected samples. For
 example, choosing `condition` as the primary factor inside a `tissue = liver`

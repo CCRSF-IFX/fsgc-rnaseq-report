@@ -8,6 +8,7 @@ import { markAnalysisCacheDirty } from './analysisCache.js';
 import {
   DESEQ_ADVANCED_QUESTION_TYPE,
   DESEQ_ADVANCED_QUESTION_TYPES,
+  DESEQ_CONDITION_LIKE_COLUMNS,
   DESEQ_GROUP_COLUMN,
   DESEQ_QUESTION_TYPES,
   analysisScopeOptions,
@@ -203,6 +204,7 @@ function syncDeseqQuestionUi() {
   const directControls = document.getElementById('deseq-direct-group-controls');
   const interactionControls = document.getElementById('deseq-interaction-controls');
   const advancedRow = document.getElementById('deseq-advanced-question-row');
+  const manualFactorGuide = document.getElementById('deseq-manual-factor-guide');
   const interactionConditionLevels = document.getElementById('deseq-interaction-condition-levels');
   const interactionModifierLevels = document.getElementById('deseq-interaction-modifier-levels');
   const interactionHelp = document.getElementById('deseq-interaction-help');
@@ -216,6 +218,10 @@ function syncDeseqQuestionUi() {
     interactionHelp.textContent = lrt
       ? 'LRT tests whether adding all condition-by-modifier interaction terms improves the additive model. The p-value is omnibus; the log2FC column is representative.'
       : 'Pairwise interaction tests whether the condition effect differs between two modifier levels using the denominators as DESeq2 reference levels.';
+  }
+  if (manualFactorGuide) {
+    const missingConditionLike = questionType === 'condition_within_subset' && !hasConditionLikeColumn();
+    manualFactorGuide.hidden = !missingConditionLike || direct || interaction || advanced;
   }
 }
 
@@ -234,14 +240,17 @@ function populateFactorControls(options = {}) {
   const previous = designSelect.value;
   const forcedColumn = forcedPrimaryFactor(formValues.questionType, eligibleColumns);
   const defaultColumn = defaultPrimaryFactor(formValues.questionType, eligibleColumns);
+  const needsManualPrimaryFactor = formValues.questionType === 'condition_within_subset' && !conditionLikeColumnFor(eligibleColumns);
   designSelect.disabled = eligibleColumns.length === 0;
-  designSelect.innerHTML = eligibleColumns
+  const placeholder = needsManualPrimaryFactor ? '<option value="">Choose primary factor...</option>' : '';
+  designSelect.innerHTML = placeholder + eligibleColumns
     .map((column) => `<option value="${deseqEscapeHtml(column)}">${deseqEscapeHtml(metadataTypeOptionLabel(column))}</option>`)
     .join('');
-  designSelect.value = forcedColumn
-    || (!options.preferQuestionDefault && eligibleColumns.includes(previous)
-    ? previous
-    : defaultColumn);
+  let selectedColumn = defaultColumn;
+  if (!options.preferQuestionDefault && eligibleColumns.includes(previous)) selectedColumn = previous;
+  if (needsManualPrimaryFactor && (options.preferQuestionDefault || !eligibleColumns.includes(previous))) selectedColumn = '';
+  if (forcedColumn) selectedColumn = forcedColumn;
+  designSelect.value = selectedColumn;
   updateDeseqLevelControls();
 }
 
@@ -254,9 +263,18 @@ function forcedPrimaryFactor(questionType, columns) {
 function defaultPrimaryFactor(questionType, columns) {
   if (questionType === 'tissue_within_subset' && columns.includes('tissue')) return 'tissue';
   if (columns.includes(state.config?.analysis?.conditionColumn)) return state.config.analysis.conditionColumn;
-  if (columns.includes('condition')) return 'condition';
+  const conditionLike = conditionLikeColumnFor(columns);
+  if (conditionLike) return conditionLike;
   if (columns.includes('tissue')) return 'tissue';
   return columns[0] || '';
+}
+
+function hasConditionLikeColumn() {
+  return Boolean(conditionLikeColumnFor(analysisFactorColumns()));
+}
+
+function conditionLikeColumnFor(columns) {
+  return columns.find((column) => DESEQ_CONDITION_LIKE_COLUMNS.includes(column.toLowerCase()));
 }
 
 function updateDeseqLevelControls() {
