@@ -1,4 +1,4 @@
-# GitHub Pages And webR Snapshots
+# GitHub Pages And Versioning
 
 The repository includes a GitHub Actions workflow that publishes the hosted
 report and builds the webR package snapshot used by optional browser analysis.

@@ -1,4 +1,8 @@
-# Troubleshooting
+# Developer Troubleshooting
+
+This page focuses on build, validation, and deployment problems. Report
+recipients should use the [User Troubleshooting](../user-guide/troubleshooting.md)
+page.
 
 ## The Report Is Blank From `file://`
 

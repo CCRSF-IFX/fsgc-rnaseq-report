@@ -1,12 +1,6 @@
-# General Questions
+# FAQ
 
 ## Do I need a server to view a report?
-
-For development, use a static server such as:
-
-```bash
-python3 -m http.server 8000
-```
 
 Standalone reports are designed so core plots and tables can be opened directly
 from the generated HTML file. Optional webR workflows are more reliable from an
@@ -48,17 +42,17 @@ comparisons are needed for plots, tables, or fgsea.
 ## Can the report work without internet?
 
 Core embedded data, styles, and application code can work offline in a
-standalone build. Plotly must be embedded with `--embed-plotly` or
-`--plotly-file` if chart rendering must work without internet. webR package
-loading also needs either reachable package URLs or a mounted library bundle.
+standalone build. Optional webR package loading needs either reachable package
+URLs or a mounted library bundle.
 
 ## Where do webR packages come from?
 
-They are built by GitHub Actions from `webr-packages/packages` and published as
-a versioned WebAssembly package snapshot. The report configuration points to
-that snapshot.
+They come from the package snapshot or library bundle configured by the report
+provider. If the online snapshot is unavailable, use the report buttons to
+download and choose the local bundle.
 
 ## Can AI be excluded from reports?
 
-Yes. The assistant is controlled by `assets/report_config.json` under `ai`.
-When `ai.enabled` is false, the assistant is not shown.
+Yes. Many delivered reports do not show any AI assistant. If an assistant is
+enabled, review your local policy before sending sample names, gene lists, or
+analysis notes to any model service.

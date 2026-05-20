@@ -1,4 +1,4 @@
-# Data Inputs
+# Data Assets
 
 A report needs a count matrix. Most richer workflows also need sample metadata.
 Other files are optional and improve the quality of the generated report.
@@ -92,3 +92,6 @@ The same command can be pointed at a run-specific directory:
 ```bash
 python3 scripts/validate_assets.py path/to/report-data
 ```
+
+For recipient-facing file format guidance, see the
+[User Guide data page](../user-guide/data-and-metadata.md).

@@ -10,6 +10,8 @@
 - `scripts/qc_excel.py`: QC Excel parser for supported summary workbooks.
 - `.github/workflows/deploy-pages.yml`: report demo and webR snapshot deployer.
 - `.github/workflows/ci_mkdocs.yaml`: documentation build validation.
+- `docs/user-guide/`: recipient-facing report documentation.
+- `docs/developer-guide/`: build, deployment, and maintenance documentation.
 
 ## External Documentation
 

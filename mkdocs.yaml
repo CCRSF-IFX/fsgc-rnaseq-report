@@ -26,19 +26,26 @@ theme:
 
 # Page Tree
 nav:
-  - Introduction:
-      - Overview: index.md
-      - Report architecture: architecture.md
-  - Building reports:
-      - Data inputs: data-inputs.md
-      - Standalone builds: standalone-builds.md
-      - GitHub Pages and webR snapshots: deployment.md
-  - Browser analysis:
-      - Runtime packages: runtime-packages.md
-      - Optional analyses: optional-analysis.md
-      - AI assistant: ai-assistant.md
-  - FAQ:
-      - General Questions: general-questions.md
-      - Troubleshooting: troubleshooting.md
+  - Home: index.md
+  - User Guide:
+      - Overview: user-guide/index.md
+      - Open The Report: user-guide/open-report.md
+      - Data And Metadata: user-guide/data-and-metadata.md
+      - Explore QC, PCA, And Heatmaps: user-guide/explore-report.md
+      - DESeq2 Analysis: user-guide/deseq2.md
+      - GSEA Analysis: user-guide/fgsea.md
+      - Cache And Offline Use: user-guide/cache-and-offline.md
+      - Troubleshooting: user-guide/troubleshooting.md
+      - FAQ: user-guide/faq.md
+  - Developer Guide:
+      - Overview: developer-guide/index.md
+      - Report Architecture: developer-guide/architecture.md
+      - Data Assets: developer-guide/data-assets.md
+      - Standalone Builds: developer-guide/standalone-builds.md
+      - GitHub Pages And Versioning: developer-guide/github-pages.md
+      - webR Packages: developer-guide/webr-packages.md
+      - AI Assistant: developer-guide/ai-assistant.md
+      - CI Workflows: developer-guide/ci-workflows.md
+      - Troubleshooting: developer-guide/troubleshooting.md
   - Reference: ref.md
   - License: license.md
