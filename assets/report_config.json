@@ -1,14 +1,14 @@
 {
-  "projectTitle": "Demo RNA-seq Report",
-  "projectAbbreviation": "RNA",
+  "projectTitle": "GSE164073 RNA-seq Report",
+  "projectAbbreviation": "GSE",
   "projectLogo": "assets/branding/fsgc-rnaseq-report-logo.svg",
-  "reportTitle": "Demo RNA-seq Report",
-  "reportSubtitle": "Static report with optional webR downstream analysis",
+  "reportTitle": "GSE164073 RNA-seq Report",
+  "reportSubtitle": "Human SARS-CoV-2 ocular surface bulk RNA-seq demo",
   "reportVersion": "0.1.0",
   "reportAuthor": "FSGC Bioinformatics Group",
   "reportOrganization": "Frederick Sequencing and Genomics Core",
-  "runId": "",
-  "dataRoot": "assets/data",
+  "runId": "GSE164073",
+  "dataRoot": "assets/data/gse164073",
   "hostedSite": {
     "repository": "CCRSF-IFX/fsgc-rnaseq-report",
     "repositoryUrl": "https://github.com/CCRSF-IFX/fsgc-rnaseq-report",
@@ -19,7 +19,7 @@
         "label": "Hosted report",
         "version": "v0.1.0",
         "url": "https://ccrsf-ifx.github.io/fsgc-rnaseq-report/",
-        "description": "Current hosted RNA-seq report."
+        "description": "Current hosted GSE164073 RNA-seq report."
       },
       {
         "label": "Documentation",
@@ -43,7 +43,7 @@
   },
   "analysis": {
     "conditionColumn": "condition",
-    "referenceLevel": "control"
+    "referenceLevel": "mock"
   },
   "ai": {
     "enabled": false,

@@ -58,7 +58,3 @@ mkdocs build --strict
 - Source: <https://github.com/CCRSF-IFX/fsgc-rnaseq-report>
 - Hosted report: <https://ccrsf-ifx.github.io/fsgc-rnaseq-report/>
 - Hosted docs: <https://ccrsf-ifx.github.io/fsgc-rnaseq-report/docs/latest/>
-
-Pipeline-generated statistics should remain the source of truth for production
-analysis. Browser-run DESeq2 and fgsea workflows are intended for exploratory
-follow-up, review, and transparent collaboration.

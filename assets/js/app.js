@@ -1,7 +1,7 @@
 import { state, setStatus, metadataColumns } from './state.js';
 import { loadCoreAssets } from './dataLoader.js';
 import { adjustVisibleDataTables, renderTable } from './tables.js';
-import { summarizeQC, badge, qcRowsWithStatus } from './qc.js';
+import { summarizeQC, qcRowsWithStatus } from './qc.js';
 import { isPlotlyReady, renderPCA, renderDistanceHeatmap, renderQCPlots, renderGeneCounts } from './plots.js?v=20260518-plotly-resilience';
 import { populateContrastSelectors, renderCurrentContrast } from './de.js';
 import { renderCurrentEnrichment } from './enrichment.js';
@@ -496,10 +496,12 @@ function escapeHtml(value) {
 }
 
 function renderQC() {
-  const summary = summarizeQC();
   renderQcExcelDownload();
-  document.getElementById('qc-summary').innerHTML = `
-    <p>${badge('ok')} ${summary.counts.ok} &nbsp; ${badge('warn')} ${summary.counts.warn} &nbsp; ${badge('fail')} ${summary.counts.fail}</p>`;
+  const summary = document.getElementById('qc-summary');
+  if (summary) {
+    summary.replaceChildren();
+    summary.hidden = true;
+  }
   renderQCPlots();
   const rows = qcRowsWithStatus().map((row) => ({ ...row, status: row.status.toUpperCase() }));
   renderTable('qc-table', rows, { columns: qcTableColumns(rows), exportName: 'qc_metrics.csv' });
