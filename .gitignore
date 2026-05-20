@@ -7,3 +7,10 @@ local_data/
 large_outputs/
 dist/
 webr-packages/patched-src/
+
+# Playwright
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+/playwright/.auth/

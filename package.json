@@ -1,0 +1,25 @@
+{
+  "name": "rnaseq-report",
+  "version": "0.1.0",
+  "description": "RNA-seq Report is a portable, client-side report viewer for RNA-seq pipeline outputs. It turns a count matrix, optional sample metadata, and optional pipeline-generated result files into an interactive browser report that can be delivered as a single HTML file or hosted on a static web server.",
+  "type": "module",
+  "scripts": {
+    "test": "playwright test",
+    "test:e2e": "playwright test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/CCRSF-IFX/fsgc-rnaseq-report.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/CCRSF-IFX/fsgc-rnaseq-report/issues"
+  },
+  "homepage": "https://github.com/CCRSF-IFX/fsgc-rnaseq-report#readme",
+  "devDependencies": {
+    "@playwright/test": "^1.60.0",
+    "@types/node": "^25.9.1"
+  }
+}
