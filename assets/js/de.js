@@ -114,6 +114,18 @@ function renderContrastNote(contrast) {
     return;
   }
   if (contrast.result_family === 'interaction_effect') {
+    if (contrast.interaction_output === 'simple_condition_effects') {
+      note.textContent = 'Simple condition effects compare condition levels within one modifier level from the full interaction model.';
+      return;
+    }
+    if (contrast.interaction_output === 'simple_modifier_effects') {
+      note.textContent = 'Simple modifier effects compare modifier levels within one condition level from the full interaction model.';
+      return;
+    }
+    if (contrast.interaction_output === 'condition_main_at_modifier_reference' || contrast.interaction_output === 'modifier_main_at_condition_reference') {
+      note.textContent = 'Reference-level main effects are coefficients at the selected reference level of the other interaction factor.';
+      return;
+    }
     note.textContent = 'Interaction log2FC is a difference-of-differences: the condition non-reference effect in this modifier level minus the same condition effect in the modifier reference level.';
     return;
   }

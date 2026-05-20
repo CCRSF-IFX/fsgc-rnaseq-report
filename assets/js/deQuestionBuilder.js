@@ -7,6 +7,39 @@ export const DESEQ_PAIRWISE_QUESTION_TYPE = 'pairwise_comparison';
 export const DESEQ_ADDITIVE_QUESTION_TYPE = 'additive_adjusted_effect';
 export const DESEQ_ADVANCED_QUESTION_TYPE = 'advanced_analysis';
 export const DESEQ_CONDITION_LIKE_COLUMNS = ['condition', 'group', 'treatment', 'phenotype'];
+export const DESEQ_DEFAULT_INTERACTION_OUTPUTS = ['interaction_coefficients'];
+export const DESEQ_INTERACTION_OUTPUT_TYPES = [
+  {
+    id: 'interaction_coefficients',
+    label: 'Interaction coefficients',
+    group: 'Primary interaction output',
+    help: 'Difference-of-differences terms that test whether the condition effect changes across modifier levels.',
+  },
+  {
+    id: 'condition_main_at_modifier_reference',
+    label: 'Condition main effect at modifier reference',
+    group: 'Reference-level coefficients',
+    help: 'Condition effect at the selected modifier reference level.',
+  },
+  {
+    id: 'modifier_main_at_condition_reference',
+    label: 'Modifier main effect at condition reference',
+    group: 'Reference-level coefficients',
+    help: 'Modifier effect at the selected condition reference level.',
+  },
+  {
+    id: 'simple_condition_effects',
+    label: 'Condition effect within each modifier level',
+    group: 'Biological follow-up outputs',
+    help: 'Condition effects inside each modifier level, such as treatment vs control within each tissue.',
+  },
+  {
+    id: 'simple_modifier_effects',
+    label: 'Modifier effect within each condition level',
+    group: 'Biological follow-up outputs',
+    help: 'Modifier effects inside each condition level, such as tissue comparisons within each treatment group.',
+  },
+];
 
 export const DESEQ_QUESTION_TYPES = [
   {
@@ -77,6 +110,7 @@ export function readDeseqFormValues(root = document) {
     interactionConditionDenominator: root.getElementById('deseq-interaction-condition-denominator')?.value || '',
     interactionModifierNumerator: root.getElementById('deseq-interaction-modifier-numerator')?.value || '',
     interactionModifierDenominator: root.getElementById('deseq-interaction-modifier-denominator')?.value || '',
+    interactionOutputs: selectedDeseqCheckboxValues(root, 'deseq-interaction-output'),
   };
 }
 
@@ -169,6 +203,7 @@ export function previewDeseqModel(spec) {
     ['Reduced model', spec.reducedModel],
     ['Test', spec.testLabel],
     ['Contrast', spec.contrastLabel],
+    ['Retained outputs', interactionOutputSummary(spec)],
     ['Interpretation', spec.interpretation],
   ].filter(([, value]) => value !== undefined && value !== null && value !== '');
 }
@@ -295,6 +330,7 @@ function buildPairwiseInteractionSpec(formValues, scope, adjustColumns, question
   const modifierFactor = formValues.interactionModifierFactor;
   const conditionDenominator = formValues.interactionConditionDenominator;
   const modifierDenominator = formValues.interactionModifierDenominator;
+  const interactionOutputs = normalizeInteractionOutputs(formValues.interactionOutputs);
   validateInteractionFactors(scope.sampleIds, conditionFactor, modifierFactor);
 
   const conditionLevels = levelsForColumn(conditionFactor, scope.sampleIds);
@@ -322,7 +358,7 @@ function buildPairwiseInteractionSpec(formValues, scope, adjustColumns, question
   validateInteractionModelSize(sampleIds, conditionFactor, modifierFactor, adjustColumns);
 
   const fullModel = formulaLabel(adjustColumns.concat([conditionFactor, modifierFactor, `${conditionFactor}:${modifierFactor}`]));
-  const contrastCount = conditionNonReferenceLevels.length * modifierNonReferenceLevels.length;
+  const contrastCount = interactionOutputCount(interactionOutputs, conditionNonReferenceLevels.length, modifierNonReferenceLevels.length);
   const contrastLabel = `${conditionFactor}:${modifierFactor} interaction coefficients`;
   const label = `${conditionFactor} by ${modifierFactor} interaction effect`;
   const adjustmentSuffix = adjustColumns.length ? ` adjusted for ${adjustColumns.join(', ')}` : '';
@@ -346,6 +382,7 @@ function buildPairwiseInteractionSpec(formValues, scope, adjustColumns, question
     modifierDenominator,
     conditionNonReferenceLevels,
     modifierNonReferenceLevels,
+    interactionOutputs,
     adjustColumns,
     modelKind: 'interaction',
     resultMode: 'wald_interaction_coefficient',
@@ -368,13 +405,38 @@ function buildPairwiseInteractionSpec(formValues, scope, adjustColumns, question
     ]),
     groupBalance,
     warnings: [
-      `This run will create ${contrastCount} interaction result${contrastCount === 1 ? '' : 's'} from the selected reference levels.`,
+      `This run will retain ${contrastCount} result set${contrastCount === 1 ? '' : 's'} from the selected interaction output${interactionOutputs.length === 1 ? '' : 's'}.`,
       ...interactionWarnings(sampleIds, groupBalance),
     ],
     interpretation: `Tests condition-by-modifier interaction coefficients using ${conditionFactor} reference ${conditionDenominator} and ${modifierFactor} reference ${modifierDenominator} with model ${fullModel}.`,
     metadataColumns: uniqueStrings([conditionFactor, modifierFactor].concat(adjustColumns)),
     syntheticColumns: {},
   };
+}
+
+function normalizeInteractionOutputs(outputs) {
+  const allowed = new Set(DESEQ_INTERACTION_OUTPUT_TYPES.map((type) => type.id));
+  const selected = uniqueStrings(outputs).filter((output) => allowed.has(output));
+  return selected.length ? selected : DESEQ_DEFAULT_INTERACTION_OUTPUTS.slice();
+}
+
+function interactionOutputCount(outputs, conditionNonReferenceCount, modifierNonReferenceCount) {
+  return normalizeInteractionOutputs(outputs).reduce((sum, output) => {
+    if (output === 'interaction_coefficients') return sum + conditionNonReferenceCount * modifierNonReferenceCount;
+    if (output === 'condition_main_at_modifier_reference') return sum + conditionNonReferenceCount;
+    if (output === 'modifier_main_at_condition_reference') return sum + modifierNonReferenceCount;
+    if (output === 'simple_condition_effects') return sum + conditionNonReferenceCount * (modifierNonReferenceCount + 1);
+    if (output === 'simple_modifier_effects') return sum + modifierNonReferenceCount * (conditionNonReferenceCount + 1);
+    return sum;
+  }, 0);
+}
+
+function interactionOutputSummary(spec) {
+  if (spec?.resultMode !== 'wald_interaction_coefficient') return '';
+  const labels = new Map(DESEQ_INTERACTION_OUTPUT_TYPES.map((type) => [type.id, type.label]));
+  return normalizeInteractionOutputs(spec.interactionOutputs)
+    .map((output) => labels.get(output) || output)
+    .join('; ');
 }
 
 function buildOmnibusInteractionLrtSpec(formValues, scope, adjustColumns, question) {
@@ -682,6 +744,12 @@ function selectedDeseqValues(root, id) {
     .map((input) => input.value)
     .filter(Boolean);
   return uniqueStrings(values.concat(dataValues, checkedValues));
+}
+
+function selectedDeseqCheckboxValues(root, name) {
+  return Array.from(root.querySelectorAll(`input[name="${name}"]:checked`))
+    .map((input) => input.value)
+    .filter(Boolean);
 }
 
 function uniqueStrings(values) {

@@ -648,6 +648,7 @@ function wireControls() {
     'deseq-interaction-modifier-denominator',
   ].forEach((id) => document.getElementById(id)?.addEventListener('change', renderAnalysisReadiness));
   document.querySelectorAll('input[name="deseq-scope-mode"]').forEach((radio) => radio.addEventListener('change', renderAnalysisReadiness));
+  document.querySelectorAll('input[name="deseq-interaction-output"]').forEach((checkbox) => checkbox.addEventListener('change', renderAnalysisReadiness));
   document.getElementById('gsea-gmt-file')?.addEventListener('change', renderAnalysisReadiness);
   wirePackageEvents();
   document.getElementById('count-gene-button')?.addEventListener('click', () => renderCountExplorerPlot());

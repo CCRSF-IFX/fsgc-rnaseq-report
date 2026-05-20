@@ -572,10 +572,29 @@ a model equivalent to:
 ```
 
 with the selected condition and modifier references releveled before DESeq2 is
-run. The app reports one result set for each non-reference interaction
-coefficient. For example, if `condition = mock` and `tissue = cornea` are the
-references, a `log2FoldChange` for `sars_cov_2:tissue_limbus` is the
-SARS-CoV-2 effect in limbus minus the SARS-CoV-2 effect in cornea.
+run. By default, the app keeps only the interaction coefficients. For example,
+if `condition = mock` and `tissue = cornea` are the references, a
+`log2FoldChange` for `sars_cov_2:tissue_limbus` is the SARS-CoV-2 effect in
+limbus minus the SARS-CoV-2 effect in cornea.
+
+Interaction effect also has an **Outputs to retain** selector. Keep the default
+for a compact statistical interaction follow-up, or add optional biological
+follow-up outputs when needed:
+
+- Interaction coefficients: difference-of-differences terms; selected by
+  default
+- Condition effect within each modifier level: for example treatment vs control
+  inside each tissue
+- Modifier effect within each condition level: for example tissue differences
+  inside each treatment group
+- Condition main effect at modifier reference: the condition effect at the
+  selected modifier reference
+- Modifier main effect at condition reference: the modifier effect at the
+  selected condition reference
+
+Each retained output becomes its own DE result set, with its own plot, table,
+cache entry, and possible GSEA input. Selecting more outputs can create many
+result sets, so use this intentionally.
 
 The LRT `pvalue` and `padj` columns test whether the interaction terms improve
 the model. The `log2FoldChange` column in an LRT result is representative output

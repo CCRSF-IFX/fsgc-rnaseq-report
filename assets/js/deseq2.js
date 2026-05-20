@@ -8,6 +8,8 @@ import { markAnalysisCacheDirty } from './analysisCache.js';
 import {
   DESEQ_ADVANCED_QUESTION_TYPE,
   DESEQ_ADVANCED_QUESTION_TYPES,
+  DESEQ_DEFAULT_INTERACTION_OUTPUTS,
+  DESEQ_INTERACTION_OUTPUT_TYPES,
   DESEQ_PAIRWISE_QUESTION_TYPE,
   DESEQ_CONDITION_LIKE_COLUMNS,
   DESEQ_GROUP_COLUMN,
@@ -105,6 +107,9 @@ function wireDeseqBuilderControls() {
   wireDeseqAdjustChecklist();
   document.querySelectorAll('input[name="deseq-scope-mode"]').forEach((radio) => {
     radio.addEventListener('change', refreshDeseqBuilder);
+  });
+  document.querySelectorAll('input[name="deseq-interaction-output"]').forEach((checkbox) => {
+    checkbox.addEventListener('change', refreshDeseqBuilder);
   });
 }
 
@@ -271,6 +276,7 @@ function syncDeseqQuestionUi() {
   const interactionModifierLevels = document.getElementById('deseq-interaction-modifier-levels');
   const interactionConditionNumeratorLabel = document.getElementById('deseq-interaction-condition-numerator-label');
   const interactionModifierNumeratorLabel = document.getElementById('deseq-interaction-modifier-numerator-label');
+  const interactionOutputControls = document.getElementById('deseq-interaction-output-controls');
   const interactionHelp = document.getElementById('deseq-interaction-help');
   if (advancedRow) advancedRow.hidden = !advanced;
   if (advancedHelp) advancedHelp.textContent = advancedQuestionHelp(questionType);
@@ -281,6 +287,7 @@ function syncDeseqQuestionUi() {
   if (interactionModifierLevels) interactionModifierLevels.hidden = lrt;
   if (interactionConditionNumeratorLabel) interactionConditionNumeratorLabel.hidden = questionType === 'pairwise_interaction';
   if (interactionModifierNumeratorLabel) interactionModifierNumeratorLabel.hidden = questionType === 'pairwise_interaction';
+  if (interactionOutputControls) interactionOutputControls.hidden = questionType !== 'pairwise_interaction';
   if (interactionHelp) {
     interactionHelp.textContent = lrt
       ? 'Recommended first for multi-level factors. LRT tests whether adding condition-by-modifier interaction terms improves the additive model. Genes with small padj have evidence of interaction.'
@@ -708,40 +715,83 @@ function registerDeseqResultRows(spec, rows) {
 function interactionResultSets(spec, rows) {
   const grouped = new Map();
   rows.forEach((row) => {
-    const key = row.coefficient_name || row.interaction_label || 'interaction';
+    const key = row.interaction_result_id || row.coefficient_name || row.interaction_label || 'interaction';
     if (!grouped.has(key)) grouped.set(key, []);
     grouped.get(key).push(row);
   });
-  return Array.from(grouped.entries()).map(([coefficientName, coefficientRows]) => {
+  return Array.from(grouped.entries()).map(([resultId, coefficientRows]) => {
     const first = coefficientRows[0] || {};
+    const coefficientName = first.coefficient_name || resultId;
     const conditionNumerator = first.condition_numerator || spec.conditionNumerator;
     const conditionDenominator = first.condition_denominator || spec.conditionDenominator;
     const modifierNumerator = first.modifier_numerator || spec.modifierNumerator;
     const modifierDenominator = first.modifier_denominator || spec.modifierDenominator;
-    const label = `${conditionNumerator} response differs in ${spec.modifierFactor}=${modifierNumerator} vs ${modifierDenominator}`;
+    const interactionOutput = first.interaction_output || 'interaction_coefficients';
+    const interactionOutputLabel = first.interaction_output_label || interactionOutputLabelFor(interactionOutput);
+    const label = first.interaction_label || interactionResultLabel(spec, interactionOutput, conditionNumerator, conditionDenominator, modifierNumerator, modifierDenominator);
+    const primaryFactor = interactionOutput.includes('modifier') ? spec.modifierFactor : spec.conditionFactor;
+    const numerator = interactionOutput.includes('modifier') ? modifierNumerator : conditionNumerator;
+    const denominator = interactionOutput.includes('modifier') ? modifierDenominator : conditionDenominator;
     const coefficientSpec = {
       ...spec,
       id: makeDeseqResultId([
         spec.id,
-        conditionNumerator,
-        conditionDenominator,
-        modifierNumerator,
-        modifierDenominator,
-        coefficientName,
+        resultId,
       ]),
       label,
-      contrastLabel: `(${conditionNumerator} - ${conditionDenominator}) interaction at ${modifierNumerator} vs ${modifierDenominator}`,
-      numerator: conditionNumerator,
-      denominator: conditionDenominator,
+      questionLabel: `${spec.questionLabel}: ${interactionOutputLabel}`,
+      contrastLabel: label,
+      primaryFactor,
+      numerator,
+      denominator,
       conditionNumerator,
       conditionDenominator,
       modifierNumerator,
       modifierDenominator,
       coefficientName,
-      interpretation: `Interaction coefficient for ${conditionNumerator} vs ${conditionDenominator} at ${spec.modifierFactor}=${modifierNumerator} relative to ${modifierDenominator}, using model ${spec.fullModel}.`,
+      interactionOutput,
+      interactionOutputLabel,
+      interactionResultId: resultId,
+      interpretation: interactionResultInterpretation(spec, interactionOutput, conditionNumerator, conditionDenominator, modifierNumerator, modifierDenominator),
     };
     return { spec: coefficientSpec, rows: coefficientRows };
   });
+}
+
+function interactionOutputLabelFor(output) {
+  return DESEQ_INTERACTION_OUTPUT_TYPES.find((type) => type.id === output)?.label || output;
+}
+
+function interactionResultLabel(spec, output, conditionNumerator, conditionDenominator, modifierNumerator, modifierDenominator) {
+  if (output === 'condition_main_at_modifier_reference') {
+    return `${conditionNumerator} vs ${conditionDenominator} at ${spec.modifierFactor} reference ${modifierDenominator}`;
+  }
+  if (output === 'modifier_main_at_condition_reference') {
+    return `${modifierNumerator} vs ${modifierDenominator} at ${spec.conditionFactor} reference ${conditionDenominator}`;
+  }
+  if (output === 'simple_condition_effects') {
+    return `${conditionNumerator} vs ${conditionDenominator} within ${spec.modifierFactor}=${modifierNumerator}`;
+  }
+  if (output === 'simple_modifier_effects') {
+    return `${modifierNumerator} vs ${modifierDenominator} within ${spec.conditionFactor}=${conditionNumerator}`;
+  }
+  return `(${conditionNumerator} - ${conditionDenominator}) interaction at ${modifierNumerator} vs ${modifierDenominator}`;
+}
+
+function interactionResultInterpretation(spec, output, conditionNumerator, conditionDenominator, modifierNumerator, modifierDenominator) {
+  if (output === 'condition_main_at_modifier_reference') {
+    return `Condition effect ${conditionNumerator} vs ${conditionDenominator} at ${spec.modifierFactor} reference ${modifierDenominator}, using model ${spec.fullModel}.`;
+  }
+  if (output === 'modifier_main_at_condition_reference') {
+    return `Modifier effect ${modifierNumerator} vs ${modifierDenominator} at ${spec.conditionFactor} reference ${conditionDenominator}, using model ${spec.fullModel}.`;
+  }
+  if (output === 'simple_condition_effects') {
+    return `Condition effect ${conditionNumerator} vs ${conditionDenominator} within ${spec.modifierFactor}=${modifierNumerator}, using model ${spec.fullModel}.`;
+  }
+  if (output === 'simple_modifier_effects') {
+    return `Modifier effect ${modifierNumerator} vs ${modifierDenominator} within ${spec.conditionFactor}=${conditionNumerator}, using model ${spec.fullModel}.`;
+  }
+  return `Interaction coefficient for ${conditionNumerator} vs ${conditionDenominator} at ${spec.modifierFactor}=${modifierNumerator} relative to ${modifierDenominator}, using model ${spec.fullModel}.`;
 }
 
 function contrastFromSpec(spec) {
@@ -773,6 +823,10 @@ function contrastFromSpec(spec) {
     condition_denominator: spec.conditionDenominator || '',
     modifier_numerator: spec.modifierNumerator || '',
     modifier_denominator: spec.modifierDenominator || '',
+    interaction_output: spec.interactionOutput || '',
+    interaction_output_label: spec.interactionOutputLabel || '',
+    interaction_result_id: spec.interactionResultId || '',
+    interaction_outputs: spec.interactionOutputs || [],
     tested_terms: spec.testedTerms || [],
     coefficient_name: spec.coefficientName || '',
     group_factors: spec.groupFactors || [],
@@ -800,11 +854,15 @@ async function deseqRunInWebR(spec) {
   const countsCsv = deseqCountsCsv(spec.sampleIds);
   const metadataCsv = deseqMetadataCsv(spec);
   const adjustTypeVector = deseqRNamedStringVector(spec.adjustColumns.map((adjustColumn) => [adjustColumn, metadataColumnType(adjustColumn)]));
+  const interactionOutputs = Array.isArray(spec.interactionOutputs) && spec.interactionOutputs.length
+    ? spec.interactionOutputs
+    : DESEQ_DEFAULT_INTERACTION_OUTPUTS;
   const code = `
 suppressPackageStartupMessages(library(DESeq2))
 count_text <- ${deseqRString(countsCsv)}
 metadata_text <- ${deseqRString(metadataCsv)}
 result_mode <- ${deseqRString(spec.resultMode)}
+interaction_outputs_raw <- c(${interactionOutputs.map(deseqRString).join(', ')})
 primary_col_raw <- ${deseqRString(spec.primaryFactor)}
 condition_col_raw <- ${deseqRString(spec.conditionFactor || '')}
 modifier_col_raw <- ${deseqRString(spec.modifierFactor || '')}
@@ -883,6 +941,62 @@ find_interaction_coef <- function(result_names, condition_col, condition_level, 
   }
   hits[[1]]
 }
+find_main_coef <- function(result_names, factor_col, level) {
+  main_names <- result_names[!(grepl(":", result_names, fixed = TRUE) | grepl("\\\\.", result_names))]
+  target_parts <- c(factor_col, level)
+  hits <- main_names[vapply(main_names, function(name) {
+    all(vapply(target_parts, function(part) contains_part(name, part), logical(1)))
+  }, logical(1))]
+  if (!length(hits)) {
+    level_part <- level
+    hits <- main_names[vapply(main_names, function(name) contains_part(name, level_part), logical(1))]
+  }
+  if (!length(hits)) {
+    stop(paste("Could not find the requested main-effect coefficient. Available coefficients:", paste(result_names, collapse = ", ")))
+  }
+  hits[[1]]
+}
+extract_result <- function(dds, add_coefs, subtract_coefs = character(0)) {
+  add_coefs <- unique(add_coefs[nzchar(add_coefs)])
+  subtract_coefs <- unique(subtract_coefs[nzchar(subtract_coefs)])
+  if (!length(subtract_coefs) && length(add_coefs) == 1) {
+    return(results(dds, name = add_coefs[[1]]))
+  }
+  available <- resultsNames(dds)
+  missing <- setdiff(c(add_coefs, subtract_coefs), available)
+  if (length(missing)) {
+    stop(paste("Requested coefficient(s) were not found:", paste(missing, collapse = ", ")))
+  }
+  contrast_vector <- setNames(rep(0, length(available)), available)
+  contrast_vector[add_coefs] <- contrast_vector[add_coefs] + 1
+  contrast_vector[subtract_coefs] <- contrast_vector[subtract_coefs] - 1
+  results(dds, contrast = contrast_vector)
+}
+decorate_result <- function(res, output, output_label, result_id, result_label, coefficient_name,
+                            condition_numerator = "", condition_denominator = "",
+                            modifier_numerator = "", modifier_denominator = "") {
+  current_out <- as.data.frame(res)
+  current_out$gene_id <- rownames(current_out)
+  current_out$interaction_output <- output
+  current_out$interaction_output_label <- output_label
+  current_out$interaction_result_id <- result_id
+  current_out$interaction_label <- result_label
+  current_out$coefficient_name <- coefficient_name
+  current_out$condition_numerator <- condition_numerator
+  current_out$condition_denominator <- condition_denominator
+  current_out$modifier_numerator <- modifier_numerator
+  current_out$modifier_denominator <- modifier_denominator
+  current_out
+}
+valid_interaction_outputs <- c(
+  "interaction_coefficients",
+  "condition_main_at_modifier_reference",
+  "modifier_main_at_condition_reference",
+  "simple_condition_effects",
+  "simple_modifier_effects"
+)
+interaction_outputs <- unique(interaction_outputs_raw[interaction_outputs_raw %in% valid_interaction_outputs])
+if (!length(interaction_outputs)) interaction_outputs <- "interaction_coefficients"
 adjust_cols <- character(0)
 for (adjust_col_raw in adjust_cols_raw) {
   adjust_col <- unname(safe_lookup[[adjust_col_raw]])
@@ -934,20 +1048,156 @@ if (identical(result_mode, "wald_interaction_coefficient")) {
   }
   interaction_tables <- list()
   coefficient_names <- character(0)
+  condition_main_coefs <- setNames(
+    vapply(condition_nonref_levels, function(level) find_main_coef(resultsNames(dds), condition_col, level), character(1)),
+    condition_nonref_levels
+  )
+  modifier_main_coefs <- setNames(
+    vapply(modifier_nonref_levels, function(level) find_main_coef(resultsNames(dds), modifier_col, level), character(1)),
+    modifier_nonref_levels
+  )
+  interaction_coef <- function(condition_level, modifier_level) {
+    find_interaction_coef(resultsNames(dds), condition_col, condition_level, modifier_col, modifier_level)
+  }
+  add_interaction_table <- function(res, output, output_label, result_id, result_label, coefficient,
+                                    condition_level = "", condition_reference = "",
+                                    modifier_level = "", modifier_reference = "") {
+    interaction_tables[[length(interaction_tables) + 1]] <<- decorate_result(
+      res,
+      output,
+      output_label,
+      result_id,
+      result_label,
+      coefficient,
+      condition_level,
+      condition_reference,
+      modifier_level,
+      modifier_reference
+    )
+    coefficient_names <<- c(coefficient_names, coefficient)
+  }
   for (condition_level in condition_nonref_levels) {
     for (modifier_level in modifier_nonref_levels) {
-      current_coef <- find_interaction_coef(resultsNames(dds), condition_col, condition_level, modifier_col, modifier_level)
-      coefficient_names <- c(coefficient_names, current_coef)
+      current_coef <- interaction_coef(condition_level, modifier_level)
+      if ("interaction_coefficients" %in% interaction_outputs) {
+        current_res <- results(dds, name = current_coef)
+        add_interaction_table(
+          current_res,
+          "interaction_coefficients",
+          "Interaction coefficients",
+          paste("interaction", condition_level, condition_denominator_level, modifier_level, modifier_denominator_level, sep = "__"),
+          paste0("(", condition_level, " - ", condition_denominator_level, ") interaction at ", modifier_level, " vs ", modifier_denominator_level),
+          current_coef,
+          condition_level,
+          condition_denominator_level,
+          modifier_level,
+          modifier_denominator_level
+        )
+      }
+    }
+  }
+  if ("condition_main_at_modifier_reference" %in% interaction_outputs) {
+    for (condition_level in condition_nonref_levels) {
+      current_coef <- condition_main_coefs[[condition_level]]
       current_res <- results(dds, name = current_coef)
-      current_out <- as.data.frame(current_res)
-      current_out$gene_id <- rownames(current_out)
-      current_out$coefficient_name <- current_coef
-      current_out$condition_numerator <- condition_level
-      current_out$condition_denominator <- condition_denominator_level
-      current_out$modifier_numerator <- modifier_level
-      current_out$modifier_denominator <- modifier_denominator_level
-      current_out$interaction_label <- paste0("(", condition_level, " - ", condition_denominator_level, ") at ", modifier_level, " vs ", modifier_denominator_level)
-      interaction_tables[[length(interaction_tables) + 1]] <- current_out
+      add_interaction_table(
+        current_res,
+        "condition_main_at_modifier_reference",
+        "Condition main effect at modifier reference",
+        paste("condition_main_at_modifier_reference", condition_level, condition_denominator_level, modifier_denominator_level, sep = "__"),
+        paste0(condition_level, " vs ", condition_denominator_level, " at ", modifier_col_raw, " reference ", modifier_denominator_level),
+        current_coef,
+        condition_level,
+        condition_denominator_level,
+        modifier_denominator_level,
+        modifier_denominator_level
+      )
+    }
+  }
+  if ("modifier_main_at_condition_reference" %in% interaction_outputs) {
+    for (modifier_level in modifier_nonref_levels) {
+      current_coef <- modifier_main_coefs[[modifier_level]]
+      current_res <- results(dds, name = current_coef)
+      add_interaction_table(
+        current_res,
+        "modifier_main_at_condition_reference",
+        "Modifier main effect at condition reference",
+        paste("modifier_main_at_condition_reference", modifier_level, modifier_denominator_level, condition_denominator_level, sep = "__"),
+        paste0(modifier_level, " vs ", modifier_denominator_level, " at ", condition_col_raw, " reference ", condition_denominator_level),
+        current_coef,
+        condition_denominator_level,
+        condition_denominator_level,
+        modifier_level,
+        modifier_denominator_level
+      )
+    }
+  }
+  if ("simple_condition_effects" %in% interaction_outputs) {
+    for (condition_level in condition_nonref_levels) {
+      main_coef <- condition_main_coefs[[condition_level]]
+      reference_res <- results(dds, name = main_coef)
+      add_interaction_table(
+        reference_res,
+        "simple_condition_effects",
+        "Condition effect within each modifier level",
+        paste("simple_condition", condition_level, condition_denominator_level, modifier_denominator_level, sep = "__"),
+        paste0(condition_level, " vs ", condition_denominator_level, " within ", modifier_col_raw, "=", modifier_denominator_level),
+        main_coef,
+        condition_level,
+        condition_denominator_level,
+        modifier_denominator_level,
+        modifier_denominator_level
+      )
+      for (modifier_level in modifier_nonref_levels) {
+        current_coef <- interaction_coef(condition_level, modifier_level)
+        current_res <- extract_result(dds, c(main_coef, current_coef))
+        add_interaction_table(
+          current_res,
+          "simple_condition_effects",
+          "Condition effect within each modifier level",
+          paste("simple_condition", condition_level, condition_denominator_level, modifier_level, sep = "__"),
+          paste0(condition_level, " vs ", condition_denominator_level, " within ", modifier_col_raw, "=", modifier_level),
+          paste(c(main_coef, current_coef), collapse = " + "),
+          condition_level,
+          condition_denominator_level,
+          modifier_level,
+          modifier_denominator_level
+        )
+      }
+    }
+  }
+  if ("simple_modifier_effects" %in% interaction_outputs) {
+    for (modifier_level in modifier_nonref_levels) {
+      main_coef <- modifier_main_coefs[[modifier_level]]
+      reference_res <- results(dds, name = main_coef)
+      add_interaction_table(
+        reference_res,
+        "simple_modifier_effects",
+        "Modifier effect within each condition level",
+        paste("simple_modifier", modifier_level, modifier_denominator_level, condition_denominator_level, sep = "__"),
+        paste0(modifier_level, " vs ", modifier_denominator_level, " within ", condition_col_raw, "=", condition_denominator_level),
+        main_coef,
+        condition_denominator_level,
+        condition_denominator_level,
+        modifier_level,
+        modifier_denominator_level
+      )
+      for (condition_level in condition_nonref_levels) {
+        current_coef <- interaction_coef(condition_level, modifier_level)
+        current_res <- extract_result(dds, c(main_coef, current_coef))
+        add_interaction_table(
+          current_res,
+          "simple_modifier_effects",
+          "Modifier effect within each condition level",
+          paste("simple_modifier", modifier_level, modifier_denominator_level, condition_level, sep = "__"),
+          paste0(modifier_level, " vs ", modifier_denominator_level, " within ", condition_col_raw, "=", condition_level),
+          paste(c(main_coef, current_coef), collapse = " + "),
+          condition_level,
+          condition_denominator_level,
+          modifier_level,
+          modifier_denominator_level
+        )
+      }
     }
   }
   coefficient_name <- paste(coefficient_names, collapse = ";")
@@ -1006,8 +1256,11 @@ if (!"condition_numerator" %in% names(out)) out$condition_numerator <- ""
 if (!"condition_denominator" %in% names(out)) out$condition_denominator <- ""
 if (!"modifier_numerator" %in% names(out)) out$modifier_numerator <- ""
 if (!"modifier_denominator" %in% names(out)) out$modifier_denominator <- ""
+if (!"interaction_output" %in% names(out)) out$interaction_output <- ""
+if (!"interaction_output_label" %in% names(out)) out$interaction_output_label <- ""
+if (!"interaction_result_id" %in% names(out)) out$interaction_result_id <- ""
 if (!"interaction_label" %in% names(out)) out$interaction_label <- ""
-wanted_cols <- c("gene_id", "baseMean", "log2FoldChange", "lfcSE", "statistic", "pvalue", "padj", "result_mode", "coefficient_name", "tested_terms", "full_model", "reduced_model", "condition_numerator", "condition_denominator", "modifier_numerator", "modifier_denominator", "interaction_label")
+wanted_cols <- c("gene_id", "baseMean", "log2FoldChange", "lfcSE", "statistic", "pvalue", "padj", "result_mode", "coefficient_name", "tested_terms", "full_model", "reduced_model", "condition_numerator", "condition_denominator", "modifier_numerator", "modifier_denominator", "interaction_output", "interaction_output_label", "interaction_result_id", "interaction_label")
 missing_cols <- setdiff(wanted_cols, names(out))
 for (missing_col in missing_cols) out[[missing_col]] <- NA
 out <- out[, wanted_cols]

@@ -464,6 +464,20 @@
                   <label id="deseq-interaction-modifier-numerator-label">Modifier level A <select id="deseq-interaction-modifier-numerator"></select></label>
                   <label>Modifier reference <select id="deseq-interaction-modifier-denominator"></select></label>
                 </div>
+                <div id="deseq-interaction-output-controls" class="deseq-direct-panel" hidden>
+                  <h5>Outputs to retain</h5>
+                  <div class="deseq-option-list" role="group" aria-label="Interaction outputs to retain">
+                    <div class="deseq-option-group-title">Primary interaction output</div>
+                    <label class="check-label"><input name="deseq-interaction-output" type="checkbox" value="interaction_coefficients" checked /> Interaction coefficients <span class="muted">difference-of-differences</span></label>
+                    <div class="deseq-option-group-title">Biological follow-up outputs</div>
+                    <label class="check-label"><input name="deseq-interaction-output" type="checkbox" value="simple_condition_effects" /> Condition effect within each modifier level <span class="muted">for example treatment vs control in each tissue</span></label>
+                    <label class="check-label"><input name="deseq-interaction-output" type="checkbox" value="simple_modifier_effects" /> Modifier effect within each condition level <span class="muted">for example tissue differences within each treatment</span></label>
+                    <div class="deseq-option-group-title">Reference-level coefficients</div>
+                    <label class="check-label"><input name="deseq-interaction-output" type="checkbox" value="condition_main_at_modifier_reference" /> Condition main effect at modifier reference</label>
+                    <label class="check-label"><input name="deseq-interaction-output" type="checkbox" value="modifier_main_at_condition_reference" /> Modifier main effect at condition reference</label>
+                  </div>
+                  <p class="note">Keep the default unless you need additional follow-up result sets. More outputs will add more contrasts, plots, tables, cache entries, and GSEA choices.</p>
+                </div>
                 <p class="note" id="deseq-interaction-help">Interaction effect fits the selected factors with their references and reports non-reference interaction coefficients.</p>
               </div>
             </section>
