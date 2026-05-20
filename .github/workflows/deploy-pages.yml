@@ -13,6 +13,10 @@ on:
         options:
           - "false"
           - "true"
+      docs_version:
+        description: Optional documentation version path. Defaults to assets/report_config.json reportVersion.
+        required: false
+        default: ""
 
 permissions:
   contents: write
@@ -33,6 +37,14 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Install documentation dependencies
+        run: python -m pip install mkdocs
 
       - name: Read webR package snapshot version
         id: webr-snapshot
@@ -75,7 +87,36 @@ jobs:
           print(f"release_tag={release_tag}")
           PY
 
+      - name: Read documentation version
+        id: docs-version
+        shell: bash
+        env:
+          DOCS_VERSION_INPUT: ${{ github.event.inputs.docs_version || '' }}
+        run: |
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          import os
+          import re
+          from pathlib import Path
+
+          input_raw = (os.environ.get("DOCS_VERSION_INPUT") or "").strip()
+          if input_raw:
+              version = input_raw
+          else:
+              cfg = json.load(open("assets/report_config.json", encoding="utf-8"))
+              raw = str(cfg.get("reportVersion") or "").strip()
+              if not raw:
+                  raw = Path("webr-packages/VERSION").read_text(encoding="utf-8").strip()
+              version = raw if raw.startswith("v") else f"v{raw}"
+
+          if not re.match(r"^[A-Za-z0-9._-]+$", version):
+              raise SystemExit(f"Unsafe documentation version: {version!r}")
+
+          print(f"version={version}")
+          PY
+
       - name: Guard existing webR package snapshot
+        id: snapshot-guard
         shell: bash
         env:
           FORCE_OVERWRITE: ${{ github.event.inputs.force_overwrite || 'false' }}
@@ -90,14 +131,17 @@ jobs:
 
           packages_url="$package_repo_url/bin/emscripten/contrib/4.5/PACKAGES"
           if curl -fsSIL "$packages_url" >/dev/null 2>&1; then
-            if [[ "$GITHUB_EVENT_NAME" != "workflow_dispatch" || "$FORCE_OVERWRITE" != "true" ]]; then
-              echo "webR package snapshot $version already exists:" >&2
-              echo "$packages_url" >&2
-              echo "Refusing to overwrite. Bump webr-packages/VERSION or run the workflow manually with force_overwrite=true." >&2
-              exit 1
+            echo "snapshot_exists=true" >> "$GITHUB_OUTPUT"
+            if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" && "$FORCE_OVERWRITE" == "true" ]]; then
+              echo "build_snapshot=true" >> "$GITHUB_OUTPUT"
+              echo "::warning::Force overwrite enabled for existing webR package snapshot $version; release assets will be refreshed with --clobber"
+            else
+              echo "build_snapshot=false" >> "$GITHUB_OUTPUT"
+              echo "::notice::webR package snapshot $version already exists at $packages_url; preserving it instead of rebuilding. Run manually with force_overwrite=true to replace it."
             fi
-            echo "::warning::Force overwrite enabled for existing webR package snapshot $version; release assets will be refreshed with --clobber"
           else
+            echo "snapshot_exists=false" >> "$GITHUB_OUTPUT"
+            echo "build_snapshot=true" >> "$GITHUB_OUTPUT"
             echo "No existing webR package snapshot found for $version"
           fi
 
@@ -112,29 +156,90 @@ jobs:
             --exclude 'dist/' \
             --exclude 'local_data/' \
             --exclude 'large_outputs/' \
+            --exclude 'docs/' \
             --exclude 'webr-packages/' \
             ./ _site/
           touch _site/.nojekyll
+
+      - name: Build versioned MkDocs documentation
+        shell: bash
+        env:
+          DOCS_VERSION: ${{ steps.docs-version.outputs.version }}
+        run: |
+          set -euo pipefail
+          python -m mkdocs build --strict --site-dir "_site/docs/${DOCS_VERSION}"
+          rm -rf _site/docs/latest
+          cp -a "_site/docs/${DOCS_VERSION}" _site/docs/latest
+
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          docs_version = os.environ["DOCS_VERSION"]
+          docs_root = Path("_site/docs")
+          versions = {
+              "latest": docs_version,
+              "versions": [
+                  {
+                      "version": docs_version,
+                      "title": docs_version,
+                      "url": f"./{docs_version}/",
+                  },
+                  {
+                      "version": "latest",
+                      "title": "latest",
+                      "url": "./latest/",
+                  },
+              ],
+          }
+          (docs_root / "versions.json").write_text(
+              json.dumps(versions, indent=2) + "\n",
+              encoding="utf-8",
+          )
+          (docs_root / "index.html").write_text(
+              """<!doctype html>
+          <html lang=\"en\">
+            <head>
+              <meta charset=\"utf-8\">
+              <meta http-equiv=\"refresh\" content=\"0; url=latest/\">
+              <title>RNA-seq Report Documentation</title>
+            </head>
+            <body>
+              <p><a href=\"latest/\">Open the latest RNA-seq Report documentation.</a></p>
+            </body>
+          </html>
+          """,
+              encoding="utf-8",
+          )
+          PY
 
       - name: Restore preserved webR package snapshots
         shell: bash
         run: |
           current_version="${{ steps.webr-snapshot.outputs.version }}"
+          build_current_snapshot="${{ steps.snapshot-guard.outputs.build_snapshot }}"
           package_repo_url="$(python3 -c 'import json; print(json.load(open("assets/report_config.json", encoding="utf-8"))["webr"]["packageRepo"].rstrip("/"))')"
           site_root="${package_repo_url%/webr-packages/*}"
           versions_file="webr-packages/published_versions"
-          if [[ ! -f "$versions_file" ]]; then
-            echo "No preserved webR package snapshot list found."
-            exit 0
-          fi
 
-          awk '
-            {
+          {
+            if [[ -f "$versions_file" ]]; then
+              awk '
+                {
+                  gsub(/^[[:space:]]+|[[:space:]]+$/, "", $0)
+                  if ($0 != "" && substr($0, 1, 1) != "#") print $0
+                }
+              ' "$versions_file"
+            fi
+            printf '%s\n' "$current_version"
+          } | awk '
+              {
               gsub(/^[[:space:]]+|[[:space:]]+$/, "", $0)
-              if ($0 != "" && substr($0, 1, 1) != "#") print $0
-            }
-          ' "$versions_file" | while read -r version; do
-            if [[ "$version" == "$current_version" ]]; then
+              if ($0 != "" && !seen[$0]++) print $0
+              }
+            ' | while read -r version; do
+            if [[ "$version" == "$current_version" && "$build_current_snapshot" == "true" ]]; then
               continue
             fi
 
@@ -167,6 +272,7 @@ jobs:
           done
 
       - name: Checkout r-wasm/actions repository
+        if: steps.snapshot-guard.outputs.build_snapshot == 'true'
         uses: actions/checkout@v4
         with:
           ref: v2
@@ -175,6 +281,7 @@ jobs:
           path: .actions
 
       - name: Retrieve webR package refs
+        if: steps.snapshot-guard.outputs.build_snapshot == 'true'
         id: packages-file
         shell: bash
         run: |
@@ -198,6 +305,7 @@ jobs:
           printf 'pkgs=%s\n' "$pkgs" >> "$GITHUB_OUTPUT"
 
       - name: Patch r-wasm action for package snapshot build
+        if: steps.snapshot-guard.outputs.build_snapshot == 'true'
         shell: python
         run: |
           from pathlib import Path
@@ -238,10 +346,12 @@ jobs:
           path.write_text(text.replace(old, new))
 
       - name: Prepare patched fastmatch source
+        if: steps.snapshot-guard.outputs.build_snapshot == 'true'
         shell: bash
         run: python3 webr-packages/patches/prepare_fastmatch_source.py
 
       - name: Build versioned webR package repo
+        if: steps.snapshot-guard.outputs.build_snapshot == 'true'
         uses: ./.actions/build-rwasm
         with:
           packages: ${{ steps.packages-file.outputs.pkgs }}
@@ -250,10 +360,12 @@ jobs:
           compress: false
 
       - name: Fix generated package permissions
+        if: steps.snapshot-guard.outputs.build_snapshot == 'true'
         shell: bash
         run: sudo chown -R "$(id -u):$(id -g)" _site/webr-packages
 
       - name: Verify webR package snapshot contents
+        if: steps.snapshot-guard.outputs.build_snapshot == 'true'
         shell: bash
         run: |
           package_index="_site/webr-packages/${{ steps.webr-snapshot.outputs.version }}/bin/emscripten/contrib/4.5/PACKAGES"
@@ -292,6 +404,7 @@ jobs:
           printf 'Verified webR package snapshot packages: %s\n' "${expected[*]}"
 
       - name: Verify webR package ABI
+        if: steps.snapshot-guard.outputs.build_snapshot == 'true'
         shell: bash
         run: |
           package_dir="_site/webr-packages/${{ steps.webr-snapshot.outputs.version }}/bin/emscripten/contrib/4.5"
@@ -309,6 +422,7 @@ jobs:
           node scripts/check_webr_package_abi.js "$tmpdir/R.wasm" "$tmpdir/fastmatch/libs/fastmatch.so"
 
       - name: Build webR package snapshot archive
+        if: steps.snapshot-guard.outputs.build_snapshot == 'true'
         shell: bash
         env:
           VERSION: ${{ steps.webr-snapshot.outputs.version }}
@@ -338,6 +452,7 @@ jobs:
           PY
 
       - name: Build webR library bundle release files
+        if: steps.snapshot-guard.outputs.build_snapshot == 'true'
         shell: bash
         env:
           VERSION: ${{ steps.webr-snapshot.outputs.version }}
@@ -407,6 +522,7 @@ jobs:
           PY
 
       - name: Upload webR package snapshot archive to GitHub Release
+        if: steps.snapshot-guard.outputs.build_snapshot == 'true'
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -425,6 +541,7 @@ jobs:
             --clobber
 
       - name: Upload webR library bundle to GitHub Release
+        if: steps.snapshot-guard.outputs.build_snapshot == 'true'
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -446,6 +563,16 @@ jobs:
             "_release_assets/${bundle_stem}.js.metadata" \
             "_release_assets/${bundle_stem}.zip" \
             --clobber
+
+      - name: Verify configured webR package snapshot is deployed
+        shell: bash
+        run: |
+          package_index="_site/webr-packages/${{ steps.webr-snapshot.outputs.version }}/bin/emscripten/contrib/4.5/PACKAGES"
+          if [[ ! -f "$package_index" ]]; then
+            echo "Configured webR package snapshot is missing from the Pages artifact: $package_index" >&2
+            echo "If this version already exists online, ensure it is listed in webr-packages/published_versions or rerun manually with force_overwrite=true." >&2
+            exit 1
+          fi
 
       - name: Configure Pages
         uses: actions/configure-pages@v5

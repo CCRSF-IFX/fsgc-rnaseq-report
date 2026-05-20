@@ -60,3 +60,14 @@ dist/rnaseq-report.html
 
 The source repository is
 [OmicsReportHub/rnaseq-report](https://github.com/OmicsReportHub/rnaseq-report).
+
+## Hosted Documentation
+
+When deployed from GitHub Actions, the documentation is available at:
+
+```text
+https://omicsreporthub.github.io/rnaseq-report/docs/latest/
+```
+
+Versioned documentation is available under `/docs/vX.Y.Z/`, matching the report
+version in `assets/report_config.json`.

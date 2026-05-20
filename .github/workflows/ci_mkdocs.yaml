@@ -6,13 +6,17 @@ on:
     paths:
       - "docs/**"
       - "mkdocs.yaml"
+      - "assets/report_config.json"
       - ".github/workflows/ci_mkdocs.yaml"
+      - ".github/workflows/deploy-pages.yml"
   pull_request:
     branches: [main, master]
     paths:
       - "docs/**"
       - "mkdocs.yaml"
+      - "assets/report_config.json"
       - ".github/workflows/ci_mkdocs.yaml"
+      - ".github/workflows/deploy-pages.yml"
   workflow_dispatch:
 
 permissions:
@@ -40,10 +44,79 @@ jobs:
             rnaseq-report-mkdocs-${{ runner.os }}-
 
       - name: Install documentation dependencies
-        run: pip install mkdocs
+        run: python -m pip install mkdocs
 
-      - name: Build documentation
-        run: mkdocs build --strict
+      - name: Read documentation version
+        id: docs-version
+        shell: bash
+        run: |
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          import re
+          from pathlib import Path
+
+          cfg = json.load(open("assets/report_config.json", encoding="utf-8"))
+          raw = str(cfg.get("reportVersion") or "").strip()
+          if not raw:
+              raw = Path("webr-packages/VERSION").read_text(encoding="utf-8").strip()
+          version = raw if raw.startswith("v") else f"v{raw}"
+          if not re.match(r"^[A-Za-z0-9._-]+$", version):
+              raise SystemExit(f"Unsafe documentation version: {version!r}")
+          print(f"version={version}")
+          PY
+
+      - name: Build versioned documentation
+        shell: bash
+        env:
+          DOCS_VERSION: ${{ steps.docs-version.outputs.version }}
+        run: |
+          set -euo pipefail
+          python -m mkdocs build --strict --site-dir "site/docs/${DOCS_VERSION}"
+          rm -rf site/docs/latest
+          cp -a "site/docs/${DOCS_VERSION}" site/docs/latest
+
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          docs_version = os.environ["DOCS_VERSION"]
+          docs_root = Path("site/docs")
+          versions = {
+              "latest": docs_version,
+              "versions": [
+                  {
+                      "version": docs_version,
+                      "title": docs_version,
+                      "url": f"./{docs_version}/",
+                  },
+                  {
+                      "version": "latest",
+                      "title": "latest",
+                      "url": "./latest/",
+                  },
+              ],
+          }
+          (docs_root / "versions.json").write_text(
+              json.dumps(versions, indent=2) + "\n",
+              encoding="utf-8",
+          )
+          (docs_root / "index.html").write_text(
+              """<!doctype html>
+          <html lang=\"en\">
+            <head>
+              <meta charset=\"utf-8\">
+              <meta http-equiv=\"refresh\" content=\"0; url=latest/\">
+              <title>RNA-seq Report Documentation</title>
+            </head>
+            <body>
+              <p><a href=\"latest/\">Open the latest RNA-seq Report documentation.</a></p>
+            </body>
+          </html>
+          """,
+              encoding="utf-8",
+          )
+          PY
 
       - name: Upload documentation artifact
         uses: actions/upload-artifact@v4
