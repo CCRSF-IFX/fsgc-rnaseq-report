@@ -61,13 +61,13 @@ The report Guide tab shows links from `assets/report_config.json`
 ```text
 https://ccrsf-ifx.github.io/fsgc-rnaseq-report/
 https://ccrsf-ifx.github.io/fsgc-rnaseq-report/docs/latest/
-https://ccrsf-ifx.github.io/fsgc-rnaseq-report/docs/v0.1.0/
-https://ccrsf-ifx.github.io/fsgc-rnaseq-report/webr-packages/v0.1.0/
+https://ccrsf-ifx.github.io/fsgc-rnaseq-report/webr-packages/v0.1.0/bin/emscripten/contrib/4.5/PACKAGES
 ```
 
-When a new report version is released, add the new versioned documentation and
-package snapshot links to `hostedSite.versionLinks` before building the
-deliverable HTML.
+Use one documentation link in the report UI unless the latest and versioned
+documentation intentionally differ. Package snapshot cards should point at the
+`PACKAGES` index or release archive, not the snapshot directory, because the
+directory itself does not have an index page.
 
 ## webR Package Snapshot
 
@@ -84,8 +84,9 @@ The current report configuration points webR package installation at:
 https://ccrsf-ifx.github.io/fsgc-rnaseq-report/webr-packages/v0.1.0/
 ```
 
-The package repository must match the webR runtime configured in
-`assets/report_config.json`.
+The package repository base URL must match the webR runtime configured in
+`assets/report_config.json`. User-facing links should use the concrete
+`PACKAGES` index under that base URL.
 
 ## Versioning Rules
 

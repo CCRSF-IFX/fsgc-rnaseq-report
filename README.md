@@ -24,7 +24,6 @@ use **GitHub Actions** as the source:
 
 ```text
 https://ccrsf-ifx.github.io/fsgc-rnaseq-report/docs/latest/
-https://ccrsf-ifx.github.io/fsgc-rnaseq-report/docs/v0.1.0/
 ```
 
 ## Common Commands

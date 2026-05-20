@@ -17,10 +17,10 @@
     "versionsIndexUrl": "https://ccrsf-ifx.github.io/fsgc-rnaseq-report/docs/versions.json",
     "versionLinks": [
       {
-        "label": "Hosted report",
+        "label": "Example dataset",
         "version": "v0.1.0",
         "url": "https://ccrsf-ifx.github.io/fsgc-rnaseq-report/",
-        "description": "Current hosted GSE164073 RNA-seq report."
+        "description": "GSE164073 example dataset report for demonstrating the RNA-seq report workflow."
       },
       {
         "label": "Documentation",
@@ -29,16 +29,10 @@
         "description": "Latest user and developer documentation."
       },
       {
-        "label": "Documentation",
-        "version": "v0.1.0",
-        "url": "https://ccrsf-ifx.github.io/fsgc-rnaseq-report/docs/v0.1.0/",
-        "description": "Versioned documentation for report v0.1.0."
-      },
-      {
         "label": "webR package snapshot",
         "version": "v0.1.0",
-        "url": "https://ccrsf-ifx.github.io/fsgc-rnaseq-report/webr-packages/v0.1.0/",
-        "description": "Compiled webR package repository used by browser DESeq2 and fgsea."
+        "url": "https://ccrsf-ifx.github.io/fsgc-rnaseq-report/webr-packages/v0.1.0/bin/emscripten/contrib/4.5/PACKAGES",
+        "description": "Compiled webR package index used by browser DESeq2 and fgsea."
       }
     ]
   },

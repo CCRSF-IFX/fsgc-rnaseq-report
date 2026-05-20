@@ -12,7 +12,7 @@ test('loads the report shell and configured version links', async ({ page }) => 
   await page.getByRole('button', { name: 'Guide' }).click();
   await expect(page.getByRole('heading', { name: 'Report versions and links' })).toBeVisible();
 
-  await expect(page.getByRole('link', { name: 'Hosted report' })).toHaveAttribute(
+  await expect(page.getByRole('link', { name: 'Example dataset' })).toHaveAttribute(
     'href',
     'https://ccrsf-ifx.github.io/fsgc-rnaseq-report/',
   );
@@ -20,9 +20,10 @@ test('loads the report shell and configured version links', async ({ page }) => 
     'href',
     'https://ccrsf-ifx.github.io/fsgc-rnaseq-report/docs/latest/',
   );
+  await expect(page.getByRole('link', { name: 'Documentation' })).toHaveCount(1);
   await expect(page.getByRole('link', { name: 'webR package snapshot' })).toHaveAttribute(
     'href',
-    'https://ccrsf-ifx.github.io/fsgc-rnaseq-report/webr-packages/v0.1.0/',
+    'https://ccrsf-ifx.github.io/fsgc-rnaseq-report/webr-packages/v0.1.0/bin/emscripten/contrib/4.5/PACKAGES',
   );
   await expect(page.getByRole('link', { name: 'Source repository' })).toHaveAttribute(
     'href',
